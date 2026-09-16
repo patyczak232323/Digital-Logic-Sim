@@ -29,12 +29,8 @@ namespace DLS.Simulation
 		static readonly List<int> pinOwnerCombinationalIndexBuild = new();
 
 		static readonly Dictionary<SimPin, int> pinIndices = new();
-		// Compressed sparse row (CSR) adjacency. Flat arrays avoid one managed
-		// allocation per pin and improve cache locality while propagating signals.
-		static int[] targetOffsetsBySource = Array.Empty<int>();
-		static int[] targetIndicesBySource = Array.Empty<int>();
-		static int[] sourceOffsetsByTarget = Array.Empty<int>();
-		static int[] sourceIndicesByTarget = Array.Empty<int>();
+		static int[][] targetIndicesBySource = Array.Empty<int[]>();
+		static int[][] sourceIndicesByTarget = Array.Empty<int[]>();
 		static int[] targetOwnerCombinationalIndex = Array.Empty<int>();
 		static bool[] targetIsCustomBoundary = Array.Empty<bool>();
 
@@ -92,7 +88,6 @@ namespace DLS.Simulation
 
 		public static void RunSimulationStep(SimChip rootSimChip, DevPinInstance[] inputPins, SimAudio newAudioState)
 		{
-			inputPins ??= Array.Empty<DevPinInstance>();
 			audioState = newAudioState;
 			audioState?.InitFrame();
 
@@ -161,10 +156,8 @@ namespace DLS.Simulation
 			allPins.Clear();
 			pinOwnerCombinationalIndexBuild.Clear();
 			pinIndices.Clear();
-			targetOffsetsBySource = Array.Empty<int>();
-			targetIndicesBySource = Array.Empty<int>();
-			sourceOffsetsByTarget = Array.Empty<int>();
-			sourceIndicesByTarget = Array.Empty<int>();
+			targetIndicesBySource = Array.Empty<int[]>();
+			sourceIndicesByTarget = Array.Empty<int[]>();
 			targetOwnerCombinationalIndex = Array.Empty<int>();
 			targetIsCustomBoundary = Array.Empty<bool>();
 			queuedTargets = Array.Empty<bool>();
@@ -278,13 +271,15 @@ namespace DLS.Simulation
 				}
 			}
 
-			BuildAdjacency(targetBuild, out targetOffsetsBySource, out targetIndicesBySource);
-			BuildAdjacency(sourceBuild, out sourceOffsetsByTarget, out sourceIndicesByTarget);
+			targetIndicesBySource = new int[allPins.Count][];
+			sourceIndicesByTarget = new int[allPins.Count][];
 			targetOwnerCombinationalIndex = pinOwnerCombinationalIndexBuild.ToArray();
 			targetIsCustomBoundary = new bool[allPins.Count];
 
 			for (int i = 0; i < allPins.Count; i++)
 			{
+				targetIndicesBySource[i] = targetBuild[i]?.ToArray() ?? Array.Empty<int>();
+				sourceIndicesByTarget[i] = sourceBuild[i]?.ToArray() ?? Array.Empty<int>();
 				targetIsCustomBoundary[i] = allPins[i].parentChip.ChipType == ChipType.Custom;
 			}
 
@@ -310,32 +305,10 @@ namespace DLS.Simulation
 			if (list.Capacity < requiredCapacity) list.Capacity = requiredCapacity;
 		}
 
-		static void BuildAdjacency(List<int>[] rows, out int[] offsets, out int[] indices)
-		{
-			offsets = new int[rows.Length + 1];
-			int edgeCount = 0;
-			for (int i = 0; i < rows.Length; i++)
-			{
-				edgeCount += rows[i]?.Count ?? 0;
-				offsets[i + 1] = edgeCount;
-			}
-
-			indices = new int[edgeCount];
-			int writeIndex = 0;
-			for (int i = 0; i < rows.Length; i++)
-			{
-				List<int> row = rows[i];
-				if (row == null) continue;
-				for (int j = 0; j < row.Count; j++) indices[writeIndex++] = row[j];
-			}
-		}
-
 		static void ResetCompiledArrays()
 		{
-			targetOffsetsBySource = Array.Empty<int>();
-			targetIndicesBySource = Array.Empty<int>();
-			sourceOffsetsByTarget = Array.Empty<int>();
-			sourceIndicesByTarget = Array.Empty<int>();
+			targetIndicesBySource = Array.Empty<int[]>();
+			sourceIndicesByTarget = Array.Empty<int[]>();
 			targetOwnerCombinationalIndex = Array.Empty<int>();
 			targetIsCustomBoundary = Array.Empty<bool>();
 			queuedTargets = Array.Empty<bool>();
@@ -438,12 +411,9 @@ namespace DLS.Simulation
 
 			for (int i = 0; i < inputPins.Length; i++)
 			{
-				DevPinInstance input = inputPins[i];
-				if (input?.Pin == null) continue;
-
 				try
 				{
-					SimPin simPin = rootSimChip.GetSimPinFromAddress(input.Pin.Address);
+					SimPin simPin = rootSimChip.GetSimPinFromAddress(inputPins[i].Pin.Address);
 					if (pinIndices.TryGetValue(simPin, out int pinIndex)) boundInputPinIndices[i] = pinIndex;
 				}
 				catch (Exception)
@@ -474,7 +444,7 @@ namespace DLS.Simulation
 			for (int i = 0; i < inputPins.Length; i++)
 			{
 				DevPinInstance input = inputPins[i];
-				if (input?.Pin == null) continue;
+				if (input == null) continue;
 
 				int pinIndex = i < boundInputPinIndices.Length ? boundInputPinIndices[i] : -1;
 				if (pinIndex >= 0)
@@ -761,23 +731,21 @@ namespace DLS.Simulation
 
 		static void ResolveTargetPin(int targetIndex, int triggeringSourceIndex)
 		{
-			int sourceStart = sourceOffsetsByTarget[targetIndex];
-			int sourceEnd = sourceOffsetsByTarget[targetIndex + 1];
-			int sourceCount = sourceEnd - sourceStart;
-			if (sourceCount == 0) return;
+			int[] sourceIndices = sourceIndicesByTarget[targetIndex];
+			if (sourceIndices.Length == 0) return;
 
 			SimPin target = allPins[targetIndex];
 			uint newState;
 			ushort contentionMask;
 
-			if (sourceCount == 1)
+			if (sourceIndices.Length == 1)
 			{
-				newState = allPins[sourceIndicesByTarget[sourceStart]].State;
+				newState = allPins[sourceIndices[0]].State;
 				contentionMask = 0;
 			}
 			else
 			{
-				newState = ResolveDrivenState(sourceStart, sourceEnd, out contentionMask);
+				newState = ResolveDrivenState(sourceIndices, out contentionMask);
 			}
 
 			target.lastUpdatedFrameIndex = Simulator.simulationFrame;
@@ -797,7 +765,7 @@ namespace DLS.Simulation
 
 			if (DiagnosticsEnabled && DiagnosticSink != null)
 			{
-				TracePropagation(triggeringSource, target, oldState, newState, sourceCount);
+				TracePropagation(triggeringSource, target, oldState, newState, sourceIndices.Length);
 			}
 			if (contentionMask != 0) TraceContention(target, contentionMask);
 
@@ -811,15 +779,15 @@ namespace DLS.Simulation
 			}
 		}
 
-		static uint ResolveDrivenState(int sourceStart, int sourceEnd, out ushort contentionMask)
+		static uint ResolveDrivenState(int[] sourceIndices, out ushort contentionMask)
 		{
 			ushort connectedMask = 0;
 			ushort highMask = 0;
 			ushort lowMask = 0;
 
-			for (int i = sourceStart; i < sourceEnd; i++)
+			for (int i = 0; i < sourceIndices.Length; i++)
 			{
-				uint state = allPins[sourceIndicesByTarget[i]].State;
+				uint state = allPins[sourceIndices[i]].State;
 				ushort bits = PinState.GetBitStates(state);
 				ushort tristate = PinState.GetTristateFlags(state);
 				ushort activeMask = (ushort)~tristate;
@@ -1024,11 +992,10 @@ namespace DLS.Simulation
 
 		static void QueueFanout(int sourceIndex)
 		{
-			int targetStart = targetOffsetsBySource[sourceIndex];
-			int targetEnd = targetOffsetsBySource[sourceIndex + 1];
-			for (int i = targetStart; i < targetEnd; i++)
+			int[] targetIndices = targetIndicesBySource[sourceIndex];
+			for (int i = 0; i < targetIndices.Length; i++)
 			{
-				int targetIndex = targetIndicesBySource[i];
+				int targetIndex = targetIndices[i];
 				LastSignalPropagations++;
 				triggeringSourceByTarget[targetIndex] = sourceIndex;
 
