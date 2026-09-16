@@ -14,31 +14,39 @@ namespace DLS.Simulation
 		public static int LastDeltaCycles { get; private set; }
 		public static int LastGateEvaluations { get; private set; }
 		public static int LastSignalPropagations { get; private set; }
+		public static int LastTargetResolutions { get; private set; }
 		public static bool LastSettleConverged { get; private set; } = true;
 
 		static readonly Stopwatch stopwatch = Stopwatch.StartNew();
 
-		static readonly List<SimChip> allBuiltinChips = new();
-		static readonly List<SimChip> combinationalChips = new();
-		static readonly List<SimChip> sourceChips = new();
-		static readonly List<SimChip> sequentialChips = new();
-		static readonly List<SimChip> buzzerChips = new();
+		static readonly List<RuntimeChip> combinationalChips = new();
+		static readonly List<RuntimeChip> sourceChips = new();
+		static readonly List<RuntimeChip> sequentialChips = new();
+		static readonly List<RuntimeChip> buzzerChips = new();
 		static readonly List<SimPin> allPins = new();
+		static readonly List<int> pinOwnerCombinationalIndexBuild = new();
 
-		static readonly HashSet<SimChip> combinationalChipSet = new();
-		static readonly Dictionary<SimPin, SimPin[]> inputSources = new();
-		static readonly Dictionary<SimPin, List<SimPin>> inputSourceBuild = new();
+		static readonly Dictionary<SimPin, int> pinIndices = new();
+		static int[][] targetIndicesBySource = Array.Empty<int[]>();
+		static int[][] sourceIndicesByTarget = Array.Empty<int[]>();
+		static int[] targetOwnerCombinationalIndex = Array.Empty<int>();
+		static bool[] targetIsCustomBoundary = Array.Empty<bool>();
 
 		static readonly Dictionary<SimChip, string> registeredDiagnosticPaths = new();
 		static readonly Dictionary<SimChip, string> runtimeDiagnosticPaths = new();
 
-		static Queue<SimPin> signalQueue = new();
-		static readonly HashSet<SimPin> queuedSignals = new();
+		static Queue<int> targetQueue = new();
+		static bool[] queuedTargets = Array.Empty<bool>();
+		static int[] triggeringSourceByTarget = Array.Empty<int>();
 
-		static readonly List<SimChip> dirtyChips = new();
-		static readonly HashSet<SimChip> dirtyChipSet = new();
-		static readonly List<SimChip> evaluationBatch = new();
+		static readonly List<int> dirtyChips = new();
+		static bool[] dirtyChipFlags = Array.Empty<bool>();
+		static readonly List<int> evaluationBatch = new();
+		static readonly List<int> initializationOrder = new();
 		static readonly List<PendingPinState> pendingPinStates = new();
+		static DevPinInstance[] boundInputPins;
+		static DevPinInstance[] boundInputPinSnapshot = Array.Empty<DevPinInstance>();
+		static int[] boundInputPinIndices = Array.Empty<int>();
 
 		static SimChip topologyRoot;
 		static bool topologyDirty = true;
@@ -48,14 +56,30 @@ namespace DLS.Simulation
 		static double elapsedSecondsOld;
 		static double deltaTime;
 
+		readonly struct RuntimeChip
+		{
+			public readonly SimChip Chip;
+			public readonly int InputStart;
+			public readonly int OutputStart;
+			public readonly int CombinationalIndex;
+
+			public RuntimeChip(SimChip chip, int inputStart, int outputStart, int combinationalIndex)
+			{
+				Chip = chip;
+				InputStart = inputStart;
+				OutputStart = outputStart;
+				CombinationalIndex = combinationalIndex;
+			}
+		}
+
 		readonly struct PendingPinState
 		{
-			public readonly SimPin Pin;
+			public readonly int PinIndex;
 			public readonly uint State;
 
-			public PendingPinState(SimPin pin, uint state)
+			public PendingPinState(int pinIndex, uint state)
 			{
-				Pin = pin;
+				PinIndex = pinIndex;
 				State = state;
 			}
 		}
@@ -65,16 +89,17 @@ namespace DLS.Simulation
 			audioState = newAudioState;
 			audioState?.InitFrame();
 
-			EnsureTopology(rootSimChip);
+			EnsureTopology(rootSimChip, inputPins);
 
 			Simulator.simulationFrame++;
 
 			LastDeltaCycles = 0;
 			LastGateEvaluations = 0;
 			LastSignalPropagations = 0;
+			LastTargetResolutions = 0;
 			LastSettleConverged = true;
 
-			ApplyExternalInputs(rootSimChip, inputPins);
+			ApplyExternalInputs(inputPins);
 			UpdateFrameSources();
 
 			if (needsInitialPropagation)
@@ -83,7 +108,7 @@ namespace DLS.Simulation
 				QueueAllExistingSignals();
 				for (int i = 0; i < combinationalChips.Count; i++)
 				{
-					MarkDirty(combinationalChips[i]);
+					MarkDirty(i);
 				}
 
 				needsInitialPropagation = false;
@@ -122,15 +147,24 @@ namespace DLS.Simulation
 			topologyDirty = true;
 			needsInitialPropagation = true;
 
-			allBuiltinChips.Clear();
 			combinationalChips.Clear();
 			sourceChips.Clear();
 			sequentialChips.Clear();
 			buzzerChips.Clear();
 			allPins.Clear();
-			combinationalChipSet.Clear();
-			inputSources.Clear();
-			inputSourceBuild.Clear();
+			pinOwnerCombinationalIndexBuild.Clear();
+			pinIndices.Clear();
+			targetIndicesBySource = Array.Empty<int[]>();
+			sourceIndicesByTarget = Array.Empty<int[]>();
+			targetOwnerCombinationalIndex = Array.Empty<int>();
+			targetIsCustomBoundary = Array.Empty<bool>();
+			queuedTargets = Array.Empty<bool>();
+			triggeringSourceByTarget = Array.Empty<int>();
+			dirtyChipFlags = Array.Empty<bool>();
+			initializationOrder.Clear();
+			boundInputPins = null;
+			boundInputPinSnapshot = Array.Empty<DevPinInstance>();
+			boundInputPinIndices = Array.Empty<int>();
 			runtimeDiagnosticPaths.Clear();
 			registeredDiagnosticPaths.Clear();
 
@@ -144,6 +178,7 @@ namespace DLS.Simulation
 			LastDeltaCycles = 0;
 			LastGateEvaluations = 0;
 			LastSignalPropagations = 0;
+			LastTargetResolutions = 0;
 			LastSettleConverged = true;
 		}
 
@@ -177,27 +212,35 @@ namespace DLS.Simulation
 			}
 		}
 
-		static void EnsureTopology(SimChip root)
+		static void EnsureTopology(SimChip root, DevPinInstance[] inputPins)
 		{
-			if (!topologyDirty && topologyRoot == root) return;
+			if (!topologyDirty && topologyRoot == root)
+			{
+				if (!ExternalInputBindingsMatch(inputPins)) BindExternalInputs(root, inputPins);
+				return;
+			}
 
 			topologyRoot = root;
 			topologyDirty = false;
 			needsInitialPropagation = true;
 
-			allBuiltinChips.Clear();
 			combinationalChips.Clear();
 			sourceChips.Clear();
 			sequentialChips.Clear();
 			buzzerChips.Clear();
 			allPins.Clear();
-			combinationalChipSet.Clear();
-			inputSources.Clear();
-			inputSourceBuild.Clear();
+			pinOwnerCombinationalIndexBuild.Clear();
+			pinIndices.Clear();
+			initializationOrder.Clear();
 			runtimeDiagnosticPaths.Clear();
 			ClearWorkQueues();
 
-			if (root == null) return;
+			if (root == null)
+			{
+				ResetCompiledArrays();
+				BindExternalInputs(root, inputPins);
+				return;
+			}
 
 			string rootPath = registeredDiagnosticPaths.TryGetValue(root, out string registeredRootPath)
 				? registeredRootPath
@@ -205,28 +248,71 @@ namespace DLS.Simulation
 
 			CollectTopologyRecursive(root, rootPath);
 
+			for (int i = 0; i < allPins.Count; i++) pinIndices.Add(allPins[i], i);
+
+			List<int>[] targetBuild = new List<int>[allPins.Count];
+			List<int>[] sourceBuild = new List<int>[allPins.Count];
+
 			for (int i = 0; i < allPins.Count; i++)
 			{
 				SimPin source = allPins[i];
 				for (int j = 0; j < source.ConnectedTargetPins.Length; j++)
 				{
 					SimPin target = source.ConnectedTargetPins[j];
-					if (!inputSourceBuild.TryGetValue(target, out List<SimPin> sources))
+					if (!pinIndices.TryGetValue(target, out int targetIndex))
 					{
-						sources = new List<SimPin>();
-						inputSourceBuild.Add(target, sources);
+						continue;
 					}
 
-					sources.Add(source);
+					(targetBuild[i] ??= new List<int>()).Add(targetIndex);
+					(sourceBuild[targetIndex] ??= new List<int>()).Add(i);
 				}
 			}
 
-			foreach (KeyValuePair<SimPin, List<SimPin>> pair in inputSourceBuild)
+			targetIndicesBySource = new int[allPins.Count][];
+			sourceIndicesByTarget = new int[allPins.Count][];
+			targetOwnerCombinationalIndex = pinOwnerCombinationalIndexBuild.ToArray();
+			targetIsCustomBoundary = new bool[allPins.Count];
+
+			for (int i = 0; i < allPins.Count; i++)
 			{
-				inputSources[pair.Key] = pair.Value.ToArray();
+				targetIndicesBySource[i] = targetBuild[i]?.ToArray() ?? Array.Empty<int>();
+				sourceIndicesByTarget[i] = sourceBuild[i]?.ToArray() ?? Array.Empty<int>();
+				targetIsCustomBoundary[i] = allPins[i].parentChip.ChipType == ChipType.Custom;
 			}
 
-			signalQueue = new Queue<SimPin>(Math.Max(64, allPins.Count));
+			targetQueue = new Queue<int>(Math.Max(64, allPins.Count));
+			queuedTargets = new bool[allPins.Count];
+			triggeringSourceByTarget = new int[allPins.Count];
+			dirtyChipFlags = new bool[combinationalChips.Count];
+			EnsureListCapacity(dirtyChips, combinationalChips.Count);
+			EnsureListCapacity(evaluationBatch, combinationalChips.Count);
+			EnsureListCapacity(initializationOrder, combinationalChips.Count);
+			EnsureListCapacity(pendingPinStates, allPins.Count);
+
+			for (int i = 0; i < combinationalChips.Count; i++) initializationOrder.Add(i);
+			initializationOrder.Sort((a, b) => string.CompareOrdinal(
+				GetChipPath(combinationalChips[a].Chip),
+				GetChipPath(combinationalChips[b].Chip)));
+
+			BindExternalInputs(root, inputPins);
+		}
+
+		static void EnsureListCapacity<T>(List<T> list, int requiredCapacity)
+		{
+			if (list.Capacity < requiredCapacity) list.Capacity = requiredCapacity;
+		}
+
+		static void ResetCompiledArrays()
+		{
+			targetIndicesBySource = Array.Empty<int[]>();
+			sourceIndicesByTarget = Array.Empty<int[]>();
+			targetOwnerCombinationalIndex = Array.Empty<int>();
+			targetIsCustomBoundary = Array.Empty<bool>();
+			queuedTargets = Array.Empty<bool>();
+			triggeringSourceByTarget = Array.Empty<int>();
+			dirtyChipFlags = Array.Empty<bool>();
+			targetQueue = new Queue<int>();
 		}
 
 		static void CollectTopologyRecursive(SimChip chip, string fallbackPath)
@@ -236,9 +322,22 @@ namespace DLS.Simulation
 				: fallbackPath;
 
 			runtimeDiagnosticPaths[chip] = path;
+			bool isCombinational = chip.ChipType != ChipType.Custom && IsCombinationalChipType(chip.ChipType);
+			int combinationalIndex = isCombinational ? combinationalChips.Count : -1;
+			int inputStart = allPins.Count;
 
-			for (int i = 0; i < chip.InputPins.Length; i++) allPins.Add(chip.InputPins[i]);
-			for (int i = 0; i < chip.OutputPins.Length; i++) allPins.Add(chip.OutputPins[i]);
+			for (int i = 0; i < chip.InputPins.Length; i++)
+			{
+				allPins.Add(chip.InputPins[i]);
+				pinOwnerCombinationalIndexBuild.Add(combinationalIndex);
+			}
+
+			int outputStart = allPins.Count;
+			for (int i = 0; i < chip.OutputPins.Length; i++)
+			{
+				allPins.Add(chip.OutputPins[i]);
+				pinOwnerCombinationalIndexBuild.Add(-1);
+			}
 
 			if (chip.ChipType == ChipType.Custom)
 			{
@@ -252,30 +351,29 @@ namespace DLS.Simulation
 				return;
 			}
 
-			allBuiltinChips.Add(chip);
+			RuntimeChip runtimeChip = new(chip, inputStart, outputStart, combinationalIndex);
 
-			if (IsCombinationalChipType(chip.ChipType))
+			if (isCombinational)
 			{
-				combinationalChips.Add(chip);
-				combinationalChipSet.Add(chip);
+				combinationalChips.Add(runtimeChip);
 			}
 
 			switch (chip.ChipType)
 			{
 				case ChipType.Clock:
 				case ChipType.Key:
-					sourceChips.Add(chip);
+					sourceChips.Add(runtimeChip);
 					break;
 
 				case ChipType.Pulse:
 				case ChipType.dev_Ram_8Bit:
 				case ChipType.DisplayRGB:
 				case ChipType.DisplayDot:
-					sequentialChips.Add(chip);
+					sequentialChips.Add(runtimeChip);
 					break;
 
 				case ChipType.Buzzer:
-					buzzerChips.Add(chip);
+					buzzerChips.Add(runtimeChip);
 					break;
 			}
 		}
@@ -300,30 +398,66 @@ namespace DLS.Simulation
 				ChipType.Bus_8Bit;
 		}
 
-		static void ApplyExternalInputs(SimChip rootSimChip, DevPinInstance[] inputPins)
+		static void BindExternalInputs(SimChip rootSimChip, DevPinInstance[] inputPins)
+		{
+			boundInputPins = inputPins;
+			boundInputPinSnapshot = (DevPinInstance[])inputPins.Clone();
+			boundInputPinIndices = new int[inputPins.Length];
+			Array.Fill(boundInputPinIndices, -1);
+
+			if (rootSimChip == null) return;
+
+			for (int i = 0; i < inputPins.Length; i++)
+			{
+				try
+				{
+					SimPin simPin = rootSimChip.GetSimPinFromAddress(inputPins[i].Pin.Address);
+					if (pinIndices.TryGetValue(simPin, out int pinIndex)) boundInputPinIndices[i] = pinIndex;
+				}
+				catch (Exception)
+				{
+					// A project edit can briefly expose the new editor pin list before the
+					// corresponding simulation-thread topology modification is applied.
+				}
+			}
+		}
+
+		static bool ExternalInputBindingsMatch(DevPinInstance[] inputPins)
+		{
+			if (!ReferenceEquals(boundInputPins, inputPins) || boundInputPinSnapshot.Length != inputPins.Length)
+			{
+				return false;
+			}
+
+			for (int i = 0; i < inputPins.Length; i++)
+			{
+				if (!ReferenceEquals(boundInputPinSnapshot[i], inputPins[i])) return false;
+			}
+
+			return true;
+		}
+
+		static void ApplyExternalInputs(DevPinInstance[] inputPins)
 		{
 			for (int i = 0; i < inputPins.Length; i++)
 			{
 				DevPinInstance input = inputPins[i];
+				if (input == null) continue;
 
-				try
+				int pinIndex = i < boundInputPinIndices.Length ? boundInputPinIndices[i] : -1;
+				if (pinIndex >= 0)
 				{
-					SimPin simPin = rootSimChip.GetSimPinFromAddress(input.Pin.Address);
+					SimPin simPin = allPins[pinIndex];
 					uint newState = input.Pin.PlayerInputState;
 
 					if (simPin.State != newState)
 					{
 						simPin.State = newState;
-						QueueSignal(simPin);
+						QueueFanout(pinIndex);
 					}
+				}
 
-					input.Pin.State = input.Pin.PlayerInputState;
-				}
-				catch (Exception)
-				{
-					// The editor and simulation run on separate threads. During an edit the
-					// runtime graph can briefly lag one command behind the visible project.
-				}
+				input.Pin.State = input.Pin.PlayerInputState;
 			}
 		}
 
@@ -333,7 +467,8 @@ namespace DLS.Simulation
 
 			for (int i = 0; i < sourceChips.Count; i++)
 			{
-				SimChip chip = sourceChips[i];
+				RuntimeChip runtimeChip = sourceChips[i];
+				SimChip chip = runtimeChip.Chip;
 
 				switch (chip.ChipType)
 				{
@@ -343,14 +478,14 @@ namespace DLS.Simulation
 							Simulator.stepsPerClockTransition != 0 &&
 							((Simulator.simulationFrame / Simulator.stepsPerClockTransition) & 1) == 0;
 
-						StageOutput(chip.OutputPins[0], high ? PinState.LogicHigh : PinState.LogicLow);
+						StageOutput(runtimeChip.OutputStart, high ? PinState.LogicHigh : PinState.LogicLow);
 						break;
 					}
 
 					case ChipType.Key:
 					{
 						bool isHeld = SimKeyboardHelper.KeyIsHeld((char)chip.InternalState[0]);
-						StageOutput(chip.OutputPins[0], isHeld ? PinState.LogicHigh : PinState.LogicLow);
+						StageOutput(runtimeChip.OutputStart, isHeld ? PinState.LogicHigh : PinState.LogicLow);
 						break;
 					}
 				}
@@ -365,24 +500,25 @@ namespace DLS.Simulation
 
 			for (int i = 0; i < sequentialChips.Count; i++)
 			{
-				SimChip chip = sequentialChips[i];
+				RuntimeChip runtimeChip = sequentialChips[i];
+				SimChip chip = runtimeChip.Chip;
 
 				switch (chip.ChipType)
 				{
 					case ChipType.Pulse:
-						AdvancePulse(chip);
+						AdvancePulse(runtimeChip);
 						break;
 
 					case ChipType.dev_Ram_8Bit:
-						if (AdvanceRam(chip)) MarkDirty(chip);
+						if (AdvanceRam(chip)) MarkDirty(runtimeChip.CombinationalIndex);
 						break;
 
 					case ChipType.DisplayRGB:
-						if (AdvanceDisplayRgb(chip)) MarkDirty(chip);
+						if (AdvanceDisplayRgb(chip)) MarkDirty(runtimeChip.CombinationalIndex);
 						break;
 
 					case ChipType.DisplayDot:
-						if (AdvanceDisplayDot(chip)) MarkDirty(chip);
+						if (AdvanceDisplayDot(chip)) MarkDirty(runtimeChip.CombinationalIndex);
 						break;
 				}
 			}
@@ -390,8 +526,9 @@ namespace DLS.Simulation
 			CommitPendingOutputs();
 		}
 
-		static void AdvancePulse(SimChip chip)
+		static void AdvancePulse(RuntimeChip runtimeChip)
 		{
+			SimChip chip = runtimeChip.Chip;
 			const int pulseDurationIndex = 0;
 			const int pulseTicksRemainingIndex = 1;
 			const int pulseInputOldIndex = 2;
@@ -422,7 +559,7 @@ namespace DLS.Simulation
 			}
 
 			chip.InternalState[pulseInputOldIndex] = pulseInputHigh ? 1u : 0;
-			StageOutput(chip.OutputPins[0], outputState);
+			StageOutput(runtimeChip.OutputStart, outputState);
 		}
 
 		static bool AdvanceRam(SimChip chip)
@@ -546,9 +683,9 @@ namespace DLS.Simulation
 			int deltaCycles = 0;
 			int maxDeltaCycles = Math.Max(256, combinationalChips.Count + 64);
 
-			while (signalQueue.Count > 0 || dirtyChips.Count > 0)
+			while (targetQueue.Count > 0 || dirtyChips.Count > 0)
 			{
-				DrainSignalQueue();
+				DrainTargetQueue();
 
 				if (dirtyChips.Count == 0) continue;
 
@@ -561,8 +698,8 @@ namespace DLS.Simulation
 
 				evaluationBatch.Clear();
 				evaluationBatch.AddRange(dirtyChips);
+				for (int i = 0; i < dirtyChips.Count; i++) dirtyChipFlags[dirtyChips[i]] = false;
 				dirtyChips.Clear();
-				dirtyChipSet.Clear();
 
 				pendingPinStates.Clear();
 
@@ -579,32 +716,38 @@ namespace DLS.Simulation
 			return (true, deltaCycles);
 		}
 
-		static void DrainSignalQueue()
+		static void DrainTargetQueue()
 		{
-			while (signalQueue.Count > 0)
+			while (targetQueue.Count > 0)
 			{
-				SimPin source = signalQueue.Dequeue();
-				queuedSignals.Remove(source);
-
-				for (int i = 0; i < source.ConnectedTargetPins.Length; i++)
-				{
-					ResolveTargetPin(source, source.ConnectedTargetPins[i]);
-					LastSignalPropagations++;
-				}
+				int targetIndex = targetQueue.Dequeue();
+				queuedTargets[targetIndex] = false;
+				ResolveTargetPin(targetIndex, triggeringSourceByTarget[targetIndex]);
+				LastTargetResolutions++;
 			}
 		}
 
-		static void ResolveTargetPin(SimPin triggeringSource, SimPin target)
+		static void ResolveTargetPin(int targetIndex, int triggeringSourceIndex)
 		{
-			if (!inputSources.TryGetValue(target, out SimPin[] sources) || sources.Length == 0)
+			int[] sourceIndices = sourceIndicesByTarget[targetIndex];
+			if (sourceIndices.Length == 0) return;
+
+			SimPin target = allPins[targetIndex];
+			uint newState;
+			ushort contentionMask;
+
+			if (sourceIndices.Length == 1)
 			{
-				return;
+				newState = allPins[sourceIndices[0]].State;
+				contentionMask = 0;
+			}
+			else
+			{
+				newState = ResolveDrivenState(sourceIndices, out contentionMask);
 			}
 
-			uint newState = ResolveDrivenState(sources, out ushort contentionMask);
-
 			target.lastUpdatedFrameIndex = Simulator.simulationFrame;
-			target.numInputsReceivedThisFrame = sources.Length;
+			target.numInputsReceivedThisFrame = sourceIndices.Length;
 
 			if (target.State == newState)
 			{
@@ -614,31 +757,35 @@ namespace DLS.Simulation
 
 			uint oldState = target.State;
 			target.State = newState;
+			SimPin triggeringSource = allPins[triggeringSourceIndex];
 			target.latestSourceID = triggeringSource.ID;
 			target.latestSourceParentChipID = triggeringSource.parentChip.ID;
 
-			TracePropagation(triggeringSource, target, oldState, newState, sources.Length);
+			if (DiagnosticsEnabled && DiagnosticSink != null)
+			{
+				TracePropagation(triggeringSource, target, oldState, newState, sourceIndices.Length);
+			}
 			if (contentionMask != 0) TraceContention(target, contentionMask);
 
-			if (target.parentChip.ChipType == ChipType.Custom)
+			if (targetIsCustomBoundary[targetIndex])
 			{
-				QueueSignal(target);
+				QueueFanout(targetIndex);
 			}
-			else if (target.isInput && combinationalChipSet.Contains(target.parentChip))
+			else
 			{
-				MarkDirty(target.parentChip);
+				MarkDirty(targetOwnerCombinationalIndex[targetIndex]);
 			}
 		}
 
-		static uint ResolveDrivenState(SimPin[] sources, out ushort contentionMask)
+		static uint ResolveDrivenState(int[] sourceIndices, out ushort contentionMask)
 		{
 			ushort connectedMask = 0;
 			ushort highMask = 0;
 			ushort lowMask = 0;
 
-			for (int i = 0; i < sources.Length; i++)
+			for (int i = 0; i < sourceIndices.Length; i++)
 			{
-				uint state = sources[i].State;
+				uint state = allPins[sourceIndices[i]].State;
 				ushort bits = PinState.GetBitStates(state);
 				ushort tristate = PinState.GetTristateFlags(state);
 				ushort activeMask = (ushort)~tristate;
@@ -658,24 +805,28 @@ namespace DLS.Simulation
 			return (uint)(resolvedBits | (resolvedTristate << 16));
 		}
 
-		static void EvaluateCombinationalChip(SimChip chip)
+		static void EvaluateCombinationalChip(int chipIndex)
 		{
+			RuntimeChip runtimeChip = combinationalChips[chipIndex];
+			SimChip chip = runtimeChip.Chip;
+			int outputStart = runtimeChip.OutputStart;
+
 			switch (chip.ChipType)
 			{
 				case ChipType.Nand:
 				{
 					uint nandOp = 1 ^ (chip.InputPins[0].State & chip.InputPins[1].State);
-					StageOutput(chip.OutputPins[0], nandOp & 1);
+					StageOutput(outputStart, nandOp & 1);
 					break;
 				}
 
 				case ChipType.Split_4To1Bit:
 				{
 					uint input = chip.InputPins[0].State;
-					StageOutput(chip.OutputPins[0], (input >> 3) & PinState.SingleBitMask);
-					StageOutput(chip.OutputPins[1], (input >> 2) & PinState.SingleBitMask);
-					StageOutput(chip.OutputPins[2], (input >> 1) & PinState.SingleBitMask);
-					StageOutput(chip.OutputPins[3], input & PinState.SingleBitMask);
+					StageOutput(outputStart, (input >> 3) & PinState.SingleBitMask);
+					StageOutput(outputStart + 1, (input >> 2) & PinState.SingleBitMask);
+					StageOutput(outputStart + 2, (input >> 1) & PinState.SingleBitMask);
+					StageOutput(outputStart + 3, input & PinState.SingleBitMask);
 					break;
 				}
 
@@ -685,7 +836,7 @@ namespace DLS.Simulation
 					uint b = chip.InputPins[2].State & PinState.SingleBitMask;
 					uint c = chip.InputPins[1].State & PinState.SingleBitMask;
 					uint d = chip.InputPins[0].State & PinState.SingleBitMask;
-					StageOutput(chip.OutputPins[0], a | (b << 1) | (c << 2) | (d << 3));
+					StageOutput(outputStart, a | (b << 1) | (c << 2) | (d << 3));
 					break;
 				}
 
@@ -701,7 +852,7 @@ namespace DLS.Simulation
 					uint h = chip.InputPins[0].State & PinState.SingleBitMask;
 
 					StageOutput(
-						chip.OutputPins[0],
+						outputStart,
 						a | (b << 1) | (c << 2) | (d << 3) |
 						(e << 4) | (f << 5) | (g << 6) | (h << 7));
 					break;
@@ -711,7 +862,7 @@ namespace DLS.Simulation
 				{
 					uint state = chip.OutputPins[0].State;
 					PinState.Set8BitFrom4BitSources(ref state, chip.InputPins[1].State, chip.InputPins[0].State);
-					StageOutput(chip.OutputPins[0], state);
+					StageOutput(outputStart, state);
 					break;
 				}
 
@@ -723,22 +874,22 @@ namespace DLS.Simulation
 					PinState.Set4BitFrom8BitSource(ref low, chip.InputPins[0].State, false);
 					PinState.Set4BitFrom8BitSource(ref high, chip.InputPins[0].State, true);
 
-					StageOutput(chip.OutputPins[0], low);
-					StageOutput(chip.OutputPins[1], high);
+					StageOutput(outputStart, low);
+					StageOutput(outputStart + 1, high);
 					break;
 				}
 
 				case ChipType.Split_8To1Bit:
 				{
 					uint input = chip.InputPins[0].State;
-					StageOutput(chip.OutputPins[0], (input >> 7) & PinState.SingleBitMask);
-					StageOutput(chip.OutputPins[1], (input >> 6) & PinState.SingleBitMask);
-					StageOutput(chip.OutputPins[2], (input >> 5) & PinState.SingleBitMask);
-					StageOutput(chip.OutputPins[3], (input >> 4) & PinState.SingleBitMask);
-					StageOutput(chip.OutputPins[4], (input >> 3) & PinState.SingleBitMask);
-					StageOutput(chip.OutputPins[5], (input >> 2) & PinState.SingleBitMask);
-					StageOutput(chip.OutputPins[6], (input >> 1) & PinState.SingleBitMask);
-					StageOutput(chip.OutputPins[7], input & PinState.SingleBitMask);
+					StageOutput(outputStart, (input >> 7) & PinState.SingleBitMask);
+					StageOutput(outputStart + 1, (input >> 6) & PinState.SingleBitMask);
+					StageOutput(outputStart + 2, (input >> 5) & PinState.SingleBitMask);
+					StageOutput(outputStart + 3, (input >> 4) & PinState.SingleBitMask);
+					StageOutput(outputStart + 4, (input >> 3) & PinState.SingleBitMask);
+					StageOutput(outputStart + 5, (input >> 2) & PinState.SingleBitMask);
+					StageOutput(outputStart + 6, (input >> 1) & PinState.SingleBitMask);
+					StageOutput(outputStart + 7, input & PinState.SingleBitMask);
 					break;
 				}
 
@@ -750,7 +901,7 @@ namespace DLS.Simulation
 						PinState.SetAllDisconnected(ref output);
 					}
 
-					StageOutput(chip.OutputPins[0], output);
+					StageOutput(outputStart, output);
 					break;
 				}
 
@@ -760,15 +911,15 @@ namespace DLS.Simulation
 					uint address = PinState.GetBitStates(chip.InputPins[0].State);
 					uint data = chip.InternalState[address];
 
-					StageOutput(chip.OutputPins[0], (data >> 8) & byteMask);
-					StageOutput(chip.OutputPins[1], data & byteMask);
+					StageOutput(outputStart, (data >> 8) & byteMask);
+					StageOutput(outputStart + 1, data & byteMask);
 					break;
 				}
 
 				case ChipType.dev_Ram_8Bit:
 				{
 					uint address = PinState.GetBitStates(chip.InputPins[0].State);
-					StageOutput(chip.OutputPins[0], chip.InternalState[address]);
+					StageOutput(outputStart, chip.InternalState[address]);
 					break;
 				}
 
@@ -776,16 +927,16 @@ namespace DLS.Simulation
 				{
 					uint address = PinState.GetBitStates(chip.InputPins[0].State);
 					uint data = chip.InternalState[address];
-					StageOutput(chip.OutputPins[0], (data >> 0) & 0b1111);
-					StageOutput(chip.OutputPins[1], (data >> 4) & 0b1111);
-					StageOutput(chip.OutputPins[2], (data >> 8) & 0b1111);
+					StageOutput(outputStart, (data >> 0) & 0b1111);
+					StageOutput(outputStart + 1, (data >> 4) & 0b1111);
+					StageOutput(outputStart + 2, (data >> 8) & 0b1111);
 					break;
 				}
 
 				case ChipType.DisplayDot:
 				{
 					uint address = PinState.GetBitStates(chip.InputPins[0].State);
-					StageOutput(chip.OutputPins[0], chip.InternalState[address]);
+					StageOutput(outputStart, chip.InternalState[address]);
 					break;
 				}
 
@@ -793,7 +944,7 @@ namespace DLS.Simulation
 				{
 					if (ChipTypeHelper.IsBusOriginType(chip.ChipType))
 					{
-						StageOutput(chip.OutputPins[0], chip.InputPins[0].State);
+						StageOutput(outputStart, chip.InputPins[0].State);
 					}
 
 					break;
@@ -807,17 +958,17 @@ namespace DLS.Simulation
 
 			for (int i = 0; i < buzzerChips.Count; i++)
 			{
-				SimChip chip = buzzerChips[i];
+				SimChip chip = buzzerChips[i].Chip;
 				int frequencyIndex = PinState.GetBitStates(chip.InputPins[0].State);
 				int volumeIndex = PinState.GetBitStates(chip.InputPins[1].State);
 				audioState.RegisterNote(frequencyIndex, (uint)volumeIndex);
 			}
 		}
 
-		static void StageOutput(SimPin pin, uint state)
+		static void StageOutput(int pinIndex, uint state)
 		{
-			if (pin.State == state) return;
-			pendingPinStates.Add(new PendingPinState(pin, state));
+			if (allPins[pinIndex].State == state) return;
+			pendingPinStates.Add(new PendingPinState(pinIndex, state));
 		}
 
 		static void CommitPendingOutputs()
@@ -825,28 +976,36 @@ namespace DLS.Simulation
 			for (int i = 0; i < pendingPinStates.Count; i++)
 			{
 				PendingPinState pending = pendingPinStates[i];
-				if (pending.Pin.State == pending.State) continue;
+				SimPin pin = allPins[pending.PinIndex];
+				if (pin.State == pending.State) continue;
 
-				pending.Pin.State = pending.State;
-				QueueSignal(pending.Pin);
+				pin.State = pending.State;
+				QueueFanout(pending.PinIndex);
 			}
 
 			pendingPinStates.Clear();
 		}
 
-		static void QueueSignal(SimPin pin)
+		static void QueueFanout(int sourceIndex)
 		{
-			if (pin.ConnectedTargetPins.Length == 0) return;
-			if (!queuedSignals.Add(pin)) return;
+			int[] targetIndices = targetIndicesBySource[sourceIndex];
+			for (int i = 0; i < targetIndices.Length; i++)
+			{
+				int targetIndex = targetIndices[i];
+				LastSignalPropagations++;
+				triggeringSourceByTarget[targetIndex] = sourceIndex;
 
-			signalQueue.Enqueue(pin);
+				if (queuedTargets[targetIndex]) continue;
+				queuedTargets[targetIndex] = true;
+				targetQueue.Enqueue(targetIndex);
+			}
 		}
 
 		static void QueueAllExistingSignals()
 		{
 			for (int i = 0; i < allPins.Count; i++)
 			{
-				QueueSignal(allPins[i]);
+				QueueFanout(i);
 			}
 		}
 
@@ -855,37 +1014,34 @@ namespace DLS.Simulation
 			// Feedback storage has no defined power-on state. Seed it once in a
 			// deterministic path order, then use simultaneous delta-cycles only.
 			QueueAllExistingSignals();
-			DrainSignalQueue();
-
-			List<SimChip> initializationOrder = new(combinationalChips);
-			initializationOrder.Sort((a, b) => string.CompareOrdinal(GetChipPath(a), GetChipPath(b)));
+			DrainTargetQueue();
 
 			for (int i = 0; i < initializationOrder.Count; i++)
 			{
 				pendingPinStates.Clear();
 				EvaluateCombinationalChip(initializationOrder[i]);
 				CommitPendingOutputs();
-				DrainSignalQueue();
+				DrainTargetQueue();
 			}
 
+			for (int i = 0; i < dirtyChips.Count; i++) dirtyChipFlags[dirtyChips[i]] = false;
 			dirtyChips.Clear();
-			dirtyChipSet.Clear();
 		}
 
-		static void MarkDirty(SimChip chip)
+		static void MarkDirty(int chipIndex)
 		{
-			if (!combinationalChipSet.Contains(chip)) return;
-			if (!dirtyChipSet.Add(chip)) return;
+			if (chipIndex < 0 || dirtyChipFlags[chipIndex]) return;
 
-			dirtyChips.Add(chip);
+			dirtyChipFlags[chipIndex] = true;
+			dirtyChips.Add(chipIndex);
 		}
 
 		static void ClearWorkQueues()
 		{
-			signalQueue.Clear();
-			queuedSignals.Clear();
+			targetQueue.Clear();
+			if (queuedTargets.Length > 0) Array.Clear(queuedTargets, 0, queuedTargets.Length);
 			dirtyChips.Clear();
-			dirtyChipSet.Clear();
+			if (dirtyChipFlags.Length > 0) Array.Clear(dirtyChipFlags, 0, dirtyChipFlags.Length);
 			evaluationBatch.Clear();
 			pendingPinStates.Clear();
 		}
@@ -951,7 +1107,7 @@ namespace DLS.Simulation
 				$"frame={Simulator.simulationFrame}\n" +
 				$"event=non-convergent-combinational-network\n" +
 				$"maxDeltaCycles={maxDeltaCycles}\n" +
-				$"pendingSignals={signalQueue.Count}\n" +
+				$"pendingSignals={targetQueue.Count}\n" +
 				$"pendingChips={dirtyChips.Count}");
 		}
 	}

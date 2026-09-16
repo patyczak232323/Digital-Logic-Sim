@@ -23,8 +23,10 @@ class DeltaNet:
         self.gates: list[tuple[str, str, str]] = []
         self.fanout: dict[str, list[int]] = defaultdict(list)
         self.aliases: dict[str, list[str]] = defaultdict(list)
+        self.alias_sources: dict[str, list[str]] = defaultdict(list)
         self.gate_evaluations = 0
         self.signal_propagations = 0
+        self.target_resolutions = 0
 
     def set(self, name: str, value: int) -> None:
         self.state[name] = int(bool(value))
@@ -42,22 +44,31 @@ class DeltaNet:
         self.state.setdefault(source, 0)
         self.state.setdefault(target, 0)
         self.aliases[source].append(target)
+        self.alias_sources[target].append(source)
+
+    def _queue_fanout(self, source: str, queue: deque[str], queued: set[str]) -> None:
+        for target in self.aliases.get(source, ()):
+            self.signal_propagations += 1
+            if target in queued:
+                continue
+            queued.add(target)
+            queue.append(target)
+
+    def _signal_changed(self, source: str, queue: deque[str], queued: set[str], dirty: set[int]) -> None:
+        dirty.update(self.fanout.get(source, ()))
+        self._queue_fanout(source, queue, queued)
 
     def _drain(self, queue: deque[str], queued: set[str], dirty: set[int]) -> None:
         while queue:
-            source = queue.popleft()
-            queued.discard(source)
-            dirty.update(self.fanout.get(source, ()))
-            value = self.state[source]
-            for target in self.aliases.get(source, ()):
-                self.signal_propagations += 1
-                if self.state[target] == value:
-                    continue
-                self.state[target] = value
-                dirty.update(self.fanout.get(target, ()))
-                if target not in queued:
-                    queued.add(target)
-                    queue.append(target)
+            target = queue.popleft()
+            queued.discard(target)
+            self.target_resolutions += 1
+            values = {self.state[source] for source in self.alias_sources[target]}
+            value = values.pop() if len(values) == 1 else 0
+            if self.state[target] == value:
+                continue
+            self.state[target] = value
+            self._signal_changed(target, queue, queued, dirty)
 
     def settle(self, changed: list[str] | None = None, max_delta: int | None = None) -> tuple[bool, int]:
         queue: deque[str] = deque()
@@ -66,9 +77,7 @@ class DeltaNet:
 
         names = list(self.state) if changed is None else changed
         for name in names:
-            if name not in queued:
-                queued.add(name)
-                queue.append(name)
+            self._signal_changed(name, queue, queued, dirty)
 
         if max_delta is None:
             max_delta = max(256, len(self.gates) + 64)
@@ -98,9 +107,7 @@ class DeltaNet:
                 if self.state[out] == new_value:
                     continue
                 self.state[out] = new_value
-                if out not in queued:
-                    queued.add(out)
-                    queue.append(out)
+                self._signal_changed(out, queue, queued, dirty)
 
             delta += 1
 
@@ -115,9 +122,11 @@ class DeltaNet:
 
     def prime(self) -> None:
         """One deterministic power-on pass used only to seed undefined feedback."""
-        queue = deque(self.state)
-        queued = set(self.state)
+        queue: deque[str] = deque()
+        queued: set[str] = set()
         dirty: set[int] = set()
+        for name in self.state:
+            self._signal_changed(name, queue, queued, dirty)
         self._drain(queue, queued, dirty)
 
         for a, b, out in self.gates:
@@ -125,9 +134,8 @@ class DeltaNet:
             if self.state[out] == new_value:
                 continue
             self.state[out] = new_value
-            queue = deque([out])
-            queued = {out}
             dirty.clear()
+            self._signal_changed(out, queue, queued, dirty)
             self._drain(queue, queued, dirty)
 
 
@@ -410,6 +418,28 @@ def test_oscillator_guard() -> None:
     assert elapsed < 1.0, elapsed
 
 
+def test_multidriver_resolution_and_coalescing() -> None:
+    net = DeltaNet()
+    drivers = [f"D{i}" for i in range(256)]
+    for source in drivers:
+        net.set(source, 0)
+        net.alias(source, "BUS")
+
+    net.prime()
+    assert net.settle()[0]
+
+    before = net.target_resolutions
+    for source in drivers:
+        net.set(source, 1)
+    assert net.settle(drivers)[0]
+    assert net.state["BUS"] == 1
+    assert net.target_resolutions - before == 1, "shared target was resolved more than once"
+
+    net.set(drivers[0], 0)
+    assert net.settle([drivers[0]])[0]
+    assert net.state["BUS"] == 0, "conflicting active drivers must resolve deterministically low"
+
+
 def test_source_integration_static() -> None:
     root = Path(__file__).resolve().parents[2]
     solver = (root / "Assets/Scripts/Simulation/DeterministicSimulator.cs").read_text(encoding="utf-8")
@@ -423,34 +453,61 @@ def test_source_integration_static() -> None:
         "AdvanceSequentialComponents",
         "RegisterDiagnosticPaths",
         "TraceNonConvergence",
+        "Queue<int> targetQueue",
+        "bool[] queuedTargets",
+        "int[][] targetIndicesBySource",
+        "sourceIndices.Length == 1",
+        "boundInputPinIndices",
+        "LastTargetResolutions",
     )
     for token in required_solver_tokens:
         assert token in solver, f"missing deterministic solver mechanism: {token}"
 
     assert "RandomBool()" not in solver
     assert "rng.Next" not in solver
+    assert "HashSet<SimPin>" not in solver
+    assert "HashSet<SimChip>" not in solver
+    assert "Dictionary<SimPin, SimPin[]>" not in solver
     assert "DeterministicSimulator.RunSimulationStep" in facade
     assert "pendingTopologyModification" in facade
 
 
-def benchmark_event_driven_chain() -> tuple[float, int, int]:
+def benchmark_sparse_parallel_bank() -> tuple[float, int, int]:
     net = DeltaNet()
-    net.set("IN", 0)
-    previous = "IN"
-    for i in range(1000):
-        out = f"B{i}"
-        net.gate(previous, previous, out)
-        previous = out
+    gate_count = 10_000
+    for i in range(gate_count):
+        net.set(f"A{i}", 0)
+        net.set(f"B{i}", 1)
+        net.gate(f"A{i}", f"B{i}", f"Q{i}")
     net.prime()
     net.settle()
     before = net.gate_evaluations
     started = time.perf_counter()
     for i in range(2000):
-        assert net.drive("IN", i & 1)[0]
+        assert net.drive("A0", 1 ^ (i & 1))[0]
     elapsed = time.perf_counter() - started
     evaluations = net.gate_evaluations - before
     full_sweeps = 2000 * len(net.gates)
     return elapsed, evaluations, full_sweeps
+
+
+def benchmark_fanin_coalescing() -> tuple[int, int, int]:
+    net = DeltaNet()
+    drivers = [f"S{i}" for i in range(2048)]
+    for source in drivers:
+        net.set(source, 0)
+        net.alias(source, "BUS")
+    net.prime()
+    net.settle()
+
+    before = net.target_resolutions
+    for source in drivers:
+        net.set(source, 1)
+    assert net.settle(drivers)[0]
+    compiled_resolutions = net.target_resolutions - before
+    legacy_driver_scans = len(drivers) * len(drivers)
+    compiled_driver_scans = compiled_resolutions * len(drivers)
+    return compiled_resolutions, compiled_driver_scans, legacy_driver_scans
 
 
 def main() -> None:
@@ -466,6 +523,7 @@ def main() -> None:
         ("creation-order independence", test_creation_order_independence),
         ("restart determinism", test_restart_determinism),
         ("oscillator delta-cycle guard", test_oscillator_guard),
+        ("multi-driver resolution + target coalescing", test_multidriver_resolution_and_coalescing),
         ("C# integration static checks", test_source_integration_static),
     ]
 
@@ -482,10 +540,14 @@ def main() -> None:
     for bits, elapsed in counter_timings.items():
         print(f"      counter-{bits}: {elapsed:.3f}s")
 
-    bench_elapsed, event_evals, full_sweeps = benchmark_event_driven_chain()
-    print("BENCH event-driven 1000-gate chain, 2000 input transitions")
+    bench_elapsed, event_evals, full_sweeps = benchmark_sparse_parallel_bank()
+    print("BENCH sparse 10,000-gate bank, 2,000 input transitions")
     print(f"      wall={bench_elapsed:.3f}s gate_evaluations={event_evals} full_sweep_reference={full_sweeps}")
     print(f"      evaluation_ratio={event_evals / full_sweeps:.6f}")
+    resolutions, compiled_scans, legacy_scans = benchmark_fanin_coalescing()
+    print("BENCH 2,048 simultaneous drivers targeting one shared net")
+    print(f"      target_resolutions={resolutions} driver_scans={compiled_scans} legacy_reference={legacy_scans}")
+    print(f"      driver_scan_ratio={compiled_scans / legacy_scans:.6f}")
     print(f"ALL TESTS PASSED in {time.perf_counter() - total_start:.3f}s")
 
 

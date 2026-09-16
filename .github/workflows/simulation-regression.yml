@@ -2,7 +2,7 @@ name: Simulation propagation regression
 
 on:
   push:
-    branches: [ fix/deterministic-simulation-propagation ]
+    branches: [ main, fix/deterministic-simulation-propagation ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
