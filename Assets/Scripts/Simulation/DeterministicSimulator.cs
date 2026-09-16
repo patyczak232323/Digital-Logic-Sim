@@ -79,6 +79,7 @@ namespace DLS.Simulation
 
 			if (needsInitialPropagation)
 			{
+				PrimeInitialCombinationalState();
 				QueueAllExistingSignals();
 				for (int i = 0; i < combinationalChips.Count; i++)
 				{
@@ -847,6 +848,28 @@ namespace DLS.Simulation
 			{
 				QueueSignal(allPins[i]);
 			}
+		}
+
+		static void PrimeInitialCombinationalState()
+		{
+			// Feedback storage has no defined power-on state. Seed it once in a
+			// deterministic path order, then use simultaneous delta-cycles only.
+			QueueAllExistingSignals();
+			DrainSignalQueue();
+
+			List<SimChip> initializationOrder = new(combinationalChips);
+			initializationOrder.Sort((a, b) => string.CompareOrdinal(GetChipPath(a), GetChipPath(b)));
+
+			for (int i = 0; i < initializationOrder.Count; i++)
+			{
+				pendingPinStates.Clear();
+				EvaluateCombinationalChip(initializationOrder[i]);
+				CommitPendingOutputs();
+				DrainSignalQueue();
+			}
+
+			dirtyChips.Clear();
+			dirtyChipSet.Clear();
 		}
 
 		static void MarkDirty(SimChip chip)
