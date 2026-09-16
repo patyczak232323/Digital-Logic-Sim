@@ -455,8 +455,11 @@ def test_source_integration_static() -> None:
         "TraceNonConvergence",
         "Queue<int> targetQueue",
         "bool[] queuedTargets",
-        "int[][] targetIndicesBySource",
-        "sourceIndices.Length == 1",
+        "int[] targetOffsetsBySource",
+        "int[] targetIndicesBySource",
+        "int[] sourceOffsetsByTarget",
+        "BuildAdjacency",
+        "sourceCount == 1",
         "boundInputPinIndices",
         "LastTargetResolutions",
     )
