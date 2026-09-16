@@ -34,19 +34,24 @@ jobs:
 
       - name: Replace repository contents with upstream
         if: steps.guard.outputs.already_imported != 'true'
+        shell: bash
         run: |
           cp .github/workflows/import-upstream.yml /tmp/import-upstream.yml
           find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-          cp -a /tmp/upstream/. .
-          rm -rf .git
+          rsync -a --exclude='.git' /tmp/upstream/ ./
           mkdir -p .github/workflows
           cp /tmp/import-upstream.yml .github/workflows/import-upstream.yml
 
       - name: Commit imported upstream
         if: steps.guard.outputs.already_imported != 'true'
+        shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
-          git commit -m 'Import SebLague/Digital-Logic-Sim main'
-          git push origin HEAD:main
+          if git diff --cached --quiet; then
+            echo 'No changes to import.'
+          else
+            git commit -m 'Import SebLague/Digital-Logic-Sim main'
+            git push origin HEAD:main
+          fi
