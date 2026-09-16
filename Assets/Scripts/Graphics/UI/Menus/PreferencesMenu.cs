@@ -125,6 +125,7 @@ namespace DLS.Graphics
 
 				// ---- Handle changes ----
 				int.TryParse(clockSpeedInputFieldState.text, out int clockSpeed);
+				clockSpeed = Mathf.Max(1, clockSpeed);
 
 				// Parse target sim tick rate
 				int.TryParse(freqState.text, out int targetSimTicksPerSecond);

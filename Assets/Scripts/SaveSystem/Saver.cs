@@ -27,7 +27,10 @@ namespace DLS.SaveSystem
 		{
 			ProjectDescription desc = Loader.LoadProjectDescription(nameOld);
 			desc.ProjectName = nameNew;
-			Directory.Move(SavePaths.GetProjectPath(nameOld), SavePaths.GetProjectPath(nameNew));
+
+			string sourcePath = SavePaths.GetProjectPath(nameOld);
+			string destinationPath = SavePaths.GetProjectPath(nameNew);
+			MoveDirectorySupportingCaseOnlyRename(sourcePath, destinationPath);
 			SaveProjectDescription(desc);
 		}
 
@@ -43,6 +46,41 @@ namespace DLS.SaveSystem
 		{
 			string serializedDescription = CreateSerializedChipDescription(chipDescription);
 			WriteToFile(serializedDescription, GetChipFilePath(chipDescription.Name, projectName));
+		}
+
+		public static void RenameChip(string oldName, ChipDescription chipDescription, string projectName)
+		{
+			string oldPath = GetChipFilePath(oldName, projectName);
+			string newPath = GetChipFilePath(chipDescription.Name, projectName);
+			string serializedDescription = CreateSerializedChipDescription(chipDescription);
+
+			// A case-only rename maps to the same path on Windows/macOS. First update
+			// the contents safely, then use a temporary name to make the casing stick.
+			if (string.Equals(oldPath, newPath, StringComparison.OrdinalIgnoreCase))
+			{
+				WriteToFile(serializedDescription, oldPath);
+				if (!string.Equals(oldPath, newPath, StringComparison.Ordinal))
+				{
+					string temporaryPath = SaveUtils.EnsureUniqueFileName(oldPath + ".rename");
+					File.Move(oldPath, temporaryPath);
+					try
+					{
+						File.Move(temporaryPath, newPath);
+					}
+					catch
+					{
+						if (File.Exists(temporaryPath)) File.Move(temporaryPath, oldPath);
+						throw;
+					}
+				}
+
+				return;
+			}
+
+			// Write the new file before removing the old one, so a failed save never
+			// destroys the last usable copy.
+			WriteToFile(serializedDescription, newPath);
+			File.Delete(oldPath);
 		}
 
 
@@ -84,7 +122,10 @@ namespace DLS.SaveSystem
 				deletedPath = SaveUtils.EnsureUniqueDirectoryName(deletedPath);
 				Directory.Move(projectPath, deletedPath);
 			}
-			//Directory.Move
+			else
+			{
+				Directory.Delete(projectPath, true);
+			}
 		}
 
 		public static bool HasUnsavedChanges(ChipDescription lastSaved, ChipDescription current)
@@ -96,9 +137,64 @@ namespace DLS.SaveSystem
 
 		static void WriteToFile(string data, string path)
 		{
-			Directory.CreateDirectory(Path.GetDirectoryName(path));
-			using StreamWriter writer = new(path);
-			writer.Write(data);
+			string directory = Path.GetDirectoryName(path);
+			Directory.CreateDirectory(directory);
+
+			string temporaryPath = path + ".tmp";
+			string backupPath = path + ".bak";
+			string stagedBackupPath = backupPath + ".next";
+
+			try
+			{
+				using (FileStream stream = new(temporaryPath, FileMode.Create, FileAccess.Write, FileShare.None))
+				using (StreamWriter writer = new(stream))
+				{
+					writer.Write(data);
+					writer.Flush();
+					stream.Flush(true);
+				}
+
+				if (File.Exists(path))
+				{
+					// Do not overwrite the last backup until the new primary is in place.
+					// This guarantees that an interruption leaves at least one complete copy.
+					File.Copy(path, stagedBackupPath, true);
+					File.Move(temporaryPath, path, true);
+					File.Move(stagedBackupPath, backupPath, true);
+				}
+				else
+				{
+					File.Move(temporaryPath, path);
+				}
+			}
+			finally
+			{
+				if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
+				if (File.Exists(stagedBackupPath)) File.Delete(stagedBackupPath);
+			}
+		}
+
+		static void MoveDirectorySupportingCaseOnlyRename(string sourcePath, string destinationPath)
+		{
+			if (string.Equals(sourcePath, destinationPath, StringComparison.Ordinal)) return;
+
+			if (!string.Equals(sourcePath, destinationPath, StringComparison.OrdinalIgnoreCase))
+			{
+				Directory.Move(sourcePath, destinationPath);
+				return;
+			}
+
+			string temporaryPath = SaveUtils.EnsureUniqueDirectoryName(sourcePath + "_rename");
+			Directory.Move(sourcePath, temporaryPath);
+			try
+			{
+				Directory.Move(temporaryPath, destinationPath);
+			}
+			catch
+			{
+				if (Directory.Exists(temporaryPath)) Directory.Move(temporaryPath, sourcePath);
+				throw;
+			}
 		}
 
 		static string GetChipFilePath(string chipName, string projectName)

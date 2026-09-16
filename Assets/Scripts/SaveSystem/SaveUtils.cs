@@ -39,7 +39,10 @@ namespace DLS.SaveSystem
 		// Test if file name is valid on all operating systems
 		public static bool ValidFileName(string name)
 		{
-			if (string.IsNullOrEmpty(name)) return false;
+			if (string.IsNullOrWhiteSpace(name)) return false;
+			// Windows silently trims these characters from file and directory names,
+			// which can otherwise turn two visibly different names into the same path.
+			if (name[^1] is ' ' or '.') return false;
 			bool hasIllegalChar = NameContainsForbiddenChar(name);
 			bool reservedFileName = IsReservedFileName(name);
 
@@ -74,9 +77,9 @@ namespace DLS.SaveSystem
 		// Ensure file name is unique by appending a number to it if necessary
 		public static string EnsureUniqueFileName(string originalPath)
 		{
-			string originalFileName = Path.GetFileName(originalPath);
 			string originalFileNameWithoutExtension = Path.GetFileNameWithoutExtension(originalPath);
 			string extension = Path.GetExtension(originalPath);
+			string directory = Path.GetDirectoryName(originalPath) ?? string.Empty;
 			string uniquePath = originalPath;
 
 			int duplicates = 0;
@@ -85,7 +88,7 @@ namespace DLS.SaveSystem
 			{
 				duplicates++;
 				string uniqueFileName = $"{originalFileNameWithoutExtension}_{duplicates}{extension}";
-				uniquePath = originalPath.Replace(originalFileName, uniqueFileName);
+				uniquePath = Path.Combine(directory, uniqueFileName);
 			}
 
 			return uniquePath;

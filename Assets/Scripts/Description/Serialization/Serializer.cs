@@ -44,12 +44,14 @@ namespace DLS.Description
 		{
 			try
 			{
-				return JsonConvert.DeserializeObject<T>(s, CreateSerializationSettings());
+				T result = JsonConvert.DeserializeObject<T>(s, CreateSerializationSettings());
+				if (result is null) throw new InvalidDataException($"Deserialized {typeof(T).Name} is null.");
+				return result;
 			}
 			catch (JsonException e)
 			{
 				Debug.LogError(e);
-				return default;
+				throw new InvalidDataException($"Failed to deserialize {typeof(T).Name}.", e);
 			}
 		}
 

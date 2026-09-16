@@ -42,7 +42,7 @@ namespace DLS.Simulation
 
 		public void RegisterNote(int index, uint volume)
 		{
-			if (volume == 0) return;
+			if (volume == 0 || (uint)index >= freqCount) return;
 
 			hasInputSinceLastInit = true;
 			float amplitudeT = MathF.Min(volume / 15f, 1);

@@ -368,7 +368,7 @@ namespace DLS.Graphics
 			throw new Exception("Failed to find collection with name: " + name);
 		}
 
-		static bool MouseIsOverBar() => InputHelper.MouseInBounds_ScreenSpace(barBounds_ScreenSpace);
+		public static bool MouseIsOverBar() => InputHelper.MouseInBounds_ScreenSpace(barBounds_ScreenSpace);
 
 		static void ExitToMainMenu()
 		{

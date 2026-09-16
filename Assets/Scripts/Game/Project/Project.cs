@@ -58,13 +58,13 @@ namespace DLS.Game
 		static readonly bool debug_runSimMainThread = false;
 		public const float SimulationPerformanceTimeWindowSec = 1.5f;
 
-		bool simThreadActive;
-		public bool advanceSingleSimStep;
+		volatile bool simThreadActive;
+		public volatile bool advanceSingleSimStep;
 		public int simPausedSingleStepCounter;
-		int mainThreadFrameCount;
+		volatile int mainThreadFrameCount;
 		DevPinInstance[] inputPins = Array.Empty<DevPinInstance>();
 		public int targetTicksPerSecond => Mathf.Max(1, description.Prefs_SimTargetStepsPerSecond);
-		public int stepsPerClockTransition => description.Prefs_SimStepsPerClockTick;
+		public int stepsPerClockTransition => Mathf.Max(1, description.Prefs_SimStepsPerClockTick);
 		public bool simPaused => description.Prefs_SimPaused;
 		public double simAvgTicksPerSec { get; private set; }
 		public SimChip rootSimChip => editModeChip.SimChip;
@@ -187,8 +187,7 @@ namespace DLS.Game
 			if (saveMode is SaveMode.Rename)
 			{
 				string nameOld = ViewedChip.LastSavedDescription.Name;
-				Saver.DeleteChip(nameOld, description.ProjectName, false);
-				Saver.SaveChip(saveChipDescription, description.ProjectName);
+				Saver.RenameChip(nameOld, saveChipDescription, description.ProjectName);
 				chipLibrary.NotifyChipRenamed(saveChipDescription, nameOld);
 				RenameStarred(saveChipDescription.Name, nameOld, false, false);
 				EnsureChipRenamedInCollections(nameOld, saveChipDescription.Name);
@@ -551,7 +550,14 @@ namespace DLS.Game
 					if (waitMs <= 0) break;
 
 					// Wait some cycles before checking timer again (todo: better approach?)
-					Thread.SpinWait(10);
+					if (waitMs > 2)
+					{
+						Thread.Sleep(Math.Max(1, (int)waitMs - 1));
+					}
+					else
+					{
+						Thread.SpinWait(10);
+					}
 				}
 
 				// ---- Update perf counter (measures average num ticks over last n seconds) ----

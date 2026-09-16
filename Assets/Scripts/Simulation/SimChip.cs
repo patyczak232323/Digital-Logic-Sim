@@ -69,23 +69,45 @@ namespace DLS.Simulation
 			{
 				InternalState = new uint[addressSize_8Bit + 1]; // +1 for clock state (to allow edge-trigger behaviour)
 
-				// Initialize memory contents to random state
-				Span<byte> randomBytes = stackalloc byte[4];
+				// Initialize each 8-bit memory cell without leaking random upper bits
+				// into the pin-state flags stored in the same uint.
 				for (int i = 0; i < InternalState.Length - 1; i++)
 				{
-					Simulator.rng.NextBytes(randomBytes);
-					InternalState[i] = BitConverter.ToUInt32(randomBytes);
+					InternalState[i] = (uint)Simulator.rng.Next(0, 256);
 				}
 			}
-			// Load in serialized persistent state (rom data, etc.)
-			else if (internalState is { Length: > 0 })
+			else
 			{
-				InternalState = new uint[internalState.Length];
-				UpdateInternalState(internalState);
+				int requiredStateLength = ChipType switch
+				{
+					ChipType.Rom_256x16 => addressSize_8Bit,
+					ChipType.Pulse => 3,
+					ChipType.Key => 1,
+					ChipType.DisplayLED => 1,
+					_ => 0
+				};
+
+				int serializedStateLength = internalState?.Length ?? 0;
+				int stateLength = Math.Max(requiredStateLength, serializedStateLength);
+				if (stateLength > 0)
+				{
+					InternalState = new uint[stateLength];
+					if (ChipType == ChipType.Pulse) InternalState[0] = 50;
+					else if (ChipType == ChipType.Key) InternalState[0] = 'K';
+
+					if (serializedStateLength > 0)
+					{
+						Array.Copy(internalState, InternalState, Math.Min(serializedStateLength, InternalState.Length));
+					}
+				}
 			}
 		}
 
-		public void UpdateInternalState(uint[] source) => Array.Copy(source, InternalState, InternalState.Length);
+		public void UpdateInternalState(uint[] source)
+		{
+			Array.Clear(InternalState, 0, InternalState.Length);
+			if (source != null) Array.Copy(source, InternalState, Math.Min(source.Length, InternalState.Length));
+		}
 
 
 		public void Sim_PropagateInputs()

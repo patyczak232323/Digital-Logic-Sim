@@ -8,6 +8,8 @@ namespace DLS.Simulation
 {
 	public static class DeterministicSimulator
 	{
+		const int Address8BitMask = 0xFF;
+
 		public static bool DiagnosticsEnabled;
 		public static Action<string> DiagnosticSink;
 
@@ -584,7 +586,7 @@ namespace DLS.Simulation
 
 			if (PinState.FirstBitHigh(writeEnablePin))
 			{
-				chip.InternalState[PinState.GetBitStates(addressPin)] = PinState.GetBitStates(dataPin);
+				chip.InternalState[GetAddress8Bit(addressPin)] = PinState.GetBitStates(dataPin) & Address8BitMask;
 				return true;
 			}
 
@@ -593,7 +595,7 @@ namespace DLS.Simulation
 
 		static bool AdvanceDisplayRgb(SimChip chip)
 		{
-			const uint addressSpace = 256;
+			const int addressSpace = 256;
 
 			uint addressPin = chip.InputPins[0].State;
 			uint redPin = chip.InputPins[1].State;
@@ -616,11 +618,11 @@ namespace DLS.Simulation
 			}
 			else if (PinState.FirstBitHigh(writePin))
 			{
-				uint addressIndex = PinState.GetBitStates(addressPin) + addressSpace;
+				int addressIndex = GetAddress8Bit(addressPin) + addressSpace;
 				uint data = (uint)(
-					PinState.GetBitStates(redPin) |
-					(PinState.GetBitStates(greenPin) << 4) |
-					(PinState.GetBitStates(bluePin) << 8));
+					(PinState.GetBitStates(redPin) & 0xF) |
+					((PinState.GetBitStates(greenPin) & 0xF) << 4) |
+					((PinState.GetBitStates(bluePin) & 0xF) << 8));
 
 				chip.InternalState[addressIndex] = data;
 			}
@@ -640,7 +642,7 @@ namespace DLS.Simulation
 
 		static bool AdvanceDisplayDot(SimChip chip)
 		{
-			const uint addressSpace = 256;
+			const int addressSpace = 256;
 
 			uint addressPin = chip.InputPins[0].State;
 			uint pixelInputPin = chip.InputPins[1].State;
@@ -661,8 +663,8 @@ namespace DLS.Simulation
 			}
 			else if (PinState.FirstBitHigh(writePin))
 			{
-				uint addressIndex = PinState.GetBitStates(addressPin) + addressSpace;
-				chip.InternalState[addressIndex] = PinState.GetBitStates(pixelInputPin);
+				int addressIndex = GetAddress8Bit(addressPin) + addressSpace;
+				chip.InternalState[addressIndex] = PinState.GetBitStates(pixelInputPin) & 1;
 			}
 
 			if (PinState.FirstBitHigh(refreshPin))
@@ -908,7 +910,7 @@ namespace DLS.Simulation
 				case ChipType.Rom_256x16:
 				{
 					const int byteMask = 0b11111111;
-					uint address = PinState.GetBitStates(chip.InputPins[0].State);
+					int address = GetAddress8Bit(chip.InputPins[0].State);
 					uint data = chip.InternalState[address];
 
 					StageOutput(outputStart, (data >> 8) & byteMask);
@@ -918,14 +920,14 @@ namespace DLS.Simulation
 
 				case ChipType.dev_Ram_8Bit:
 				{
-					uint address = PinState.GetBitStates(chip.InputPins[0].State);
+					int address = GetAddress8Bit(chip.InputPins[0].State);
 					StageOutput(outputStart, chip.InternalState[address]);
 					break;
 				}
 
 				case ChipType.DisplayRGB:
 				{
-					uint address = PinState.GetBitStates(chip.InputPins[0].State);
+					int address = GetAddress8Bit(chip.InputPins[0].State);
 					uint data = chip.InternalState[address];
 					StageOutput(outputStart, (data >> 0) & 0b1111);
 					StageOutput(outputStart + 1, (data >> 4) & 0b1111);
@@ -935,7 +937,7 @@ namespace DLS.Simulation
 
 				case ChipType.DisplayDot:
 				{
-					uint address = PinState.GetBitStates(chip.InputPins[0].State);
+					int address = GetAddress8Bit(chip.InputPins[0].State);
 					StageOutput(outputStart, chip.InternalState[address]);
 					break;
 				}
@@ -959,11 +961,13 @@ namespace DLS.Simulation
 			for (int i = 0; i < buzzerChips.Count; i++)
 			{
 				SimChip chip = buzzerChips[i].Chip;
-				int frequencyIndex = PinState.GetBitStates(chip.InputPins[0].State);
+				int frequencyIndex = GetAddress8Bit(chip.InputPins[0].State);
 				int volumeIndex = PinState.GetBitStates(chip.InputPins[1].State);
 				audioState.RegisterNote(frequencyIndex, (uint)volumeIndex);
 			}
 		}
+
+		static int GetAddress8Bit(uint pinState) => PinState.GetBitStates(pinState) & Address8BitMask;
 
 		static void StageOutput(int pinIndex, uint state)
 		{

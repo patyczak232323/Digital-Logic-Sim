@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using DLS.Description;
 using DLS.Game;
 using Random = System.Random;
@@ -9,6 +11,8 @@ namespace DLS.Simulation
 {
 	public static class Simulator
 	{
+		const int Address8BitMask = 0xFF;
+
 		public static readonly Random rng = new();
 		static readonly Stopwatch stopwatch = Stopwatch.StartNew();
 		public static int stepsPerClockTransition;
@@ -356,7 +360,7 @@ namespace DLS.Simulation
 				}
 				case ChipType.DisplayRGB:
 				{
-					const uint addressSpace = 256;
+					const int addressSpace = 256;
 					uint addressPin = chip.InputPins[0].State;
 					uint redPin = chip.InputPins[1].State;
 					uint greenPin = chip.InputPins[2].State;
@@ -384,8 +388,8 @@ namespace DLS.Simulation
 						// Write to back-buffer
 						else if (PinState.FirstBitHigh(writePin))
 						{
-							uint addressIndex = PinState.GetBitStates(addressPin) + addressSpace;
-							uint data = (uint)(PinState.GetBitStates(redPin) | (PinState.GetBitStates(greenPin) << 4) | (PinState.GetBitStates(bluePin) << 8));
+							int addressIndex = GetAddress8Bit(addressPin) + addressSpace;
+							uint data = (uint)((PinState.GetBitStates(redPin) & 0xF) | ((PinState.GetBitStates(greenPin) & 0xF) << 4) | ((PinState.GetBitStates(bluePin) & 0xF) << 8));
 							chip.InternalState[addressIndex] = data;
 						}
 
@@ -400,7 +404,7 @@ namespace DLS.Simulation
 					}
 
 					// Output current pixel colour
-					uint colData = chip.InternalState[PinState.GetBitStates(addressPin)];
+					uint colData = chip.InternalState[GetAddress8Bit(addressPin)];
 					chip.OutputPins[0].State = (ushort)((colData >> 0) & 0b1111); // red
 					chip.OutputPins[1].State = (ushort)((colData >> 4) & 0b1111); // green
 					chip.OutputPins[2].State = (ushort)((colData >> 8) & 0b1111); // blue
@@ -409,7 +413,7 @@ namespace DLS.Simulation
 				}
 				case ChipType.DisplayDot:
 				{
-					const uint addressSpace = 256;
+					const int addressSpace = 256;
 					uint addressPin = chip.InputPins[0].State;
 					uint pixelInputPin = chip.InputPins[1].State;
 					uint resetPin = chip.InputPins[2].State;
@@ -435,8 +439,8 @@ namespace DLS.Simulation
 						// Write to back-buffer
 						else if (PinState.FirstBitHigh(writePin))
 						{
-							uint addressIndex = PinState.GetBitStates(addressPin) + addressSpace;
-							uint data = PinState.GetBitStates(pixelInputPin);
+							int addressIndex = GetAddress8Bit(addressPin) + addressSpace;
+							uint data = PinState.GetBitStates(pixelInputPin) & 1;
 							chip.InternalState[addressIndex] = data;
 						}
 
@@ -451,7 +455,7 @@ namespace DLS.Simulation
 					}
 
 					// Output current pixel colour
-					ushort pixelState = (ushort)chip.InternalState[PinState.GetBitStates(addressPin)];
+					ushort pixelState = (ushort)chip.InternalState[GetAddress8Bit(addressPin)];
 					chip.OutputPins[0].State = pixelState;
 
 					break;
@@ -481,19 +485,19 @@ namespace DLS.Simulation
 						}
 						else if (PinState.FirstBitHigh(writeEnablePin))
 						{
-							chip.InternalState[PinState.GetBitStates(addressPin)] = PinState.GetBitStates(dataPin);
+							chip.InternalState[GetAddress8Bit(addressPin)] = PinState.GetBitStates(dataPin) & Address8BitMask;
 						}
 					}
 
 					// Output data at current address
-					chip.OutputPins[0].State = (ushort)chip.InternalState[PinState.GetBitStates(addressPin)];
+					chip.OutputPins[0].State = (ushort)chip.InternalState[GetAddress8Bit(addressPin)];
 
 					break;
 				}
 				case ChipType.Rom_256x16:
 				{
 					const int ByteMask = 0b11111111;
-					uint address = PinState.GetBitStates(chip.InputPins[0].State);
+					int address = GetAddress8Bit(chip.InputPins[0].State);
 					uint data = chip.InternalState[address];
 					chip.OutputPins[0].State = (ushort)((data >> 8) & ByteMask);
 					chip.OutputPins[1].State = (ushort)(data & ByteMask);
@@ -501,7 +505,7 @@ namespace DLS.Simulation
 				}
 				case ChipType.Buzzer:
 				{
-					int freqIndex = PinState.GetBitStates(chip.InputPins[0].State);
+					int freqIndex = GetAddress8Bit(chip.InputPins[0].State);
 					int volumeIndex = PinState.GetBitStates(chip.InputPins[1].State);
 					audioState.RegisterNote(freqIndex, (uint)volumeIndex);
 					break;
@@ -520,6 +524,8 @@ namespace DLS.Simulation
 			}
 		}
 
+		static int GetAddress8Bit(uint pinState) => PinState.GetBitStates(pinState) & Address8BitMask;
+
 		public static SimChip BuildSimChip(ChipDescription chipDesc, ChipLibrary library)
 		{
 			return BuildSimChip(chipDesc, library, -1, null);
@@ -527,34 +533,58 @@ namespace DLS.Simulation
 
 		public static SimChip BuildSimChip(ChipDescription chipDesc, ChipLibrary library, int subChipID, uint[] internalState)
 		{
-			SimChip simChip = BuildSimChipRecursive(chipDesc, library, subChipID, internalState);
+			HashSet<string> activeDependencies = new(ChipDescription.NameComparer);
+			List<string> dependencyPath = new();
+			SimChip simChip = BuildSimChipRecursive(chipDesc, library, subChipID, internalState, activeDependencies, dependencyPath);
 			return simChip;
 		}
 
 		// Recursively build full representation of chip from its description for simulation.
-		static SimChip BuildSimChipRecursive(ChipDescription chipDesc, ChipLibrary library, int subChipID, uint[] internalState)
+		static SimChip BuildSimChipRecursive(
+			ChipDescription chipDesc,
+			ChipLibrary library,
+			int subChipID,
+			uint[] internalState,
+			HashSet<string> activeDependencies,
+			List<string> dependencyPath)
 		{
-			// Recursively create subchips
-			SimChip[] subchips = chipDesc.SubChips.Length == 0 ? Array.Empty<SimChip>() : new SimChip[chipDesc.SubChips.Length];
+			if (chipDesc == null) throw new InvalidDataException("Cannot build a null chip description.");
 
-			for (int i = 0; i < chipDesc.SubChips.Length; i++)
+			string chipName = string.IsNullOrWhiteSpace(chipDesc.Name) ? "<unnamed>" : chipDesc.Name;
+			if (!activeDependencies.Add(chipName))
 			{
-				SubChipDescription subchipDesc = chipDesc.SubChips[i];
-				ChipDescription subchipFullDesc = library.GetChipDescription(subchipDesc.Name);
-				SimChip subChip = BuildSimChipRecursive(subchipFullDesc, library, subchipDesc.ID, subchipDesc.InternalData);
-				subchips[i] = subChip;
+				throw new InvalidDataException("Cyclic chip dependency detected: " + string.Join(" -> ", dependencyPath) + " -> " + chipName);
 			}
 
-			SimChip simChip = new(chipDesc, subChipID, internalState, subchips);
-
-
-			// Create connections
-			for (int i = 0; i < chipDesc.Wires.Length; i++)
+			dependencyPath.Add(chipName);
+			try
 			{
-				simChip.AddConnection(chipDesc.Wires[i].SourcePinAddress, chipDesc.Wires[i].TargetPinAddress);
-			}
+				SubChipDescription[] subchipDescriptions = chipDesc.SubChips ?? Array.Empty<SubChipDescription>();
+				SimChip[] subchips = subchipDescriptions.Length == 0 ? Array.Empty<SimChip>() : new SimChip[subchipDescriptions.Length];
 
-			return simChip;
+				for (int i = 0; i < subchipDescriptions.Length; i++)
+				{
+					SubChipDescription subchipDesc = subchipDescriptions[i];
+					ChipDescription subchipFullDesc = library.GetChipDescription(subchipDesc.Name);
+					SimChip subChip = BuildSimChipRecursive(subchipFullDesc, library, subchipDesc.ID, subchipDesc.InternalData, activeDependencies, dependencyPath);
+					subchips[i] = subChip;
+				}
+
+				SimChip simChip = new(chipDesc, subChipID, internalState, subchips);
+
+				WireDescription[] wires = chipDesc.Wires ?? Array.Empty<WireDescription>();
+				for (int i = 0; i < wires.Length; i++)
+				{
+					simChip.AddConnection(wires[i].SourcePinAddress, wires[i].TargetPinAddress);
+				}
+
+				return simChip;
+			}
+			finally
+			{
+				dependencyPath.RemoveAt(dependencyPath.Count - 1);
+				activeDependencies.Remove(chipName);
+			}
 		}
 
 		public static void AddPin(SimChip simChip, int pinID, bool isInputPin)

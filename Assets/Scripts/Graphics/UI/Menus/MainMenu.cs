@@ -378,7 +378,15 @@ namespace DLS.Graphics
 				bool projectNameAlreadyExists = false;
 				foreach (string existingProjectName in allProjectNames)
 				{
-					projectNameAlreadyExists |= string.Equals(projectName, existingProjectName, StringComparison.CurrentCultureIgnoreCase);
+					bool isCurrentProjectCaseOnlyRename =
+						activePopup == PopupKind.NamePopup_RenameProject &&
+						string.Equals(existingProjectName, SelectedProjectName, StringComparison.Ordinal) &&
+						string.Equals(projectName, SelectedProjectName, StringComparison.OrdinalIgnoreCase);
+
+					if (!isCurrentProjectCaseOnlyRename)
+					{
+						projectNameAlreadyExists |= string.Equals(projectName, existingProjectName, StringComparison.OrdinalIgnoreCase);
+					}
 				}
 
 				bool canCreateProject = validProjectName && !projectNameAlreadyExists;
@@ -397,7 +405,7 @@ namespace DLS.Graphics
 					activePopup = PopupKind.None;
 				}
 
-				if (confirmButton || KeyboardShortcuts.ConfirmShortcutTriggered)
+				if (confirmButton || (canCreateProject && KeyboardShortcuts.ConfirmShortcutTriggered))
 				{
 					state.ClearText();
 					PopupKind kind = activePopup;

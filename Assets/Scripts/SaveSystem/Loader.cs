@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using DLS.Description;
 using DLS.Game;
+using UnityEngine;
 
 namespace DLS.SaveSystem
 {
@@ -11,13 +12,20 @@ namespace DLS.SaveSystem
 	{
 		public static AppSettings LoadAppSettings()
 		{
-			if (File.Exists(SavePaths.AppSettingsPath))
+			if (!File.Exists(SavePaths.AppSettingsPath) && !File.Exists(SavePaths.AppSettingsPath + ".bak"))
 			{
-				string settingsString = File.ReadAllText(SavePaths.AppSettingsPath);
-				return Serializer.DeserializeAppSettings(settingsString);
+				return AppSettings.Default();
 			}
 
-			return AppSettings.Default();
+			try
+			{
+				return LoadWithBackup(SavePaths.AppSettingsPath, Serializer.DeserializeAppSettings);
+			}
+			catch (Exception e)
+			{
+				Debug.LogWarning("Could not load app settings; defaults will be used. " + e.Message);
+				return AppSettings.Default();
+			}
 		}
 
 		public static Project LoadProject(string projectName)
@@ -30,16 +38,17 @@ namespace DLS.SaveSystem
 		public static bool ProjectExists(string projectName)
 		{
 			string path = SavePaths.GetProjectDescriptionPath(projectName);
-			return File.Exists(path);
+			return File.Exists(path) || File.Exists(path + ".bak");
 		}
 
 		public static ProjectDescription LoadProjectDescription(string projectName)
 		{
 			string path = SavePaths.GetProjectDescriptionPath(projectName);
-			if (!File.Exists(path)) throw new Exception("No project description found at " + path);
-
-			ProjectDescription desc = Serializer.DeserializeProjectDescription(File.ReadAllText(path));
+			ProjectDescription desc = LoadWithBackup(path, Serializer.DeserializeProjectDescription);
 			desc.ProjectName = projectName; // Enforce name = directory name (in case player modifies manually -- operations like deleting projects rely on this)
+			desc.AllCustomChipNames ??= Array.Empty<string>();
+			desc.StarredList ??= new List<StarredItem>();
+			desc.ChipCollections ??= new List<ChipCollection>();
 
 			for (int i = 0; i < desc.StarredList.Count; i++)
 			{
@@ -91,9 +100,17 @@ namespace DLS.SaveSystem
 			for (int i = 0; i < loadedChips.Length; i++)
 			{
 				string chipPath = Path.Combine(chipDirectoryPath, projectDescription.AllCustomChipNames[i] + ".json");
-				string chipSaveString = File.ReadAllText(chipPath);
+				ChipDescription chipDesc = LoadWithBackup(chipPath, Serializer.DeserializeChipDescription);
+				if (chipDesc == null || string.IsNullOrWhiteSpace(chipDesc.Name))
+				{
+					throw new InvalidDataException("Invalid chip description at " + chipPath);
+				}
 
-				ChipDescription chipDesc = Serializer.DeserializeChipDescription(chipSaveString);
+				chipDesc.InputPins ??= Array.Empty<PinDescription>();
+				chipDesc.OutputPins ??= Array.Empty<PinDescription>();
+				chipDesc.SubChips ??= Array.Empty<SubChipDescription>();
+				chipDesc.Wires ??= Array.Empty<WireDescription>();
+				chipDesc.Displays ??= Array.Empty<DisplayDescription>();
 				loadedChips[i] = chipDesc;
 				customChipNameHashset.Add(chipDesc.Name);
 			}
@@ -105,6 +122,42 @@ namespace DLS.SaveSystem
 
 			UpgradeHelper.ApplyVersionChanges(loadedChips, builtinChips);
 			return new ChipLibrary(loadedChips, builtinChips);
+		}
+
+		static T LoadWithBackup<T>(string path, Func<string, T> deserialize)
+		{
+			Exception primaryError = null;
+
+			if (File.Exists(path))
+			{
+				try
+				{
+					return deserialize(File.ReadAllText(path));
+				}
+				catch (Exception e)
+				{
+					primaryError = e;
+				}
+			}
+
+			string backupPath = path + ".bak";
+			if (File.Exists(backupPath))
+			{
+				try
+				{
+					T recovered = deserialize(File.ReadAllText(backupPath));
+					Debug.LogWarning("Recovered save data from backup: " + backupPath);
+					return recovered;
+				}
+				catch (Exception backupError)
+				{
+					Exception primaryFailure = primaryError ?? new FileNotFoundException("Primary save data is missing.", path);
+					throw new InvalidDataException("Both the primary save and backup are invalid: " + path, new AggregateException(primaryFailure, backupError));
+				}
+			}
+
+			if (primaryError != null) throw new InvalidDataException("Save data is invalid and no backup exists: " + path, primaryError);
+			throw new FileNotFoundException("No save data or backup found.", path);
 		}
 	}
 }

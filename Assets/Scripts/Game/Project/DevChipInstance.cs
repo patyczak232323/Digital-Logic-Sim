@@ -119,7 +119,8 @@ namespace DLS.Game
 		{
 			bool failedToLoad = false;
 			WireInstance loadedWire = null;
-			WireInstance connectedWire = wireDescription.ConnectedWireIndex >= 0 ? allWires[wireDescription.ConnectedWireIndex] : null;
+			bool connectedIndexValid = wireDescription.ConnectedWireIndex >= 0 && wireDescription.ConnectedWireIndex < allWires.Count;
+			WireInstance connectedWire = connectedIndexValid ? allWires[wireDescription.ConnectedWireIndex] : null;
 
 			instance.TryFindPin(wireDescription.SourcePinAddress, out PinInstance sourcePin);
 			instance.TryFindPin(wireDescription.TargetPinAddress, out PinInstance targetPin);
@@ -131,7 +132,7 @@ namespace DLS.Game
 				if (connectionType is WireConnectionType.ToWireSource or WireConnectionType.ToWireTarget)
 				{
 					WireInstance wireConnectTarget = connectedWire;
-					bool wireConnectTargetFailedToLoad = wireConnectTarget == null;
+					bool wireConnectTargetFailedToLoad = !connectedIndexValid || wireConnectTarget == null;
 
 					if (!wireConnectTargetFailedToLoad)
 					{

@@ -21,6 +21,7 @@ namespace DLS.Graphics
 		static readonly UIHandle ID_ChipNameField = new("SaveMenu_ChipNameField");
 		static readonly Func<string, bool> chipNameValidator = ValidateChipNameInput;
 		static readonly Random rng = new();
+		static Vector2 sizeBeyondNameMinimum;
 
 		public static SubChipInstance ActiveCustomizeChip;
 		static SubChipInstance CustomizeStateBeforeEnteringCustomizeMenu;
@@ -41,6 +42,11 @@ namespace DLS.Graphics
 		public static void OnMenuOpened()
 		{
 			ActiveCustomizeChip ??= CreateCustomizationState();
+			Vector2 currentMinimum = SubChipInstance.CalculateMinChipSize(
+				ActiveCustomizeDescription.InputPins,
+				ActiveCustomizeDescription.OutputPins,
+				ActiveCustomizeDescription.Name);
+			sizeBeyondNameMinimum = Vector2.Max(Vector2.zero, ActiveCustomizeDescription.Size - currentMinimum);
 			InitUIFromDescription(ActiveCustomizeChip.Description);
 		}
 
@@ -69,14 +75,15 @@ namespace DLS.Graphics
 				inputFieldState = UI.InputField(ID_ChipNameField, inputTheme, new Vector2(50, 33), inputFieldSize, "Name", Anchor.Centre, inputFieldTextPad, chipNameValidator, true);
 
 				Vector2 buttonTopLeft = UI.PrevBounds.BottomLeft + Vector2.down * (DrawSettings.DefaultButtonSpacing * 2);
-				bool renaming = Project.ActiveProject.ChipHasBeenSavedBefore && !ChipDescription.NameMatch(inputFieldState.text, Project.ActiveProject.ViewedChip.LastSavedDescription.Name);
+				bool renaming = Project.ActiveProject.ChipHasBeenSavedBefore &&
+				                !string.Equals(inputFieldState.text, Project.ActiveProject.ViewedChip.LastSavedDescription.Name, StringComparison.Ordinal);
 
 				bool saveButtonEnabled = IsValidSaveName(inputFieldState.text);
 				ButtonGroupInteractStates[SaveButtonIndex] = saveButtonEnabled;
 				ButtonGroupInteractStates[SaveAsButtonIndex] = saveButtonEnabled;
 				string[] buttonGroupNames = renaming ? CancelRenameSaveButtonNames : CancelSaveButtonNames;
 				int buttonIndex = UI.HorizontalButtonGroup(buttonGroupNames, ButtonGroupInteractStates, theme.ButtonTheme, buttonTopLeft, UI.PrevBounds.Width, DrawSettings.DefaultButtonSpacing, 0, Anchor.TopLeft);
-				bool confirmShortcut = !renaming && KeyboardShortcuts.ConfirmShortcutTriggered;
+				bool confirmShortcut = !renaming && saveButtonEnabled && KeyboardShortcuts.ConfirmShortcutTriggered;
 
 				if (buttonIndex == CancelButtonIndex || KeyboardShortcuts.CancelShortcutTriggered)
 				{
@@ -106,8 +113,7 @@ namespace DLS.Graphics
 					{
 						ActiveCustomizeDescription.Name = newName;
 						Vector2 minChipSize = SubChipInstance.CalculateMinChipSize(ActiveCustomizeDescription.InputPins, ActiveCustomizeDescription.OutputPins, newName);
-						Vector2 chipSizeNew = Vector2.Max(minChipSize, ActiveCustomizeDescription.Size);
-						ActiveCustomizeDescription.Size = chipSizeNew;
+						ActiveCustomizeDescription.Size = minChipSize + sizeBeyondNameMinimum;
 					}
 				}
 			}
