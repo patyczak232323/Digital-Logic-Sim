@@ -1,0 +1,49 @@
+name: Patch deterministic solver initialization
+
+on:
+  push:
+    branches: [ fix/deterministic-simulation-propagation ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/deterministic-simulation-propagation
+          fetch-depth: 0
+
+      - name: Add deterministic one-time feedback seed
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('Assets/Scripts/Simulation/DeterministicSimulator.cs')
+          s = p.read_text()
+          if 'PrimeInitialCombinationalState();' not in s:
+              s = s.replace(
+                  'if (needsInitialPropagation)\n\t\t\t{\n\t\t\t\tQueueAllExistingSignals();',
+                  'if (needsInitialPropagation)\n\t\t\t{\n\t\t\t\tPrimeInitialCombinationalState();\n\t\t\t\tQueueAllExistingSignals();')
+
+              anchor = '''\t\tstatic void MarkDirty(SimChip chip)\n'''
+              method = '''\t\tstatic void PrimeInitialCombinationalState()\n\t\t{\n\t\t\t// Feedback storage has no defined power-on state. Seed it once in a\n\t\t\t// deterministic path order, then use simultaneous delta-cycles only.\n\t\t\tQueueAllExistingSignals();\n\t\t\tDrainSignalQueue();\n\n\t\t\tList<SimChip> initializationOrder = new(combinationalChips);\n\t\t\tinitializationOrder.Sort((a, b) => string.CompareOrdinal(GetChipPath(a), GetChipPath(b)));\n\n\t\t\tfor (int i = 0; i < initializationOrder.Count; i++)\n\t\t\t{\n\t\t\t\tpendingPinStates.Clear();\n\t\t\t\tEvaluateCombinationalChip(initializationOrder[i]);\n\t\t\t\tCommitPendingOutputs();\n\t\t\t\tDrainSignalQueue();\n\t\t\t}\n\n\t\t\tdirtyChips.Clear();\n\t\t\tdirtyChipSet.Clear();\n\t\t}\n\n'''
+              if anchor not in s:
+                  raise SystemExit('MarkDirty anchor not found')
+              s = s.replace(anchor, method + anchor)
+              p.write_text(s)
+          PY
+
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Assets/Scripts/Simulation/DeterministicSimulator.cs
+          if git diff --cached --quiet; then
+            echo 'Already patched.'
+          else
+            git commit -m 'Seed feedback state deterministically on runtime initialization'
+            git push origin HEAD:fix/deterministic-simulation-propagation
+          fi
