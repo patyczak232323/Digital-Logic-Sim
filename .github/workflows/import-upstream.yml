@@ -1,0 +1,45 @@
+name: Import upstream Digital Logic Sim
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/import-upstream.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout destination repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Clone Sebastian Lague upstream main
+        run: |
+          git clone --depth 1 --branch main https://github.com/SebLague/Digital-Logic-Sim.git /tmp/upstream
+
+      - name: Replace repository contents with upstream
+        run: |
+          cp .github/workflows/import-upstream.yml /tmp/import-upstream.yml
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -a /tmp/upstream/. .
+          rm -rf .git
+          mkdir -p .github/workflows
+          cp /tmp/import-upstream.yml .github/workflows/import-upstream.yml
+
+      - name: Commit imported upstream
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No changes to import.'
+          else
+            git commit -m 'Import SebLague/Digital-Logic-Sim main'
+            git push origin HEAD:main
+          fi
