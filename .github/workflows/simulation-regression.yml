@@ -1,0 +1,40 @@
+name: Simulation propagation regression
+
+on:
+  push:
+    branches: [ fix/deterministic-simulation-propagation ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify save format and descriptions remain untouched
+        shell: bash
+        run: |
+          git fetch origin main --quiet
+          git diff --exit-code origin/main...HEAD -- \
+            Assets/Scripts/Description \
+            Assets/Scripts/SaveSystem
+
+      - name: Verify no existing GUI implementation was modified
+        shell: bash
+        run: |
+          changed="$(git diff --name-only origin/main...HEAD -- Assets/Scripts/Graphics | grep -v '^Assets/Scripts/Graphics/UI/Menus/SimulationFacade.cs' | grep -v '^Assets/Scripts/Graphics/UI/Menus/SimulationFacade.cs.meta' || true)"
+          if [ -n "$changed" ]; then
+            echo "Unexpected existing GUI changes:"
+            echo "$changed"
+            exit 1
+          fi
+
+      - name: Run deterministic propagation regression suite
+        run: python3 Tools/SimulationRegression/regression.py
