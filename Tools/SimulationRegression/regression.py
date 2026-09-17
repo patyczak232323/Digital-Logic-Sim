@@ -503,7 +503,9 @@ def test_source_integration_static() -> None:
     assert "HashSet<SimChip>" not in solver
     assert "Dictionary<SimPin, SimPin[]>" not in solver
     assert "DeterministicSimulator.RunSimulationStep" in facade
-    assert "pendingTopologyModification" in facade
+    assert "bool topologyChanged = DLS.Simulation.Simulator.ApplyModifications();" in facade
+    assert "if (topologyChanged) DeterministicSimulator.InvalidateTopology();" in facade
+    assert "pendingTopologyModification" not in facade
 
 
 def benchmark_sparse_parallel_bank() -> tuple[float, int, int]:

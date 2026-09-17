@@ -8,8 +8,6 @@ namespace DLS.Game
 	// Simulator while the runtime step is handled by the deterministic solver.
 	public static class Simulator
 	{
-		static bool pendingTopologyModification;
-
 		public static Random rng => DLS.Simulation.Simulator.rng;
 
 		public static int stepsPerClockTransition
@@ -65,13 +63,11 @@ namespace DLS.Game
 
 		public static void AddPin(SimChip simChip, int pinID, bool isInputPin)
 		{
-			pendingTopologyModification = true;
 			DLS.Simulation.Simulator.AddPin(simChip, pinID, isInputPin);
 		}
 
 		public static void RemovePin(SimChip simChip, int pinID)
 		{
-			pendingTopologyModification = true;
 			DLS.Simulation.Simulator.RemovePin(simChip, pinID);
 		}
 
@@ -82,40 +78,32 @@ namespace DLS.Game
 			int subChipID,
 			uint[] subChipInternalData)
 		{
-			pendingTopologyModification = true;
 			DLS.Simulation.Simulator.AddSubChip(simChip, desc, chipLibrary, subChipID, subChipInternalData);
 		}
 
 		public static void AddConnection(SimChip simChip, PinAddress source, PinAddress target)
 		{
-			pendingTopologyModification = true;
 			DLS.Simulation.Simulator.AddConnection(simChip, source, target);
 		}
 
 		public static void RemoveConnection(SimChip simChip, PinAddress source, PinAddress target)
 		{
-			pendingTopologyModification = true;
 			DLS.Simulation.Simulator.RemoveConnection(simChip, source, target);
 		}
 
 		public static void RemoveSubChip(SimChip simChip, int id)
 		{
-			pendingTopologyModification = true;
 			DLS.Simulation.Simulator.RemoveSubChip(simChip, id);
 		}
 
 		public static void ApplyModifications()
 		{
-			DLS.Simulation.Simulator.ApplyModifications();
-			if (!pendingTopologyModification) return;
-
-			pendingTopologyModification = false;
-			DeterministicSimulator.InvalidateTopology();
+			bool topologyChanged = DLS.Simulation.Simulator.ApplyModifications();
+			if (topologyChanged) DeterministicSimulator.InvalidateTopology();
 		}
 
 		public static void Reset()
 		{
-			pendingTopologyModification = false;
 			DLS.Simulation.Simulator.Reset();
 			DeterministicSimulator.Reset();
 		}

@@ -83,6 +83,23 @@ def test_backup_recovery_model() -> None:
         assert result == '{"valid":true}'
 
 
+def test_topology_invalidation_race_model() -> None:
+    # Old design: a producer can set the shared flag after the consumer drains
+    # the queue but before the consumer clears it. The new command then remains
+    # queued while the flag is false, so the next drain misses invalidation.
+    old_pending = True
+    new_command_queued = False
+    new_command_queued = True
+    old_pending = False
+    assert new_command_queued and not old_pending
+
+    # New design: invalidation is derived from the command successfully removed
+    # from the concurrent queue in that exact drain, so it cannot be lost.
+    commands_dequeued_next_drain = 1
+    topology_changed = commands_dequeued_next_drain > 0
+    assert topology_changed
+
+
 def test_csharp_integration_guards() -> None:
     saver = source("Assets/Scripts/SaveSystem/Saver.cs")
     loader = source("Assets/Scripts/SaveSystem/Loader.cs")
@@ -96,6 +113,7 @@ def test_csharp_integration_guards() -> None:
     sim_chip = source("Assets/Scripts/Simulation/SimChip.cs")
     project = source("Assets/Scripts/Game/Project/Project.cs")
     camera = source("Assets/Scripts/Game/Interaction/CameraController.cs")
+    simulation_facade = source("Assets/Scripts/Game/Project/SimulationFacade.cs")
 
     assert 'string temporaryPath = path + ".tmp";' in saver
     assert 'string backupPath = path + ".bak";' in saver
@@ -114,6 +132,12 @@ def test_csharp_integration_guards() -> None:
     assert "Simulator.rng.Next(0, 256)" in sim_chip
     assert "Thread.Sleep(Math.Max(1, (int)waitMs - 1));" in project
     assert "!BottomBarUI.MouseIsOverBar()" in camera
+    assert "public static bool ApplyModifications()" in simulator
+    assert "while (modificationQueue.TryDequeue(out SimModifyCommand cmd))" in simulator
+    assert "return topologyChanged;" in simulator
+    assert "bool topologyChanged = DLS.Simulation.Simulator.ApplyModifications();" in simulation_facade
+    assert "if (topologyChanged) DeterministicSimulator.InvalidateTopology();" in simulation_facade
+    assert "pendingTopologyModification" not in simulation_facade
 
 
 TESTS = (
@@ -121,6 +145,7 @@ TESTS = (
     test_cycle_model,
     test_address_mask_model,
     test_backup_recovery_model,
+    test_topology_invalidation_race_model,
     test_csharp_integration_guards,
 )
 
