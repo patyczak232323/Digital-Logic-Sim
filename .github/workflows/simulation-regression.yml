@@ -1,4 +1,4 @@
-name: Simulation and program regression
+name: Simulation, computer, and program regression
 
 on:
   push:
@@ -20,6 +20,9 @@ jobs:
 
       - name: Run deterministic propagation regression suite
         run: python3 Tools/SimulationRegression/regression.py
+
+      - name: Run 8-bit computer regression suite
+        run: python3 Tools/ComputerRegression/regression.py
 
       - name: Run whole-program regression suite
         run: python3 Tools/ProgramRegression/regression.py
