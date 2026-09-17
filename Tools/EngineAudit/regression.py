@@ -47,6 +47,18 @@ def test_topology_edit_recovery_is_one_shot_and_nonconvergence_only() -> None:
     assert "if (!DeterministicSimulator.LastSettleConverged)" in init_method
     assert "DeterministicSimulator.Reset();" in init_method
 
+    # Recovery power-on synchronization must not consume a real RAM/Pulse/display
+    # clock edge that arrived in the same frame as the structural edit.
+    capture = init_method.index("CaptureSequentialEdgeState(rootSimChip)")
+    reset = init_method.index("DeterministicSimulator.Reset();")
+    recovery_init = init_method.rindex("DeterministicSimulator.EnsureInitialized(rootSimChip, inputPins, audioState);")
+    restore = init_method.index("RestoreSequentialEdgeState(edgeState);")
+    assert capture < reset < recovery_init < restore
+
+    edge_index_method = extract_method(facade, "static int GetSequentialEdgeStateIndex(")
+    for chip_type in ("ChipType.Pulse", "ChipType.dev_Ram_8Bit", "ChipType.DisplayRGB", "ChipType.DisplayDot"):
+        assert chip_type in edge_index_method
+
     # The normal hot path must not perform an unconditional extra initialization.
     ensure_call = "EnsureInitialized(rootSimChip, inputPins, audioState);"
     assert ensure_call in run_method
