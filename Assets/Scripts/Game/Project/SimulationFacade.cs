@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using DLS.Description;
 using DLS.Simulation;
 
@@ -9,6 +10,20 @@ namespace DLS.Game
 	public static class Simulator
 	{
 		static bool topologyRecoveryPending;
+
+		readonly struct SequentialEdgeSnapshot
+		{
+			public readonly SimChip Chip;
+			public readonly int StateIndex;
+			public readonly uint Value;
+
+			public SequentialEdgeSnapshot(SimChip chip, int stateIndex, uint value)
+			{
+				Chip = chip;
+				StateIndex = stateIndex;
+				Value = value;
+			}
+		}
 
 		public static Random rng => DLS.Simulation.Simulator.rng;
 
@@ -76,6 +91,7 @@ namespace DLS.Game
 			// never take this path, so there is no extra work or randomization for them.
 			if (!DeterministicSimulator.LastSettleConverged)
 			{
+				List<SequentialEdgeSnapshot> edgeState = CaptureSequentialEdgeState(rootSimChip);
 				DeterministicSimulator.Reset();
 
 				// Reset intentionally clears the compiled inspection/diagnostic bookkeeping,
@@ -91,7 +107,62 @@ namespace DLS.Game
 				}
 
 				DeterministicSimulator.EnsureInitialized(rootSimChip, inputPins, audioState);
+
+				// Recovery initialization deliberately synchronizes edge-triggered builtins so
+				// power-on itself cannot manufacture an edge. This recovery, however, happens
+				// between ordinary simulation steps after an edit, so retain the pre-recovery
+				// previous-clock/input state. A real edge that arrived together with the edit
+				// must still be seen by the following normal simulation step.
+				RestoreSequentialEdgeState(edgeState);
 			}
+		}
+
+		static List<SequentialEdgeSnapshot> CaptureSequentialEdgeState(SimChip root)
+		{
+			List<SequentialEdgeSnapshot> snapshots = new();
+			CaptureRecursive(root);
+			return snapshots;
+
+			void CaptureRecursive(SimChip chip)
+			{
+				if (chip == null) return;
+
+				int stateIndex = GetSequentialEdgeStateIndex(chip);
+				if (stateIndex >= 0)
+				{
+					snapshots.Add(new SequentialEdgeSnapshot(chip, stateIndex, chip.InternalState[stateIndex]));
+				}
+
+				for (int i = 0; i < chip.SubChips.Length; i++) CaptureRecursive(chip.SubChips[i]);
+			}
+		}
+
+		static void RestoreSequentialEdgeState(List<SequentialEdgeSnapshot> snapshots)
+		{
+			for (int i = 0; i < snapshots.Count; i++)
+			{
+				SequentialEdgeSnapshot snapshot = snapshots[i];
+				if (snapshot.Chip != null &&
+				    snapshot.StateIndex >= 0 &&
+				    snapshot.StateIndex < snapshot.Chip.InternalState.Length)
+				{
+					snapshot.Chip.InternalState[snapshot.StateIndex] = snapshot.Value;
+				}
+			}
+		}
+
+		static int GetSequentialEdgeStateIndex(SimChip chip)
+		{
+			if (chip.InternalState.Length == 0) return -1;
+
+			return chip.ChipType switch
+			{
+				ChipType.Pulse when chip.InternalState.Length > 2 => 2,
+				ChipType.dev_Ram_8Bit => chip.InternalState.Length - 1,
+				ChipType.DisplayRGB => chip.InternalState.Length - 1,
+				ChipType.DisplayDot => chip.InternalState.Length - 1,
+				_ => -1
+			};
 		}
 
 		static void TrySynchronizeInspectionChip(Project project)
