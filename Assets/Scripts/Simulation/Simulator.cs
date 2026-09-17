@@ -660,41 +660,43 @@ namespace DLS.Simulation
 		}
 
 		// Note: this should only be called from the sim thread
-		public static void ApplyModifications()
+		public static bool ApplyModifications()
 		{
-			while (modificationQueue.Count > 0)
+			bool topologyChanged = false;
+
+			while (modificationQueue.TryDequeue(out SimModifyCommand cmd))
 			{
 				needsOrderPass = true;
+				topologyChanged = true;
 
-				if (modificationQueue.TryDequeue(out SimModifyCommand cmd))
+				if (cmd.type == SimModifyCommand.ModificationType.AddSubchip)
 				{
-					if (cmd.type == SimModifyCommand.ModificationType.AddSubchip)
-					{
-						SimChip newSubChip = BuildSimChip(cmd.chipDesc, cmd.lib, cmd.subChipID, cmd.subChipInternalData);
-						cmd.modifyTarget.AddSubChip(newSubChip);
-					}
-					else if (cmd.type == SimModifyCommand.ModificationType.RemoveSubChip)
-					{
-						cmd.modifyTarget.RemoveSubChip(cmd.removeSubChipID);
-					}
-					else if (cmd.type == SimModifyCommand.ModificationType.AddConnection)
-					{
-						cmd.modifyTarget.AddConnection(cmd.sourcePinAddress, cmd.targetPinAddress);
-					}
-					else if (cmd.type == SimModifyCommand.ModificationType.RemoveConnection)
-					{
-						cmd.modifyTarget.RemoveConnection(cmd.sourcePinAddress, cmd.targetPinAddress); //
-					}
-					else if (cmd.type == SimModifyCommand.ModificationType.AddPin)
-					{
-						cmd.modifyTarget.AddPin(cmd.simPinToAdd, cmd.pinIsInputPin);
-					}
-					else if (cmd.type == SimModifyCommand.ModificationType.RemovePin)
-					{
-						cmd.modifyTarget.RemovePin(cmd.removePinID);
-					}
+					SimChip newSubChip = BuildSimChip(cmd.chipDesc, cmd.lib, cmd.subChipID, cmd.subChipInternalData);
+					cmd.modifyTarget.AddSubChip(newSubChip);
+				}
+				else if (cmd.type == SimModifyCommand.ModificationType.RemoveSubChip)
+				{
+					cmd.modifyTarget.RemoveSubChip(cmd.removeSubChipID);
+				}
+				else if (cmd.type == SimModifyCommand.ModificationType.AddConnection)
+				{
+					cmd.modifyTarget.AddConnection(cmd.sourcePinAddress, cmd.targetPinAddress);
+				}
+				else if (cmd.type == SimModifyCommand.ModificationType.RemoveConnection)
+				{
+					cmd.modifyTarget.RemoveConnection(cmd.sourcePinAddress, cmd.targetPinAddress);
+				}
+				else if (cmd.type == SimModifyCommand.ModificationType.AddPin)
+				{
+					cmd.modifyTarget.AddPin(cmd.simPinToAdd, cmd.pinIsInputPin);
+				}
+				else if (cmd.type == SimModifyCommand.ModificationType.RemovePin)
+				{
+					cmd.modifyTarget.RemovePin(cmd.removePinID);
 				}
 			}
+
+			return topologyChanged;
 		}
 
 		public static void Reset()

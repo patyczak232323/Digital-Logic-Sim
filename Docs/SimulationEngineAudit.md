@@ -66,6 +66,16 @@ Null input arrays and temporarily missing editor pins are now treated as absent
 inputs during topology rebinding and state application. This covers the short-lived
 main-thread/simulation-thread mismatch that can occur while editing a project.
 
+### 8. Topology invalidation could be lost between threads — fixed
+
+The game facade previously used a separate shared boolean to remember that an edit
+had been queued. A producer could set that flag while the simulation thread was
+finishing an older drain, after which the simulation thread cleared the flag. The new
+command would still execute on the next drain, but the compiled netlist would remain
+stale. `ApplyModifications` now reports whether it actually dequeued a topology
+command, and the deterministic netlist is invalidated from that result. Queue
+consumption and invalidation therefore belong to the same simulation-thread action.
+
 ## Correctness invariants retained
 
 - Gate outputs are staged and committed simultaneously within a delta cycle.
