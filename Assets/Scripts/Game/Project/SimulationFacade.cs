@@ -41,6 +41,28 @@ namespace DLS.Game
 
 		public static void EnsureInitialized(SimChip rootSimChip, DevPinInstance[] inputPins, SimAudio audioState)
 		{
+			// The simulation loop calls EnsureInitialized even while paused, before the
+			// normal per-step SetInspectionChip call. Keep the viewed Custom Chip expanded
+			// in that path too; otherwise a ready LUT/JIT block can leave its internal pin
+			// states stale for the entire time the simulation remains paused.
+			Project project = Project.ActiveProject;
+			if (project != null && project.simPaused)
+			{
+				try
+				{
+					if (project.chipViewStack.Count > 0)
+					{
+						DeterministicSimulator.SetInspectionChip(project.ViewedChip.SimChip);
+					}
+				}
+				catch (InvalidOperationException)
+				{
+					// The main thread can replace the view stack while the simulation thread
+					// is sampling it. Keep the previous inspection target for this pass and
+					// retry on the next loop rather than collapsing the wrong hierarchy.
+				}
+			}
+
 			DeterministicSimulator.EnsureInitialized(rootSimChip, inputPins, audioState);
 		}
 
