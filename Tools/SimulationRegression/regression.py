@@ -70,10 +70,16 @@ class DeltaNet:
             self.state[target] = value
             self._signal_changed(target, queue, queued, dirty)
 
-    def settle(self, changed: list[str] | None = None, max_delta: int | None = None) -> tuple[bool, int]:
+    def settle(
+        self,
+        changed: list[str] | None = None,
+        max_delta: int | None = None,
+        max_gate_evaluations: int = 256,
+    ) -> tuple[bool, int]:
         queue: deque[str] = deque()
         queued: set[str] = set()
         dirty: set[int] = set()
+        evaluations_this_settle: dict[int, int] = defaultdict(int)
 
         names = list(self.state) if changed is None else changed
         for name in names:
@@ -97,6 +103,9 @@ class DeltaNet:
             pending: list[tuple[str, int]] = []
 
             for index in batch:
+                if evaluations_this_settle[index] >= max_gate_evaluations:
+                    return False, delta
+                evaluations_this_settle[index] += 1
                 a, b, out = self.gates[index]
                 new_value = 1 ^ (self.state[a] & self.state[b])
                 self.gate_evaluations += 1
@@ -418,6 +427,21 @@ def test_oscillator_guard() -> None:
     assert elapsed < 1.0, elapsed
 
 
+def test_local_oscillator_guard_with_large_unrelated_netlist() -> None:
+    net = DeltaNet()
+    net.set("X", 0)
+    net.gate("X", "X", "X")
+    for index in range(10_000):
+        net.set(f"A{index}", 0)
+        net.set(f"B{index}", 0)
+        net.gate(f"A{index}", f"B{index}", f"Q{index}")
+
+    net.prime()
+    converged, delta = net.settle(["X"], max_gate_evaluations=64)
+    assert not converged
+    assert delta == 64, "unrelated gates must not delay local oscillation detection"
+
+
 def test_multidriver_resolution_and_coalescing() -> None:
     net = DeltaNet()
     drivers = [f"D{i}" for i in range(256)]
@@ -455,13 +479,23 @@ def test_source_integration_static() -> None:
         "TraceNonConvergence",
         "Queue<int> targetQueue",
         "bool[] queuedTargets",
-        "int[][] targetIndicesBySource",
-        "sourceIndices.Length == 1",
+        "int[] targetOffsetsBySource",
+        "int[] targetIndicesBySource",
+        "int[] sourceOffsetsByTarget",
+        "BuildAdjacency",
+        "sourceCount == 1",
+        "target.numInputsReceivedThisFrame = sourceCount;",
+        "if (inputPins == null) inputPins = Array.Empty<DevPinInstance>();",
+        "MaxEvaluationsPerChipPerSettle",
+        "TryBeginChipEvaluation",
+        "evaluationEpochByChip",
         "boundInputPinIndices",
         "LastTargetResolutions",
     )
     for token in required_solver_tokens:
         assert token in solver, f"missing deterministic solver mechanism: {token}"
+
+    assert "sourceIndices.Length" not in solver, "stale jagged-adjacency reference breaks the CSR build"
 
     assert "RandomBool()" not in solver
     assert "rng.Next" not in solver
@@ -523,6 +557,7 @@ def main() -> None:
         ("creation-order independence", test_creation_order_independence),
         ("restart determinism", test_restart_determinism),
         ("oscillator delta-cycle guard", test_oscillator_guard),
+        ("local oscillator guard in large netlist", test_local_oscillator_guard_with_large_unrelated_netlist),
         ("multi-driver resolution + target coalescing", test_multidriver_resolution_and_coalescing),
         ("C# integration static checks", test_source_integration_static),
     ]

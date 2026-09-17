@@ -21,6 +21,10 @@ The topology compiler now assigns dense integer indices to pins and combinationa
 chips. Runtime scheduling uses integer queues, precomputed arrays, and `bool[]`
 membership flags.
 
+Adjacency is stored in compressed sparse row (CSR) form: one offsets array and one
+contiguous edge array in each direction. This removes the managed array previously
+allocated for every pin and improves locality while walking fan-out and driver lists.
+
 ### 2. Repeated multi-driver resolution — fixed
 
 When many outputs changed together and drove the same target, the old queue resolved
@@ -47,6 +51,21 @@ simulation step reuses all scheduling buffers and does not create collections.
 The regression workflow listened only to the old feature branch. It now also runs on
 `main`.
 
+### 6. Oscillator work scaled with the whole project — fixed
+
+The global delta-cycle limit is intentionally proportional to the number of gates so
+very deep valid paths can settle. That allowed a tiny oscillating loop inside a large
+CPU project to consume a large amount of work before the global limit fired. Each
+gate now also has a per-settle evaluation budget tracked with allocation-free epochs.
+A local oscillator is stopped after 256 evaluations regardless of unrelated project
+size, while ordinary deep acyclic paths remain unaffected.
+
+### 7. Empty editor input snapshots could crash the simulation — fixed
+
+Null input arrays and temporarily missing editor pins are now treated as absent
+inputs during topology rebinding and state application. This covers the short-lived
+main-thread/simulation-thread mismatch that can occur while editing a project.
+
 ## Correctness invariants retained
 
 - Gate outputs are staged and committed simultaneously within a delta cycle.
@@ -64,7 +83,8 @@ The regression workflow listened only to the old feature branch. It now also run
 depth 0–8, long chains, 100 parallel custom-chip instances, SR/D latches, 10,000 DFF
 cycles, 100,000 clocks for 4/8/16-bit counters, flat-versus-nested equivalence,
 creation-order and restart determinism, oscillator bounding, deterministic driver
-contention, and shared-target coalescing.
+contention, shared-target coalescing, CSR integration guards, and local oscillator
+bounding in a 10,000-gate unrelated netlist.
 
 Structural benchmark results from the suite:
 
