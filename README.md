@@ -31,7 +31,7 @@ Existing Digital Logic Sim projects are intended to remain compatible. The curre
 
 ## Repository policy
 
-The source is published for transparency, auditing and development. The canonical project is maintained by **@patyczak232323**. External changes should be proposed through forks and pull requests rather than direct modification of the main branch.
+The canonical project is maintained by **@patyczak232323**. External contributors should use forks and pull requests. Direct write access to the canonical repository is not intended for third parties.
 
 ## Credits and license
 
