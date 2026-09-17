@@ -1,0 +1,75 @@
+name: Linux compatibility fix
+
+on:
+  push:
+    branches: [ fix/unity-linux-save-graphics-work3 ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch Saver and graphics settings
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          saver = Path('Assets/Scripts/SaveSystem/Saver.cs')
+          text = saver.read_text(encoding='utf-8')
+          old = '''\t\t\t\t\tFile.Copy(path, stagedBackupPath, true);\n\t\t\t\t\tFile.Move(temporaryPath, path, true);\n\t\t\t\t\tFile.Move(stagedBackupPath, backupPath, true);'''
+          new = '''\t\t\t\t\tFile.Copy(path, stagedBackupPath, true);\n\t\t\t\t\tif (File.Exists(path)) File.Delete(path);\n\t\t\t\t\tFile.Move(temporaryPath, path);\n\t\t\t\t\tif (File.Exists(backupPath)) File.Delete(backupPath);\n\t\t\t\t\tFile.Move(stagedBackupPath, backupPath);'''
+          if old not in text and new not in text:
+              raise SystemExit('Expected Saver.cs pattern not found')
+          text = text.replace(old, new, 1)
+          saver.write_text(text, encoding='utf-8')
+
+          settings = Path('ProjectSettings/ProjectSettings.asset')
+          text = settings.read_text(encoding='utf-8')
+          old = '    m_APIs: 1200000002000000150000000b000000'
+          new = '    m_APIs: 120000000200000015000000'
+          if old not in text and new not in text:
+              raise SystemExit('Expected Windows graphics API list not found')
+          text = text.replace(old, new, 1)
+          settings.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Validate compatibility changes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          saver = Path('Assets/Scripts/SaveSystem/Saver.cs').read_text(encoding='utf-8')
+          if re.search(r'File\.Move\s*\([^\n]*,[^\n]*,[^\n]*\)', saver):
+              raise SystemExit('Three-argument File.Move remains')
+
+          settings = Path('ProjectSettings/ProjectSettings.asset').read_text(encoding='utf-8')
+          marker = '- m_BuildTarget: WindowsStandaloneSupport\n    m_APIs: 120000000200000015000000'
+          if marker not in settings:
+              raise SystemExit('Windows graphics API list was not normalized')
+          PY
+
+      - name: Run existing regression suites
+        run: |
+          python3 Tools/SimulationRegression/regression.py
+          python3 Tools/ComputerRegression/regression.py
+          python3 Tools/ProgramRegression/regression.py
+
+      - name: Commit compatibility fix
+        run: |
+          if git diff --quiet -- Assets/Scripts/SaveSystem/Saver.cs ProjectSettings/ProjectSettings.asset; then
+            echo "Compatibility fix already present."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Assets/Scripts/SaveSystem/Saver.cs ProjectSettings/ProjectSettings.asset
+          git commit -m "Fix Unity save API and standalone graphics settings"
+          git push
