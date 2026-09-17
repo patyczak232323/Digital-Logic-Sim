@@ -1,10 +1,12 @@
 # Digital Logic Sim Rewired
 
-A fork of Sebastian Lague's **Digital Logic Sim** with a rewritten deterministic simulation engine focused on reliable propagation, nested custom chips, feedback-heavy circuits, and large CPU-scale designs.
+**Digital Logic Sim Rewired** is an independently maintained fork of Sebastian Lague's Digital Logic Sim, focused on making the simulation engine more deterministic, reliable and scalable while preserving the familiar editor and project format.
 
-## Download
+The rewritten runtime is designed for circuits that are particularly demanding for logic simulators: deeply nested Custom Chips, feedback loops, registers, counters, flip-flops, large fan-out networks and CPU-scale designs.
 
-The supported binaries are published in GitHub Releases:
+## Downloads
+
+Prebuilt releases are available for:
 
 - **Windows x64:** `DLSRewired-Windows-x64.zip`
 - **Linux x86_64:** `DLSRewired-Linux-x86_64.zip`
@@ -13,22 +15,23 @@ Latest release: **v0.1.0**
 
 https://github.com/patyczak232323/Digital-Logic-Sim/releases/tag/v0.1.0
 
-## Main changes
+## Highlights
 
-- deterministic event-driven simulation engine
-- improved propagation through deeply nested Custom Chips
-- fixes for feedback loops, registers, counters and flip-flops
-- isolated state for parallel instances of the same custom chip
-- better behaviour on large circuits and CPU-scale projects
-- Linux/Windows standalone compatibility fixes
+- rewritten deterministic event-driven simulation engine
+- reliable propagation through deeply nested Custom Chips
+- improved handling of feedback-heavy sequential circuits
+- isolated per-instance state for repeated custom chips
+- improved behaviour on large circuits and CPU-scale projects
+- compatibility fixes for Linux and Windows standalone builds
+- original editor workflow and project format retained wherever possible
 
 ## Compatibility
 
-The project keeps the original Digital Logic Sim editor and project format wherever possible. Existing projects are intended to remain compatible, but **v0.1.0 is still an early release** and unusual circuits may expose bugs.
+Existing Digital Logic Sim projects are intended to remain compatible. The current release is still early software, so unusual or extremely large circuits may expose bugs.
 
-## Source
+## Repository policy
 
-This repository contains the Unity project used to build the release. Development-only diagnostic tools and temporary CI workflows are intentionally excluded from the release branch.
+The source is published for transparency, auditing and development. The canonical project is maintained by **@patyczak232323**. External changes should be proposed through forks and pull requests rather than direct modification of the main branch.
 
 ## Credits and license
 
