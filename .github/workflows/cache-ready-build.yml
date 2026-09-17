@@ -17,7 +17,10 @@ jobs:
       - name: Rebuild patcher
         shell: bash
         run: |
-          cat .cache-build/part*.b64 | base64 -d > /tmp/apply_cache_patch.py
+          : > /tmp/apply_cache_patch.py
+          for f in .cache-build/part*.b64; do
+            base64 -d "$f" >> /tmp/apply_cache_patch.py
+          done
           python3 -m py_compile /tmp/apply_cache_patch.py
 
       - name: Apply cache changes
