@@ -629,7 +629,7 @@ namespace DLS.Simulation
 
 			if (PinState.FirstBitHigh(writeEnablePin))
 			{
-				chip.InternalState[GetAddress8Bit(addressPin)] = PinState.GetBitStates(dataPin) & Address8BitMask;
+				chip.InternalState[GetAddress8Bit(addressPin)] = (uint)(PinState.GetBitStates(dataPin) & Address8BitMask);
 				return true;
 			}
 
@@ -707,7 +707,7 @@ namespace DLS.Simulation
 			else if (PinState.FirstBitHigh(writePin))
 			{
 				int addressIndex = GetAddress8Bit(addressPin) + addressSpace;
-				chip.InternalState[addressIndex] = PinState.GetBitStates(pixelInputPin) & 1;
+				chip.InternalState[addressIndex] = (uint)(PinState.GetBitStates(pixelInputPin) & 1);
 			}
 
 			if (PinState.FirstBitHigh(refreshPin))
