@@ -16,7 +16,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Patch Saver and graphics settings
+      - name: Patch Saver, graphics settings, and regression guard
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -38,6 +38,15 @@ jobs:
               raise SystemExit('Expected Windows graphics API list not found')
           text = text.replace(old, new, 1)
           settings.write_text(text, encoding='utf-8')
+
+          regression = Path('Tools/ProgramRegression/regression.py')
+          text = regression.read_text(encoding='utf-8')
+          old = '    assert "File.Move(temporaryPath, path, true);" in saver\n'
+          new = '''    assert "File.Move(temporaryPath, path);" in saver\n    assert "if (File.Exists(path)) File.Delete(path);" in saver\n    assert "File.Move(stagedBackupPath, backupPath);" in saver\n    assert "if (File.Exists(backupPath)) File.Delete(backupPath);" in saver\n'''
+          if old not in text and new not in text:
+              raise SystemExit('Expected ProgramRegression guard not found')
+          text = text.replace(old, new, 1)
+          regression.write_text(text, encoding='utf-8')
           PY
 
       - name: Validate compatibility changes
@@ -64,12 +73,12 @@ jobs:
 
       - name: Commit compatibility fix
         run: |
-          if git diff --quiet -- Assets/Scripts/SaveSystem/Saver.cs ProjectSettings/ProjectSettings.asset; then
+          if git diff --quiet -- Assets/Scripts/SaveSystem/Saver.cs ProjectSettings/ProjectSettings.asset Tools/ProgramRegression/regression.py; then
             echo "Compatibility fix already present."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Assets/Scripts/SaveSystem/Saver.cs ProjectSettings/ProjectSettings.asset
+          git add Assets/Scripts/SaveSystem/Saver.cs ProjectSettings/ProjectSettings.asset Tools/ProgramRegression/regression.py
           git commit -m "Fix Unity save API and standalone graphics settings"
           git push
