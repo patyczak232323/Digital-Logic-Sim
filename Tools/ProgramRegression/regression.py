@@ -118,7 +118,10 @@ def test_csharp_integration_guards() -> None:
     assert 'string temporaryPath = path + ".tmp";' in saver
     assert 'string backupPath = path + ".bak";' in saver
     assert "stream.Flush(true);" in saver
-    assert "File.Move(temporaryPath, path, true);" in saver
+    assert "File.Move(temporaryPath, path);" in saver
+    assert "if (File.Exists(path)) File.Delete(path);" in saver
+    assert "File.Move(stagedBackupPath, backupPath);" in saver
+    assert "if (File.Exists(backupPath)) File.Delete(backupPath);" in saver
     assert "LoadWithBackup" in loader and 'path + ".bak"' in loader
     assert "throw new InvalidDataException" in serializer
     assert "string.IsNullOrWhiteSpace(name)" in save_utils
