@@ -159,8 +159,10 @@ namespace DLS.SaveSystem
 					// Do not overwrite the last backup until the new primary is in place.
 					// This guarantees that an interruption leaves at least one complete copy.
 					File.Copy(path, stagedBackupPath, true);
-					File.Move(temporaryPath, path, true);
-					File.Move(stagedBackupPath, backupPath, true);
+					if (File.Exists(path)) File.Delete(path);
+					File.Move(temporaryPath, path);
+					if (File.Exists(backupPath)) File.Delete(backupPath);
+					File.Move(stagedBackupPath, backupPath);
 				}
 				else
 				{
