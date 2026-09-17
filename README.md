@@ -1,8 +1,24 @@
 # Digital Logic Sim Rewired
 
-**Digital Logic Sim Rewired** is an independently maintained fork of Sebastian Lague's Digital Logic Sim, focused on making the simulation engine more deterministic, reliable and scalable while preserving the familiar editor and project format.
+**Digital Logic Sim Rewired** is an independently maintained fork of Sebastian Lague's Digital Logic Sim with a rebuilt simulation runtime focused on reliable large-scale digital circuits while keeping the familiar editor and project format.
 
-The rewritten runtime is designed for circuits that are particularly demanding for logic simulators: deeply nested Custom Chips, feedback loops, registers, counters, flip-flops, large fan-out networks and CPU-scale designs.
+The project is aimed especially at designs that are difficult for traditional gate-level simulators: deeply nested Custom Chips, feedback loops, latches, flip-flops, registers, counters, large fan-out networks and complete CPU-scale circuits.
+
+## Simulation engine
+
+Rewired replaces the original runtime propagation model with an event-driven engine built around compiled netlist topology, dirty-gate scheduling and fixed-point settling.
+
+Key goals of the engine are:
+
+- correct propagation through deeply nested Custom Chips
+- stable behaviour for feedback-heavy circuits such as latches and flip-flops
+- deterministic normal simulation after circuit initialization
+- isolated state for multiple instances of the same Custom Chip
+- efficient handling of large fan-out and CPU-scale designs
+- explicit convergence limits instead of silently leaving partially propagated state
+- preservation of the original Digital Logic Sim editor workflow and project format wherever possible
+
+Feedback-based storage elements do not require arbitrary gate outputs to be randomized during normal operation. Circuit initialization is treated separately from normal deterministic simulation so that gate logic itself always remains logically correct.
 
 ## Downloads
 
@@ -15,19 +31,11 @@ Latest release: **v0.1.0**
 
 https://github.com/patyczak232323/Digital-Logic-Sim/releases/tag/v0.1.0
 
-## Highlights
-
-- rewritten deterministic event-driven simulation engine
-- reliable propagation through deeply nested Custom Chips
-- improved handling of feedback-heavy sequential circuits
-- isolated per-instance state for repeated custom chips
-- improved behaviour on large circuits and CPU-scale projects
-- compatibility fixes for Linux and Windows standalone builds
-- original editor workflow and project format retained wherever possible
-
 ## Compatibility
 
-Existing Digital Logic Sim projects are intended to remain compatible. The current release is still early software, so unusual or extremely large circuits may expose bugs.
+Existing Digital Logic Sim projects are intended to remain compatible. The editor, Custom Chip workflow and project format are kept as close to the original as practical while the simulation runtime is replaced underneath.
+
+The project is still under active development, so unusual circuits are worth reporting with a minimal reproducible project.
 
 ## Repository policy
 
