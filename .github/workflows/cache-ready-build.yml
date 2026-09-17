@@ -1,0 +1,80 @@
+name: Build ready cache ZIP
+
+on:
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  build-ready-zip:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Rebuild patcher
+        shell: bash
+        run: |
+          cat .cache-build/part*.b64 | base64 -d > /tmp/apply_cache_patch.py
+          python3 -m py_compile /tmp/apply_cache_patch.py
+
+      - name: Apply cache changes
+        shell: bash
+        run: |
+          python3 /tmp/apply_cache_patch.py
+          find Assets -name '*.pre-cache.bak' -delete
+
+      - name: Verify expected files
+        shell: bash
+        run: |
+          test -f Assets/Scripts/Simulation/CombinationalChipCache.cs
+          grep -q 'ChipCacheMode' Assets/Scripts/Description/Types/ChipDescription.cs
+          grep -q 'LastCacheHits' Assets/Scripts/Simulation/DeterministicSimulator.cs
+          grep -q 'SIM CACHE' Assets/Scripts/Graphics/UI/Menus/ChipSaveMenu.cs
+
+      - name: Create ready replacement ZIP
+        shell: bash
+        run: |
+          mkdir -p ready
+          files=(
+            Assets/Scripts/Description/Types/ChipDescription.cs
+            Assets/Scripts/SaveSystem/DescriptionCreator.cs
+            Assets/Scripts/Simulation/SimChip.cs
+            Assets/Scripts/Simulation/SimPin.cs
+            Assets/Scripts/Simulation/Simulator.cs
+            Assets/Scripts/Simulation/DeterministicSimulator.cs
+            Assets/Scripts/Simulation/CombinationalChipCache.cs
+            Assets/Scripts/Game/Project/SimulationFacade.cs
+            Assets/Scripts/Game/Project/Project.cs
+            Assets/Scripts/Graphics/UI/Menus/ChipSaveMenu.cs
+          )
+          for f in "${files[@]}"; do
+            mkdir -p "ready/$(dirname "$f")"
+            cp "$f" "ready/$f"
+          done
+          cat > ready/README_CACHE_READY.txt <<'EOF'
+          DLS Rewired - Custom Chip RAM Cache
+
+          Ta paczka zawiera GOTOWE pliki do nadpisania.
+          Nie uruchamiaj zadnego skryptu Python.
+
+          Instalacja:
+          1. Zamknij Unity / uruchomiona wersje symulatora.
+          2. Rozpakuj ZIP do katalogu glownego Digital-Logic-Sim.
+          3. Zezwol na nadpisanie plikow w Assets/.
+          4. Otworz projekt i pozwol Unity wykonac rekompilacje.
+
+          W SAVE CHIP pojawi sie SIM CACHE: AUTO / NORMAL / CACHED.
+          EOF
+          cd ready
+          zip -r ../DLS_Rewired_CACHE_READY.zip .
+
+      - name: Upload ready ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: DLS_Rewired_CACHE_READY
+          path: DLS_Rewired_CACHE_READY.zip
+          if-no-files-found: error
+          retention-days: 7
