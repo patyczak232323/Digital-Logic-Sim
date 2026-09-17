@@ -72,3 +72,6 @@ crashlytics-build.properties
 /[Aa]ssets/[Ss]treamingAssets/aa/*
 /.idea
 /.vsconfig
+
+# Generated persistent full-LUT simulation caches (Unity editor test projects)
+/TestData/Projects/*/Cache/

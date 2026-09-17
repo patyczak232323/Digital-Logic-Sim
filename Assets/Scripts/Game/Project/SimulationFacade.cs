@@ -39,6 +39,13 @@ namespace DLS.Game
 			DeterministicSimulator.RunSimulationStep(rootSimChip, inputPins, audioState);
 		}
 
+		public static void EnsureInitialized(SimChip rootSimChip, DevPinInstance[] inputPins, SimAudio audioState)
+		{
+			DeterministicSimulator.EnsureInitialized(rootSimChip, inputPins, audioState);
+		}
+
+		public static void SetInspectionChip(SimChip chip) => DeterministicSimulator.SetInspectionChip(chip);
+
 		public static void UpdateInPausedState() => DeterministicSimulator.UpdateInPausedState();
 
 		public static void UpdateKeyboardInputFromMainThread() => DLS.Simulation.Simulator.UpdateKeyboardInputFromMainThread();

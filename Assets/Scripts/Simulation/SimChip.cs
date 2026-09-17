@@ -7,18 +7,22 @@ namespace DLS.Simulation
 	public class SimChip
 	{
 		public readonly ChipType ChipType;
+		public readonly ChipDescription Description;
 		public readonly int ID;
 
 		// Some builtin chips, such as RAM, require an internal state for memory
 		// (can also be used for other arbitrary chip-specific data)
 		public readonly uint[] InternalState = Array.Empty<uint>();
 		public readonly bool IsBuiltin;
+		internal SimChip ParentChip;
 		public SimPin[] InputPins = Array.Empty<SimPin>();
 		public int numConnectedInputs;
 
 		public int numInputsReady;
 		public SimPin[] OutputPins = Array.Empty<SimPin>();
 		public SimChip[] SubChips = Array.Empty<SimChip>();
+		internal CombinationalChipMemoCache MemoCache;
+		internal CompiledChipExecutor CompiledExecutor;
 
 
 		public SimChip()
@@ -28,7 +32,12 @@ namespace DLS.Simulation
 
 		public SimChip(ChipDescription desc, int id, uint[] internalState, SimChip[] subChips)
 		{
+			Description = desc;
 			SubChips = subChips;
+			for (int i = 0; i < SubChips.Length; i++)
+			{
+				if (SubChips[i] != null) SubChips[i].ParentChip = this;
+			}
 			ID = id;
 			ChipType = desc.ChipType;
 			IsBuiltin = ChipType != ChipType.Custom;
@@ -252,6 +261,7 @@ namespace DLS.Simulation
 		{
 			Array.Resize(ref SubChips, SubChips.Length + 1);
 			SubChips[^1] = subChip;
+			if (subChip != null) subChip.ParentChip = this;
 		}
 
 		public void AddConnection(PinAddress sourcePinAddress, PinAddress targetPinAddress)

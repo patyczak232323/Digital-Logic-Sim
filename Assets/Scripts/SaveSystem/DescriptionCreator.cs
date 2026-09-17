@@ -19,6 +19,7 @@ namespace DLS.SaveSystem
 			Color col = hasSavedDesc ? descOld.Colour : RandomInitialChipColour();
 			string name = hasSavedDesc ? descOld.Name : string.Empty;
 			DisplayDescription[] displays = hasSavedDesc ? descOld.Displays : null;
+			ChipCacheMode cacheMode = hasSavedDesc ? descOld.CacheMode : ChipCacheMode.Auto;
 
 			// Create pin and subchip descriptions
 			PinDescription[] inputPins = OrderPins(chip.GetInputPins()).Select(CreatePinDescription).ToArray();
@@ -43,7 +44,8 @@ namespace DLS.SaveSystem
 				OutputPins = outputPins,
 				Wires = chip.Wires.Select(CreateWireDescription).ToArray(),
 				Displays = displays,
-				ChipType = ChipType.Custom
+				ChipType = ChipType.Custom,
+				CacheMode = cacheMode
 			};
 		}
 

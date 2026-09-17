@@ -10,6 +10,8 @@ namespace DLS.Simulation
 	{
 		const int Address8BitMask = 0xFF;
 		const int MaxEvaluationsPerChipPerSettle = 256;
+		const int MinPowerOnEvaluationBudget = 4096;
+		const int PowerOnEvaluationsPerChipBudget = 512;
 
 		public static bool DiagnosticsEnabled;
 		public static Action<string> DiagnosticSink;
@@ -18,6 +20,9 @@ namespace DLS.Simulation
 		public static int LastGateEvaluations { get; private set; }
 		public static int LastSignalPropagations { get; private set; }
 		public static int LastTargetResolutions { get; private set; }
+		public static int LastCacheHits { get; private set; }
+		public static int LastCacheMisses { get; private set; }
+		public static int LastJitHits { get; private set; }
 		public static bool LastSettleConverged { get; private set; } = true;
 
 		static readonly Stopwatch stopwatch = Stopwatch.StartNew();
@@ -60,8 +65,13 @@ namespace DLS.Simulation
 		static int[] boundInputPinIndices = Array.Empty<int>();
 
 		static SimChip topologyRoot;
+		static SimChip inspectionChip;
+		static readonly HashSet<SimChip> inspectionPath = new();
 		static bool topologyDirty = true;
+		static int observedCacheGeneration;
 		static bool needsInitialPropagation = true;
+		static bool needsPowerOnSettle = true;
+		static ulong stateChangeSerial;
 
 		static SimAudio audioState;
 		static double elapsedSecondsOld;
@@ -95,36 +105,96 @@ namespace DLS.Simulation
 			}
 		}
 
+		public static void EnsureInitialized(SimChip rootSimChip, DevPinInstance[] inputPins, SimAudio newAudioState)
+		{
+			if (inputPins == null) inputPins = Array.Empty<DevPinInstance>();
+			audioState = newAudioState;
+
+			EnsureTopology(rootSimChip, inputPins);
+			if (!needsInitialPropagation || rootSimChip == null) return;
+
+			// Initialization is deliberately separated from normal simulation time.
+			// It must never manufacture a clock edge, RAM write or Pulse event.
+			LastDeltaCycles = 0;
+			LastGateEvaluations = 0;
+			LastSignalPropagations = 0;
+			LastTargetResolutions = 0;
+			LastCacheHits = 0;
+			LastCacheMisses = 0;
+			LastJitHits = 0;
+			LastSettleConverged = true;
+
+			ApplyExternalInputs(inputPins);
+			UpdateFrameSources();
+
+			bool initConverged;
+			int initDeltaCycles = 0;
+
+			if (needsPowerOnSettle)
+			{
+				// Real gate networks with feedback do not power up in a perfectly
+				// synchronous state. During power-on only, evaluate dirty gates one
+				// at a time in a random order and commit each *correct* logic result
+				// immediately. This breaks symmetric SR/D-latch startup without ever
+				// randomizing NAND truth tables or user inputs.
+				initConverged = PowerOnAsynchronousSettle();
+
+				// Once a fixed point is found, verify it with the normal deterministic
+				// delta-cycle solver. A plain NAND (including a NAND3 made from NANDs)
+				// therefore always ends in its mathematically correct state.
+				ulong serialBeforeVerify = stateChangeSerial;
+				(bool verifyConverged, int verifyDelta) = FullDeterministicResettle();
+				initDeltaCycles += verifyDelta;
+				initConverged &= verifyConverged;
+
+				if (stateChangeSerial != serialBeforeVerify)
+				{
+					TracePowerOnVerificationAdjustment(serialBeforeVerify, stateChangeSerial);
+				}
+
+				// Edge-sensitive built-ins start from the already-settled level.
+				// The initialization itself is not an edge.
+				SynchronizeSequentialEdgeState();
+				needsPowerOnSettle = false;
+			}
+			else
+			{
+				// Editing/rebinding an already running graph must preserve latch/RAM
+				// state. Re-propagate everything deterministically, with no startup noise.
+				(initConverged, initDeltaCycles) = FullDeterministicResettle();
+			}
+
+			LastDeltaCycles += initDeltaCycles;
+			LastSettleConverged &= initConverged;
+			needsInitialPropagation = false;
+		}
+
 		public static void RunSimulationStep(SimChip rootSimChip, DevPinInstance[] inputPins, SimAudio newAudioState)
 		{
 			if (inputPins == null) inputPins = Array.Empty<DevPinInstance>();
 			audioState = newAudioState;
 			audioState?.InitFrame();
 
-			EnsureTopology(rootSimChip, inputPins);
-
-			Simulator.simulationFrame++;
-
 			LastDeltaCycles = 0;
 			LastGateEvaluations = 0;
 			LastSignalPropagations = 0;
 			LastTargetResolutions = 0;
+			LastCacheHits = 0;
+			LastCacheMisses = 0;
+			LastJitHits = 0;
 			LastSettleConverged = true;
+
+			EnsureInitialized(rootSimChip, inputPins, newAudioState);
+			if (rootSimChip == null)
+			{
+				UpdateAudioState();
+				return;
+			}
+
+			Simulator.simulationFrame++;
 
 			ApplyExternalInputs(inputPins);
 			UpdateFrameSources();
-
-			if (needsInitialPropagation)
-			{
-				PrimeInitialCombinationalState();
-				QueueAllExistingSignals();
-				for (int i = 0; i < combinationalChips.Count; i++)
-				{
-					MarkDirty(i);
-				}
-
-				needsInitialPropagation = false;
-			}
 
 			(bool preConverged, int preDelta) = SettleCombinational();
 			LastDeltaCycles += preDelta;
@@ -153,11 +223,20 @@ namespace DLS.Simulation
 			topologyDirty = true;
 		}
 
+		public static void SetInspectionChip(SimChip chip)
+		{
+			if (ReferenceEquals(inspectionChip, chip)) return;
+			inspectionChip = chip;
+			topologyDirty = true;
+		}
+
 		public static void Reset()
 		{
 			topologyRoot = null;
 			topologyDirty = true;
+			observedCacheGeneration = CombinationalChipCacheManager.ReadyGeneration;
 			needsInitialPropagation = true;
+			needsPowerOnSettle = true;
 
 			combinationalChips.Clear();
 			sourceChips.Clear();
@@ -178,12 +257,15 @@ namespace DLS.Simulation
 			evaluationEpochByChip = Array.Empty<int>();
 			evaluationsInEpoch = Array.Empty<ushort>();
 			evaluationEpoch = 0;
+			stateChangeSerial = 0;
 			initializationOrder.Clear();
 			boundInputPins = null;
 			boundInputPinSnapshot = Array.Empty<DevPinInstance>();
 			boundInputPinIndices = Array.Empty<int>();
 			runtimeDiagnosticPaths.Clear();
 			registeredDiagnosticPaths.Clear();
+			inspectionChip = null;
+			inspectionPath.Clear();
 
 			ClearWorkQueues();
 
@@ -196,6 +278,9 @@ namespace DLS.Simulation
 			LastGateEvaluations = 0;
 			LastSignalPropagations = 0;
 			LastTargetResolutions = 0;
+			LastCacheHits = 0;
+			LastCacheMisses = 0;
+			LastJitHits = 0;
 			LastSettleConverged = true;
 		}
 
@@ -231,15 +316,31 @@ namespace DLS.Simulation
 
 		static void EnsureTopology(SimChip root, DevPinInstance[] inputPins)
 		{
+			int cacheGeneration = CombinationalChipCacheManager.ReadyGeneration;
+			if (cacheGeneration != observedCacheGeneration)
+			{
+				observedCacheGeneration = cacheGeneration;
+				topologyDirty = true;
+			}
+
+			bool rootChanged = !ReferenceEquals(topologyRoot, root);
+
 			if (!topologyDirty && topologyRoot == root)
 			{
-				if (!ExternalInputBindingsMatch(inputPins)) BindExternalInputs(root, inputPins);
+				if (!ExternalInputBindingsMatch(inputPins))
+				{
+					BindExternalInputs(root, inputPins);
+					// A changed editor input list needs a full propagation pass, but it is
+					// not a new power-on and must not randomize existing storage.
+					needsInitialPropagation = true;
+				}
 				return;
 			}
 
 			topologyRoot = root;
 			topologyDirty = false;
 			needsInitialPropagation = true;
+			if (rootChanged && root != null) needsPowerOnSettle = true;
 
 			combinationalChips.Clear();
 			sourceChips.Clear();
@@ -263,7 +364,9 @@ namespace DLS.Simulation
 				? registeredRootPath
 				: "ROOT";
 
-			CollectTopologyRecursive(root, rootPath);
+			inspectionPath.Clear();
+			if (inspectionChip != null) FindInspectionPath(root, inspectionChip);
+			CollectTopologyRecursive(root, rootPath, false);
 
 			for (int i = 0; i < allPins.Count; i++) pinIndices.Add(allPins[i], i);
 
@@ -293,7 +396,9 @@ namespace DLS.Simulation
 
 			for (int i = 0; i < allPins.Count; i++)
 			{
-				targetIsCustomBoundary[i] = allPins[i].parentChip.ChipType == ChipType.Custom;
+				targetIsCustomBoundary[i] =
+					allPins[i].parentChip.ChipType == ChipType.Custom &&
+					targetOwnerCombinationalIndex[i] < 0;
 			}
 
 			targetQueue = new Queue<int>(Math.Max(64, allPins.Count));
@@ -357,14 +462,46 @@ namespace DLS.Simulation
 			targetQueue = new Queue<int>();
 		}
 
-		static void CollectTopologyRecursive(SimChip chip, string fallbackPath)
+		static bool FindInspectionPath(SimChip chip, SimChip target)
+		{
+			if (chip == null || target == null) return false;
+
+			if (ReferenceEquals(chip, target))
+			{
+				inspectionPath.Add(chip);
+				return true;
+			}
+
+			for (int i = 0; i < chip.SubChips.Length; i++)
+			{
+				if (FindInspectionPath(chip.SubChips[i], target))
+				{
+					inspectionPath.Add(chip);
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		static void CollectTopologyRecursive(SimChip chip, string fallbackPath, bool allowMemoCache)
 		{
 			string path = registeredDiagnosticPaths.TryGetValue(chip, out string registeredPath)
 				? registeredPath
 				: fallbackPath;
 
 			runtimeDiagnosticPaths[chip] = path;
-			bool isCombinational = chip.ChipType != ChipType.Custom && IsCombinationalChipType(chip.ChipType);
+
+			bool acceleratedCustom =
+				allowMemoCache &&
+				chip.ChipType == ChipType.Custom &&
+				!inspectionPath.Contains(chip) &&
+				((chip.MemoCache != null && chip.MemoCache.Ready) || chip.CompiledExecutor != null);
+
+			bool isCombinational =
+				acceleratedCustom ||
+				(chip.ChipType != ChipType.Custom && IsCombinationalChipType(chip.ChipType));
+
 			int combinationalIndex = isCombinational ? combinationalChips.Count : -1;
 			int inputStart = allPins.Count;
 
@@ -381,13 +518,13 @@ namespace DLS.Simulation
 				pinOwnerCombinationalIndexBuild.Add(-1);
 			}
 
-			if (chip.ChipType == ChipType.Custom)
+			if (chip.ChipType == ChipType.Custom && !acceleratedCustom)
 			{
 				for (int i = 0; i < chip.SubChips.Length; i++)
 				{
 					SimChip child = chip.SubChips[i];
 					string childPath = $"{path}/{child.ChipType}[{child.ID}]";
-					CollectTopologyRecursive(child, childPath);
+					CollectTopologyRecursive(child, childPath, true);
 				}
 
 				return;
@@ -398,6 +535,11 @@ namespace DLS.Simulation
 			if (isCombinational)
 			{
 				combinationalChips.Add(runtimeChip);
+			}
+
+			if (acceleratedCustom)
+			{
+				return;
 			}
 
 			switch (chip.ChipType)
@@ -498,6 +640,7 @@ namespace DLS.Simulation
 					if (simPin.State != newState)
 					{
 						simPin.State = newState;
+						stateChangeSerial++;
 						QueueFanout(pinIndex);
 					}
 				}
@@ -841,6 +984,7 @@ namespace DLS.Simulation
 
 			uint oldState = target.State;
 			target.State = newState;
+			stateChangeSerial++;
 			SimPin triggeringSource = allPins[triggeringSourceIndex];
 			target.latestSourceID = triggeringSource.ID;
 			target.latestSourceParentChipID = triggeringSource.parentChip.ID;
@@ -894,6 +1038,32 @@ namespace DLS.Simulation
 			RuntimeChip runtimeChip = combinationalChips[chipIndex];
 			SimChip chip = runtimeChip.Chip;
 			int outputStart = runtimeChip.OutputStart;
+
+			if (chip.ChipType == ChipType.Custom)
+			{
+				// A ready LUT is still the cheapest path. Native JIT acts as the immediate
+				// accelerator while an async LUT is loading/building and as the permanent
+				// path for chips that are intentionally not using a LUT.
+				if (chip.MemoCache != null && chip.MemoCache.Ready)
+				{
+					bool cacheHit = chip.MemoCache.Evaluate(chip, out uint[] cachedOutputs);
+					if (cacheHit) LastCacheHits++;
+					else LastCacheMisses++;
+
+					int count = Math.Min(cachedOutputs.Length, chip.OutputPins.Length);
+					for (int i = 0; i < count; i++) StageOutput(outputStart + i, cachedOutputs[i]);
+					return;
+				}
+
+				if (chip.CompiledExecutor != null)
+				{
+					uint[] compiledOutputs = chip.CompiledExecutor.Evaluate(chip);
+					LastJitHits++;
+					int count = Math.Min(compiledOutputs.Length, chip.OutputPins.Length);
+					for (int i = 0; i < count; i++) StageOutput(outputStart + i, compiledOutputs[i]);
+					return;
+				}
+			}
 
 			switch (chip.ChipType)
 			{
@@ -1066,6 +1236,7 @@ namespace DLS.Simulation
 				if (pin.State == pending.State) continue;
 
 				pin.State = pending.State;
+				stateChangeSerial++;
 				QueueFanout(pending.PinIndex);
 			}
 
@@ -1096,23 +1267,105 @@ namespace DLS.Simulation
 			}
 		}
 
-		static void PrimeInitialCombinationalState()
+		static bool PowerOnAsynchronousSettle()
 		{
-			// Feedback storage has no defined power-on state. Seed it once in a
-			// deterministic path order, then use simultaneous delta-cycles only.
+			// This is the "switch-on noise" phase used only for a genuinely new root
+			// circuit. Gate *results* remain deterministic; only scheduling order is
+			// randomized. Each gate commits immediately before the next gate runs.
+			ClearWorkQueues();
 			QueueAllExistingSignals();
 			DrainTargetQueue();
 
-			for (int i = 0; i < initializationOrder.Count; i++)
+			for (int i = 0; i < combinationalChips.Count; i++)
 			{
-				pendingPinStates.Clear();
-				EvaluateCombinationalChip(initializationOrder[i]);
-				CommitPendingOutputs();
-				DrainTargetQueue();
+				MarkDirty(i);
 			}
 
-			for (int i = 0; i < dirtyChips.Count; i++) dirtyChipFlags[dirtyChips[i]] = false;
-			dirtyChips.Clear();
+			int evaluationBudget = Math.Max(
+				MinPowerOnEvaluationBudget,
+				Math.Max(1, combinationalChips.Count) * PowerOnEvaluationsPerChipBudget);
+
+			int evaluations = 0;
+
+			while (targetQueue.Count > 0 || dirtyChips.Count > 0)
+			{
+				DrainTargetQueue();
+				if (dirtyChips.Count == 0) continue;
+
+				if (evaluations >= evaluationBudget)
+				{
+					TracePowerOnNonConvergence(evaluationBudget, evaluations);
+					ClearWorkQueues();
+					return false;
+				}
+
+				// Remove one random dirty gate in O(1). This models tiny propagation
+				// delay differences that decide which side of a feedback latch wins.
+				int slot = Simulator.rng.Next(dirtyChips.Count);
+				int lastSlot = dirtyChips.Count - 1;
+				int chipIndex = dirtyChips[slot];
+				dirtyChips[slot] = dirtyChips[lastSlot];
+				dirtyChips.RemoveAt(lastSlot);
+				dirtyChipFlags[chipIndex] = false;
+
+				pendingPinStates.Clear();
+				EvaluateCombinationalChip(chipIndex);
+				LastGateEvaluations++;
+				CommitPendingOutputs();
+				evaluations++;
+			}
+
+			return true;
+		}
+
+		static (bool converged, int deltaCycles) FullDeterministicResettle()
+		{
+			QueueAllExistingSignals();
+			for (int i = 0; i < combinationalChips.Count; i++)
+			{
+				MarkDirty(i);
+			}
+
+			return SettleCombinational();
+		}
+
+		static void SynchronizeSequentialEdgeState()
+		{
+			for (int i = 0; i < sequentialChips.Count; i++)
+			{
+				SimChip chip = sequentialChips[i].Chip;
+
+				switch (chip.ChipType)
+				{
+					case ChipType.Pulse:
+						// [2] stores the previous input level for rising-edge detection.
+						if (chip.InternalState.Length > 2 && chip.InputPins.Length > 0)
+						{
+							chip.InternalState[2] = PinState.FirstBitHigh(chip.InputPins[0].State) ? 1u : 0u;
+						}
+						break;
+
+					case ChipType.dev_Ram_8Bit:
+						SynchronizeLastClockState(chip, 4);
+						break;
+
+					case ChipType.DisplayRGB:
+						SynchronizeLastClockState(chip, 7);
+						break;
+
+					case ChipType.DisplayDot:
+						SynchronizeLastClockState(chip, 5);
+						break;
+				}
+			}
+		}
+
+		static void SynchronizeLastClockState(SimChip chip, int clockInputIndex)
+		{
+			if (chip.InternalState.Length == 0 || chip.InputPins.Length <= clockInputIndex) return;
+
+			chip.InternalState[^1] =
+				PinState.FirstBitHigh(chip.InputPins[clockInputIndex].State) ? 1u : 0u;
 		}
 
 		static void MarkDirty(int chipIndex)
@@ -1196,6 +1449,29 @@ namespace DLS.Simulation
 				$"maxDeltaCycles={maxDeltaCycles}\n" +
 				$"pendingSignals={targetQueue.Count}\n" +
 				$"pendingChips={dirtyChips.Count}");
+		}
+
+		static void TracePowerOnNonConvergence(int evaluationBudget, int evaluations)
+		{
+			if (!DiagnosticsEnabled || DiagnosticSink == null) return;
+
+			DiagnosticSink(
+				$"frame={Simulator.simulationFrame}\n" +
+				$"event=power-on-did-not-reach-fixed-point\n" +
+				$"evaluationBudget={evaluationBudget}\n" +
+				$"evaluations={evaluations}\n" +
+				$"pendingSignals={targetQueue.Count}\n" +
+				$"pendingChips={dirtyChips.Count}");
+		}
+
+		static void TracePowerOnVerificationAdjustment(ulong serialBefore, ulong serialAfter)
+		{
+			if (!DiagnosticsEnabled || DiagnosticSink == null) return;
+
+			DiagnosticSink(
+				$"frame={Simulator.simulationFrame}\n" +
+				$"event=power-on-verification-adjusted-state\n" +
+				$"changes={serialAfter - serialBefore}");
 		}
 
 		static void TraceRepeatedEvaluation(int chipIndex)

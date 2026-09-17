@@ -49,9 +49,9 @@ namespace DLS.Simulation
 		void ReceiveInput(SimPin source)
 		{
 			// If this is the first input of the frame, reset the received inputs counter to zero
-			if (lastUpdatedFrameIndex != Simulator.simulationFrame)
+			if (lastUpdatedFrameIndex != Simulator.SignalFrameIndex)
 			{
-				lastUpdatedFrameIndex = Simulator.simulationFrame;
+				lastUpdatedFrameIndex = Simulator.SignalFrameIndex;
 				numInputsReceivedThisFrame = 0;
 			}
 

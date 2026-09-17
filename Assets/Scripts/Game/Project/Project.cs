@@ -62,7 +62,7 @@ namespace DLS.Game
 		public volatile bool advanceSingleSimStep;
 		public int simPausedSingleStepCounter;
 		volatile int mainThreadFrameCount;
-		DevPinInstance[] inputPins = Array.Empty<DevPinInstance>();
+		volatile DevPinInstance[] inputPins = Array.Empty<DevPinInstance>();
 		public int targetTicksPerSecond => Mathf.Max(1, description.Prefs_SimTargetStepsPerSecond);
 		public int stepsPerClockTransition => Mathf.Max(1, description.Prefs_SimStepsPerClockTick);
 		public bool simPaused => description.Prefs_SimPaused;
@@ -102,6 +102,11 @@ namespace DLS.Game
 
 		public void StartSimulation()
 		{
+			// Populate editor inputs before the simulation thread can execute its
+			// first tick. Previously the thread started with an empty array and only
+			// received the real pins from the first main-thread Update().
+			inputPins = editModeChip?.GetInputPins() ?? Array.Empty<DevPinInstance>();
+
 			if (debug_runSimMainThread)
 			{
 				Debug.Log("Simulation will run on main thread");
@@ -188,6 +193,7 @@ namespace DLS.Game
 			{
 				string nameOld = ViewedChip.LastSavedDescription.Name;
 				Saver.RenameChip(nameOld, saveChipDescription, description.ProjectName);
+				CombinationalChipCacheManager.DeletePersistentCache(nameOld, description.ProjectName);
 				chipLibrary.NotifyChipRenamed(saveChipDescription, nameOld);
 				RenameStarred(saveChipDescription.Name, nameOld, false, false);
 				EnsureChipRenamedInCollections(nameOld, saveChipDescription.Name);
@@ -207,6 +213,13 @@ namespace DLS.Game
 					UpdateAndSaveProjectDescription();
 				}
 			}
+
+			// Keep persistent full-LUT caches in sync with the saved chip and all of its parents.
+			// Valid caches are loaded from disk; only missing/outdated caches are rebuilt.
+			CombinationalChipCacheManager.RefreshPersistentCachesAfterSave(
+				saveChipDescription.Name,
+				chipLibrary,
+				description.ProjectName);
 
 			// Notify the chip itself that it has been saved
 			ViewedChip.NotifySaved(saveChipDescription);
@@ -322,7 +335,9 @@ namespace DLS.Game
 
 			// Delete chip save file, remove from library, and update project description
 			Saver.DeleteChip(chipToDeleteName, description.ProjectName);
+			CombinationalChipCacheManager.DeletePersistentCache(chipToDeleteName, description.ProjectName);
 			chipLibrary.RemoveChip(chipToDeleteName);
+			CombinationalChipCacheManager.NotifyProjectDescriptionsChanged();
 			SetStarred(chipToDeleteName, false, false, false); // ensure removed from starred list
 			EnsureChipRemovedFromCollections(chipToDeleteName);
 			UpdateAndSaveProjectDescription();
@@ -497,6 +512,17 @@ namespace DLS.Game
 			while (simThreadActive)
 			{
 				Simulator.ApplyModifications();
+
+				// Power-on/topology settling is not a simulation tick and must also run
+				// while the user has the simulator paused. No clock edge or sequential
+				// component is advanced by EnsureInitialized().
+				Simulator.stepsPerClockTransition = stepsPerClockTransition;
+				SimChip initChip = rootSimChip;
+				if (initChip != null)
+				{
+					Simulator.EnsureInitialized(initChip, inputPins, audioState.simAudio);
+				}
+
 				// ---- A new frame has been reached on main thread  ----
 				if (mainThreadFrameCount > simLastMainThreadSyncFrame)
 				{
@@ -539,6 +565,7 @@ namespace DLS.Game
 				Simulator.stepsPerClockTransition = stepsPerClockTransition;
 				SimChip simChip = rootSimChip;
 				if (simChip == null) continue; // Could potentially be null for a frame when switching between chips
+				Simulator.SetInspectionChip(ViewedSimChip);
 				Simulator.RunSimulationStep(simChip, inputPins, audioState.simAudio);
 
 				// ---- Wait some amount of time (if needed) to try to hit the target ticks per second ----
@@ -587,6 +614,7 @@ namespace DLS.Game
 		{
 			Simulator.stepsPerClockTransition = stepsPerClockTransition;
 			Simulator.ApplyModifications();
+			Simulator.SetInspectionChip(ViewedSimChip);
 			Simulator.RunSimulationStep(rootSimChip, inputPins, audioState.simAudio);
 			ViewedChip.UpdateStateFromSim(ViewedSimChip, !CanEditViewedChip);
 		}

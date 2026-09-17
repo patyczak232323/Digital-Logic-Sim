@@ -19,6 +19,13 @@ namespace DLS.Simulation
 		public static int simulationFrame;
 		static uint pcg_rngState;
 
+		[ThreadStatic] static bool memoEvaluationActive;
+		[ThreadStatic] static int memoEvaluationFrame;
+		[ThreadStatic] static int memoEvaluationCounter;
+		[ThreadStatic] static Random memoEvaluationRng;
+		[ThreadStatic] static uint memoPcgRngState;
+		internal static int SignalFrameIndex => memoEvaluationActive ? memoEvaluationFrame : simulationFrame;
+
 		// When sim is first built, or whenever modified, it needs to run a less efficient pass in which the traversal order of the chips is determined
 		public static bool needsOrderPass;
 
@@ -198,7 +205,15 @@ namespace DLS.Simulation
 			// Step 4) if no sub chip is ready to be processed, pick one at random (but save buses for last)
 			if (noSubChipsReady)
 			{
-				nextSubChipIndex = rng.Next(0, num);
+				if (memoEvaluationActive)
+				{
+					memoEvaluationRng ??= new Random(0x5EED);
+					nextSubChipIndex = memoEvaluationRng.Next(0, num);
+				}
+				else
+				{
+					nextSubChipIndex = rng.Next(0, num);
+				}
 
 				// If processing in random order, save buses for last (since we must know all their inputs to display correctly)
 				if (isNonBusChipRemaining)
@@ -214,6 +229,42 @@ namespace DLS.Simulation
 			return nextSubChipIndex;
 		}
 
+		internal static void EvaluatePureCombinationalForMemo(SimChip chip)
+		{
+			if (chip == null) return;
+
+			bool previousActive = memoEvaluationActive;
+			int previousFrame = memoEvaluationFrame;
+
+			try
+			{
+				memoEvaluationActive = true;
+				unchecked
+				{
+					memoEvaluationCounter++;
+					if (memoEvaluationCounter == 0) memoEvaluationCounter = 1;
+				}
+
+				memoEvaluationFrame = memoEvaluationCounter;
+				ResetMemoEvaluationStateRecursive(chip);
+				StepChipReorder(chip);
+			}
+			finally
+			{
+				memoEvaluationActive = previousActive;
+				memoEvaluationFrame = previousFrame;
+			}
+		}
+
+		static void ResetMemoEvaluationStateRecursive(SimChip chip)
+		{
+			chip.numInputsReady = 0;
+			for (int i = 0; i < chip.SubChips.Length; i++)
+			{
+				ResetMemoEvaluationStateRecursive(chip.SubChips[i]);
+			}
+		}
+
 		public static void UpdateKeyboardInputFromMainThread()
 		{
 			SimKeyboardHelper.RefreshInputState();
@@ -221,6 +272,15 @@ namespace DLS.Simulation
 
 		public static bool RandomBool()
 		{
+			if (memoEvaluationActive)
+			{
+				if (memoPcgRngState == 0) memoPcgRngState = 0xA341316Cu;
+				memoPcgRngState = memoPcgRngState * 747796405 + 2891336453;
+				uint memoResult = ((memoPcgRngState >> (int)((memoPcgRngState >> 28) + 4)) ^ memoPcgRngState) * 277803737;
+				memoResult = (memoResult >> 22) ^ memoResult;
+				return memoResult < uint.MaxValue / 2;
+			}
+
 			pcg_rngState = pcg_rngState * 747796405 + 2891336453;
 			uint result = ((pcg_rngState >> (int)((pcg_rngState >> 28) + 4)) ^ pcg_rngState) * 277803737;
 			result = (result >> 22) ^ result;
@@ -578,6 +638,8 @@ namespace DLS.Simulation
 					simChip.AddConnection(wires[i].SourcePinAddress, wires[i].TargetPinAddress);
 				}
 
+				CombinationalChipCacheManager.Attach(simChip, chipDesc, library);
+				CombinationalJitCompiler.Attach(simChip, chipDesc, library);
 				return simChip;
 			}
 			finally
@@ -668,6 +730,14 @@ namespace DLS.Simulation
 			{
 				needsOrderPass = true;
 				topologyChanged = true;
+
+				// Any structural edit invalidates native programs on the edited chip and
+				// every compiled ancestor that flattened it. Until a fresh instance is built
+				// from the saved description, the deterministic engine is the safe path.
+				for (SimChip invalidate = cmd.modifyTarget; invalidate != null; invalidate = invalidate.ParentChip)
+				{
+					invalidate.CompiledExecutor = null;
+				}
 
 				if (cmd.type == SimModifyCommand.ModificationType.AddSubchip)
 				{

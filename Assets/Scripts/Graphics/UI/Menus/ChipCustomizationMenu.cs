@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using DLS.Description;
 using DLS.Game;
+using DLS.Simulation;
 using Seb.Helpers;
 using Seb.Vis;
 using Seb.Vis.UI;
@@ -19,16 +20,22 @@ namespace DLS.Graphics
 			"Name: Hidden"
 		};
 
+		static readonly string[] cacheModeOptions = { "AUTO", "NORMAL", "FULL" };
+
 
 		// ---- State ----
 		static SubChipInstance[] subChipsWithDisplays;
 		static string displayLabelString;
 		static string colHexCodeString;
+		static ChipCacheAnalysis cacheAnalysis;
+		static PersistentCacheInfo persistentCacheInfo;
+		static int nestedCacheableCount;
 
 		static readonly UIHandle ID_DisplaysScrollView = new("CustomizeMenu_DisplaysScroll");
 		static readonly UIHandle ID_ColourPicker = new("CustomizeMenu_ChipCol");
 		static readonly UIHandle ID_ColourHexInput = new("CustomizeMenu_ChipColHexInput");
 		static readonly UIHandle ID_NameDisplayOptions = new("CustomizeMenu_NameDisplayOptions");
+		static readonly UIHandle ID_CacheMode = new("CustomizeMenu_CacheMode");
 		static readonly UI.ScrollViewDrawElementFunc drawDisplayScrollEntry = DrawDisplayScroll;
 		static readonly Func<string, bool> hexStringInputValidator = ValidateHexStringInput;
 
@@ -39,6 +46,15 @@ namespace DLS.Graphics
 			CustomizationSceneDrawer.OnCustomizationMenuOpened();
 			displayLabelString = $"DISPLAYS ({subChipsWithDisplays.Length}):";
 
+			cacheAnalysis = CombinationalChipCacheManager.Analyze(
+				ChipSaveMenu.ActiveCustomizeDescription,
+				Project.ActiveProject.chipLibrary);
+			persistentCacheInfo = CombinationalChipCacheManager.GetPersistentCacheInfo(
+				ChipSaveMenu.ActiveCustomizeDescription,
+				Project.ActiveProject.chipLibrary);
+			nestedCacheableCount = CombinationalChipCacheManager.CountCacheableNestedDescriptions(
+				ChipSaveMenu.ActiveCustomizeDescription,
+				Project.ActiveProject.chipLibrary);
 			InitUIFromChipDescription();
 		}
 
@@ -60,6 +76,20 @@ namespace DLS.Graphics
 			// ---- Chip name UI ----
 			int nameDisplayMode = UI.WheelSelector(ID_NameDisplayOptions, nameDisplayOptions, NextPos(), new Vector2(pw, DrawSettings.ButtonHeight), theme.OptionsWheel, Anchor.TopLeft);
 			ChipSaveMenu.ActiveCustomizeDescription.NameLocation = (NameDisplayLocation)nameDisplayMode;
+
+			// ---- Simulation cache UI ----
+			int cacheModeIndex = MenuHelper.LabeledOptionsWheel(
+				"SIM CACHE",
+				Color.white,
+				NextPos(),
+				new Vector2(pw, DrawSettings.ButtonHeight),
+				ID_CacheMode,
+				cacheModeOptions,
+				7,
+				true);
+			ChipSaveMenu.ActiveCustomizeDescription.CacheMode = (ChipCacheMode)cacheModeIndex;
+
+			DrawCacheInfoPanel(theme);
 
 			// ---- Chip colour UI ----
 			Color newCol = UI.DrawColourPicker(ID_ColourPicker, NextPos(), pw, Anchor.TopLeft);
@@ -151,6 +181,193 @@ namespace DLS.Graphics
 			// Init name display mode
 			WheelSelectorState nameDisplayWheelState = UI.GetWheelSelectorState(ID_NameDisplayOptions);
 			nameDisplayWheelState.index = (int)ChipSaveMenu.ActiveCustomizeDescription.NameLocation;
+			UI.GetWheelSelectorState(ID_CacheMode).index = (int)ChipSaveMenu.ActiveCustomizeDescription.CacheMode;
+		}
+
+
+		static void DrawCacheInfoPanel(DrawSettings.UIThemeDLS theme)
+		{
+			const float panelWidth = 35;
+			const float panelHeight = 24;
+			const float rowHeight = 3.1f;
+			const float pad = UILayoutHelper.DefaultSpacing;
+
+			Vector2 panelTopRight = UI.TopRight + Vector2.left * pad + Vector2.down * pad;
+			UI.DrawPanel(panelTopRight, new Vector2(panelWidth, panelHeight), theme.MenuPanelCol, Anchor.TopRight);
+
+			float contentWidth = panelWidth - pad * 2;
+			Vector2 rowPos = panelTopRight + Vector2.left * (panelWidth - pad) + Vector2.down * pad;
+			Color rowCol = ColHelper.Darken(theme.MenuPanelCol, 0.01f);
+
+			DrawRow("CACHE INFO", theme.FontBold, 0.92f);
+			DrawRow(GetCacheHeadline(), theme.FontBold, 0.72f);
+
+			GetCacheReasonLines(out string reasonA, out string reasonB);
+			DrawRow(reasonA, theme.FontRegular, 0.56f);
+			DrawRow(reasonB, theme.FontRegular, 0.56f);
+
+			DrawRow(GetCacheRamLine(), theme.FontRegular, 0.62f);
+			DrawRow(GetCacheDiskLine(), theme.FontRegular, 0.62f);
+
+			void DrawRow(string text, FontType font, float fontScale)
+			{
+				UI.TextWithBackground(
+					rowPos,
+					new Vector2(contentWidth, rowHeight),
+					Anchor.TopLeft,
+					text,
+					font,
+					theme.FontSizeRegular * fontScale,
+					Color.white,
+					rowCol);
+				rowPos += Vector2.down * (rowHeight + pad * 0.35f);
+			}
+		}
+
+		static string GetCacheHeadline()
+		{
+			ChipCacheMode mode = ChipSaveMenu.ActiveCustomizeDescription.CacheMode;
+			if (mode == ChipCacheMode.Normal) return "SIM CACHE: OFF";
+
+			if (cacheAnalysis.CanCache &&
+			    CombinationalChipCacheManager.CanBuildFullCache(
+				    ChipSaveMenu.ActiveCustomizeDescription,
+				    cacheAnalysis,
+				    out _))
+			{
+				return $"FULL LUT: ENABLED ({cacheAnalysis.InputBitCount} bits)";
+			}
+
+			if (nestedCacheableCount > 0) return $"CACHE: HYBRID ({nestedCacheableCount} LUT)";
+			return "CACHE: STATEFUL / LIVE";
+		}
+
+		static void GetCacheReasonLines(out string first, out string second)
+		{
+			ChipCacheMode mode = ChipSaveMenu.ActiveCustomizeDescription.CacheMode;
+			string text;
+
+			if (mode == ChipCacheMode.Normal)
+			{
+				text = "Reason: disabled by user";
+			}
+			else if (!cacheAnalysis.CanCache)
+			{
+				text = nestedCacheableCount > 0
+					? "Root stays live (state/feedback); safe nested combinational chips use LUTs"
+					: "State/feedback logic stays live; an input-only LUT would be incorrect";
+			}
+			else if (!CombinationalChipCacheManager.CanBuildFullCache(
+				         ChipSaveMenu.ActiveCustomizeDescription,
+				         cacheAnalysis,
+				         out string reason))
+			{
+				text = "Reason: " + reason;
+			}
+			else
+			{
+				text = "Mode: full binary LUT; build/load runs in background";
+			}
+
+			SplitPanelText(text, 48, out first, out second);
+		}
+
+		static string GetCacheRamLine()
+		{
+			ChipCacheMode mode = ChipSaveMenu.ActiveCustomizeDescription.CacheMode;
+			if (mode == ChipCacheMode.Normal) return "RAM: disabled";
+
+			if (!cacheAnalysis.CanCache ||
+			    !CombinationalChipCacheManager.CanBuildFullCache(
+				    ChipSaveMenu.ActiveCustomizeDescription,
+				    cacheAnalysis,
+				    out _))
+			{
+				return nestedCacheableCount > 0
+					? $"RAM: {nestedCacheableCount} nested LUT(s), background"
+					: "RAM: normal live simulation";
+			}
+
+			ChipDescription saved = Project.ActiveProject.ViewedChip.LastSavedDescription;
+			if (saved != null &&
+			    CombinationalChipCacheManager.TryGetStats(saved, out int entries, out int target) &&
+			    CombinationalChipCacheManager.TryGetBuildInfo(
+				    saved,
+				    out bool ready,
+				    out double buildMs,
+				    out long bytes,
+				    out string failure))
+			{
+				if (!string.IsNullOrWhiteSpace(failure)) return "RAM: build failed";
+				if (ready)
+				{
+					string timing = buildMs > 0.01 ? $" | build {buildMs:0.0} ms" : string.Empty;
+					return $"RAM: {entries:N0}/{target:N0} | {CombinationalChipCacheManager.FormatBytes(bytes)}{timing}";
+				}
+				if (target > 0) return $"RAM: building {entries:N0}/{target:N0} (background)";
+			}
+
+			long estimated = CombinationalChipCacheManager.GetEstimatedMemoryBytes(
+				ChipSaveMenu.ActiveCustomizeDescription,
+				cacheAnalysis);
+			return $"RAM: queued | ~{CombinationalChipCacheManager.FormatBytes(estimated)}";
+		}
+
+		static string GetCacheDiskLine()
+		{
+			if (!cacheAnalysis.CanCache ||
+			    !CombinationalChipCacheManager.CanBuildFullCache(
+				    ChipSaveMenu.ActiveCustomizeDescription,
+				    cacheAnalysis,
+				    out _))
+			{
+				return nestedCacheableCount > 0 ? "DISK: nested LUTs persisted separately" : "DISK: root LUT not applicable";
+			}
+
+			ChipDescription saved = Project.ActiveProject.ViewedChip.LastSavedDescription;
+			if (saved != null &&
+			    CombinationalChipCacheManager.TryGetRuntimePersistenceInfo(
+				    saved,
+				    out bool loadedFromDisk,
+				    out double loadMs,
+				    out string diskMessage))
+			{
+				if (loadedFromDisk) return $"DISK: loaded in {loadMs:0.0} ms";
+				if (diskMessage == "DISK VALID") return "DISK: VALID";
+				if (!string.IsNullOrWhiteSpace(diskMessage) &&
+				    (diskMessage.Contains("BACKGROUND") || diskMessage == "QUEUED" || diskMessage.StartsWith("LOADING") || diskMessage.StartsWith("SAVING")))
+				{
+					return "DISK: " + diskMessage;
+				}
+			}
+
+			if (!persistentCacheInfo.Supported)
+			{
+				return "DISK: " + persistentCacheInfo.Status;
+			}
+
+			string size = persistentCacheInfo.FileBytes > 0
+				? " | " + CombinationalChipCacheManager.FormatBytes(persistentCacheInfo.FileBytes)
+				: string.Empty;
+			return "DISK: " + persistentCacheInfo.Status + size;
+		}
+
+		static void SplitPanelText(string text, int maxChars, out string first, out string second)
+		{
+			first = text ?? string.Empty;
+			second = string.Empty;
+			if (first.Length <= maxChars) return;
+
+			int split = first.LastIndexOf(' ', Math.Min(maxChars, first.Length - 1));
+			if (split <= 0) split = maxChars;
+
+			second = first.Substring(split).TrimStart();
+			first = first.Substring(0, split).TrimEnd();
+
+			if (second.Length > maxChars)
+			{
+				second = second.Substring(0, Math.Max(0, maxChars - 3)) + "...";
+			}
 		}
 
 		static void UpdateCustomizeDescription()
