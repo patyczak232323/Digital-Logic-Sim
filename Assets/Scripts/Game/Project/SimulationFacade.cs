@@ -8,6 +8,8 @@ namespace DLS.Game
 	// Simulator while the runtime step is handled by the deterministic solver.
 	public static class Simulator
 	{
+		static bool topologyRecoveryPending;
+
 		public static Random rng => DLS.Simulation.Simulator.rng;
 
 		public static int stepsPerClockTransition
@@ -36,34 +38,77 @@ namespace DLS.Game
 
 		public static void RunSimulationStep(SimChip rootSimChip, DevPinInstance[] inputPins, SimAudio audioState)
 		{
+			// Debug/main-thread simulation does not call the explicit initialization pass
+			// used by Project.SimThread. Only pay for the extra call when an edit actually
+			// queued a topology recovery check; the steady-state hot path is unchanged.
+			if (topologyRecoveryPending)
+			{
+				EnsureInitialized(rootSimChip, inputPins, audioState);
+			}
+
 			DeterministicSimulator.RunSimulationStep(rootSimChip, inputPins, audioState);
 		}
 
 		public static void EnsureInitialized(SimChip rootSimChip, DevPinInstance[] inputPins, SimAudio audioState)
 		{
+			Project project = Project.ActiveProject;
+
 			// The simulation loop calls EnsureInitialized even while paused, before the
 			// normal per-step SetInspectionChip call. Keep the viewed Custom Chip expanded
 			// in that path too; otherwise a ready LUT/JIT block can leave its internal pin
 			// states stale for the entire time the simulation remains paused.
-			Project project = Project.ActiveProject;
 			if (project != null && project.simPaused)
 			{
-				try
-				{
-					if (project.chipViewStack.Count > 0)
-					{
-						DeterministicSimulator.SetInspectionChip(project.ViewedChip.SimChip);
-					}
-				}
-				catch (InvalidOperationException)
-				{
-					// The main thread can replace the view stack while the simulation thread
-					// is sampling it. Keep the previous inspection target for this pass and
-					// retry on the next loop rather than collapsing the wrong hierarchy.
-				}
+				TrySynchronizeInspectionChip(project);
 			}
 
 			DeterministicSimulator.EnsureInitialized(rootSimChip, inputPins, audioState);
+
+			if (rootSimChip == null || !topologyRecoveryPending) return;
+			topologyRecoveryPending = false;
+
+			// A structural edit normally uses a deterministic resettle so existing latch
+			// and RAM state is preserved. A newly-created feedback network can, however,
+			// start perfectly symmetrically (for example a cross-coupled NAND latch can
+			// alternate 00 -> 11 -> 00 forever under simultaneous delta cycles). Only if
+			// that first deterministic resettle actually failed, retry initialization with
+			// the solver's bounded asynchronous power-on settle. Stable edited circuits
+			// never take this path, so there is no extra work or randomization for them.
+			if (!DeterministicSimulator.LastSettleConverged)
+			{
+				DeterministicSimulator.Reset();
+
+				// Reset intentionally clears the compiled inspection/diagnostic bookkeeping,
+				// but does not alter SimChip pin state or builtin InternalState. Restore the
+				// useful metadata before the recovery settle.
+				if (project != null)
+				{
+					TrySynchronizeInspectionChip(project);
+					if (rootSimChip.Description != null && project.chipLibrary != null)
+					{
+						DeterministicSimulator.RegisterDiagnosticPaths(rootSimChip, rootSimChip.Description, project.chipLibrary);
+					}
+				}
+
+				DeterministicSimulator.EnsureInitialized(rootSimChip, inputPins, audioState);
+			}
+		}
+
+		static void TrySynchronizeInspectionChip(Project project)
+		{
+			try
+			{
+				if (project.chipViewStack.Count > 0)
+				{
+					DeterministicSimulator.SetInspectionChip(project.ViewedChip.SimChip);
+				}
+			}
+			catch (InvalidOperationException)
+			{
+				// The main thread can replace the view stack while the simulation thread
+				// is sampling it. Keep the previous inspection target for this pass and
+				// retry on the next loop rather than collapsing the wrong hierarchy.
+			}
 		}
 
 		public static void SetInspectionChip(SimChip chip) => DeterministicSimulator.SetInspectionChip(chip);
@@ -128,11 +173,16 @@ namespace DLS.Game
 		public static void ApplyModifications()
 		{
 			bool topologyChanged = DLS.Simulation.Simulator.ApplyModifications();
-			if (topologyChanged) DeterministicSimulator.InvalidateTopology();
+			if (topologyChanged)
+			{
+				topologyRecoveryPending = true;
+				DeterministicSimulator.InvalidateTopology();
+			}
 		}
 
 		public static void Reset()
 		{
+			topologyRecoveryPending = false;
 			DLS.Simulation.Simulator.Reset();
 			DeterministicSimulator.Reset();
 		}
