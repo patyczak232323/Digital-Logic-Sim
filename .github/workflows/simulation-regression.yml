@@ -24,5 +24,10 @@ jobs:
       - name: Run 8-bit computer regression suite
         run: python3 Tools/ComputerRegression/regression.py
 
+      - name: Build and execute generated 8-bit computer netlist
+        run: |
+          python3 Tools/ComputerProjectBuilder/build_project.py
+          python3 Tools/ComputerProjectBuilder/verify_netlist.py
+
       - name: Run whole-program regression suite
         run: python3 Tools/ProgramRegression/regression.py

@@ -293,6 +293,88 @@ def test_parallel_instances() -> None:
     assert {net.state[out] for out in outputs} == {1}
 
 
+def test_massive_nested_fanout() -> None:
+    """Exercise CPU-like reuse: hundreds of deeply wrapped chip instances."""
+    net = DeltaNet()
+    net.set("A", 1)
+    net.set("B", 1)
+    outputs = []
+    for i in range(512):
+        out = f"BANK/CUSTOM{i}/Q"
+        wrapped_nand(net, "A", "B", out, f"BANK/CUSTOM{i}/NAND", 64)
+        outputs.append(out)
+
+    net.prime()
+    assert net.settle()[0]
+    assert all(net.state[out] == 0 for out in outputs)
+    assert net.drive("A", 0)[0]
+    assert all(net.state[out] == 1 for out in outputs)
+
+
+def test_large_8bit_bus_fanout() -> None:
+    net = DeltaNet()
+    inputs = [f"BUS_IN/{bit}" for bit in range(8)]
+    for name in inputs:
+        net.set(name, 0)
+    for instance in range(1024):
+        for bit, source in enumerate(inputs):
+            net.alias(source, f"INSTANCE{instance}/D{bit}")
+
+    net.prime()
+    assert net.settle()[0]
+    for value in (0x00, 0xFF, 0xA5, 0x5A, 0x81, 0x7E):
+        changed = []
+        for bit, source in enumerate(inputs):
+            state = (value >> bit) & 1
+            if net.state[source] != state:
+                net.state[source] = state
+                changed.append(source)
+        assert net.settle(changed)[0]
+        for instance in range(1024):
+            actual = sum(net.state[f"INSTANCE{instance}/D{bit}"] << bit for bit in range(8))
+            assert actual == value, (instance, value, actual)
+
+
+def test_randomized_combinational_dags() -> None:
+    """Compare event propagation against a topological full-sweep oracle."""
+    for seed in range(8):
+        rng = random.Random(0xD15EA5E + seed)
+        inputs = [f"I{i}" for i in range(32)]
+        definitions: list[tuple[str, str, str]] = []
+        available = inputs.copy()
+        for index in range(768):
+            a = rng.choice(available)
+            b = rng.choice(available)
+            out = f"G{index}"
+            definitions.append((a, b, out))
+            available.append(out)
+
+        net = DeltaNet()
+        for name in inputs:
+            net.set(name, rng.randrange(2))
+        shuffled = definitions.copy()
+        rng.shuffle(shuffled)
+        for a, b, out in shuffled:
+            net.gate(a, b, out)
+        net.prime()
+        assert net.settle()[0]
+
+        for vector in range(128):
+            changed = []
+            for name in inputs:
+                state = rng.randrange(2)
+                if net.state[name] != state:
+                    net.state[name] = state
+                    changed.append(name)
+            assert net.settle(changed)[0], (seed, vector, "did not converge")
+
+            expected = {name: net.state[name] for name in inputs}
+            for a, b, out in definitions:
+                expected[out] = 1 ^ (expected[a] & expected[b])
+            for _, _, out in definitions:
+                assert net.state[out] == expected[out], (seed, vector, out, net.state[out], expected[out])
+
+
 def test_sr_latch() -> None:
     net = DeltaNet()
     net.set("SET_N", 1)
@@ -552,6 +634,9 @@ def main() -> None:
         ("NAND truth table + hierarchy depth 0..8", test_nand_and_hierarchy),
         ("100-gate chain", test_long_chain),
         ("100 parallel custom-chip instances", test_parallel_instances),
+        ("512 custom chips at hierarchy depth 64", test_massive_nested_fanout),
+        ("8-bit bus fanout to 1,024 instances", test_large_8bit_bus_fanout),
+        ("randomized NAND DAGs versus full-sweep oracle", test_randomized_combinational_dags),
         ("SR latch SET/HOLD/RESET/HOLD", test_sr_latch),
         ("D latch enable behavior", test_d_latch),
         ("edge-triggered DFF 10,000 cycles", test_dff_10000_cycles),
