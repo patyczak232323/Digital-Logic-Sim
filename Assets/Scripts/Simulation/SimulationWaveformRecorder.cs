@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using DLS.Description;
 
 namespace DLS.Simulation
@@ -45,6 +46,8 @@ namespace DLS.Simulation
 			public WaveformSample[] Samples;
 			public int WriteIndex;
 			public int Count;
+			public uint LastState;
+			public bool HasLastState;
 
 			public Probe(int id, string name, SimPin pin, int capacity)
 			{
@@ -59,6 +62,7 @@ namespace DLS.Simulation
 		static readonly object sync = new();
 		static readonly Dictionary<int, Probe> probes = new();
 		static volatile bool enabled;
+		static int probeCount;
 		static int nextId = 1;
 		static int capacity = 4096;
 
@@ -99,6 +103,7 @@ namespace DLS.Simulation
 
 				int id = nextId++;
 				probes.Add(id, new Probe(id, string.IsNullOrWhiteSpace(name) ? $"PIN {pin.ID}" : name, pin, capacity));
+				Volatile.Write(ref probeCount, probes.Count);
 				DeterministicSimulator.InvalidateTopology();
 				return id;
 			}
@@ -134,7 +139,11 @@ namespace DLS.Simulation
 			lock (sync)
 			{
 				bool removed = probes.Remove(id);
-				if (removed) DeterministicSimulator.InvalidateTopology();
+				if (removed)
+				{
+					Volatile.Write(ref probeCount, probes.Count);
+					DeterministicSimulator.InvalidateTopology();
+				}
 				return removed;
 			}
 		}
@@ -147,6 +156,7 @@ namespace DLS.Simulation
 				{
 					probe.WriteIndex = 0;
 					probe.Count = 0;
+					probe.HasLastState = false;
 				}
 			}
 		}
@@ -157,6 +167,7 @@ namespace DLS.Simulation
 			{
 				bool hadProbes = probes.Count > 0;
 				probes.Clear();
+				Volatile.Write(ref probeCount, 0);
 				nextId = 1;
 				if (hadProbes) DeterministicSimulator.InvalidateTopology();
 			}
@@ -188,6 +199,7 @@ namespace DLS.Simulation
 				if (root == null)
 				{
 					probes.Clear();
+					Volatile.Write(ref probeCount, 0);
 					return;
 				}
 
@@ -203,6 +215,7 @@ namespace DLS.Simulation
 
 				if (removeIds == null) return;
 				for (int i = 0; i < removeIds.Count; i++) probes.Remove(removeIds[i]);
+				Volatile.Write(ref probeCount, probes.Count);
 			}
 
 			static void CollectPins(SimChip chip, HashSet<SimPin> pins)
@@ -218,14 +231,20 @@ namespace DLS.Simulation
 
 		internal static void Capture(int frame)
 		{
-			if (!enabled) return;
+			if (!enabled || Volatile.Read(ref probeCount) == 0) return;
 
 			lock (sync)
 			{
 				foreach (Probe probe in probes.Values)
 				{
+					uint state = probe.Pin.State;
+					if (probe.HasLastState && probe.LastState == state) continue;
+
+					probe.LastState = state;
+					probe.HasLastState = true;
+
 					WaveformSample[] samples = probe.Samples;
-					samples[probe.WriteIndex] = new WaveformSample(frame, probe.Pin.State);
+					samples[probe.WriteIndex] = new WaveformSample(frame, state);
 					probe.WriteIndex++;
 					if (probe.WriteIndex == samples.Length) probe.WriteIndex = 0;
 					if (probe.Count < samples.Length) probe.Count++;
