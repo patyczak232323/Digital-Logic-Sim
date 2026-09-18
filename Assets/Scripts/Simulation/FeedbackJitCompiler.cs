@@ -121,13 +121,16 @@ namespace DLS.Simulation
 			List<SimChip> primitiveChips = new();
 			CollectLocalGraph(root, localPins, localPinSet, primitiveChips);
 
-			primitiveChips.RemoveAll(c => c.OutputPins.Length == 0);
-			if (primitiveChips.Count < MinPrimitiveNodeCount) return null;
-
+			// Reject side-effecting/clocked/source primitives before removing sink-only
+			// terminators. A buzzer, key, clock, RAM or display must never disappear merely
+			// because it has no output pin used by the compiled dataflow.
 			for (int i = 0; i < primitiveChips.Count; i++)
 			{
 				if (!IsSupportedPrimitive(primitiveChips[i].ChipType)) return null;
 			}
+
+			primitiveChips.RemoveAll(c => c.OutputPins.Length == 0);
+			if (primitiveChips.Count < MinPrimitiveNodeCount) return null;
 
 			Dictionary<SimPin, SimPin> incomingSource = BuildIncomingSourceMap(localPins, localPinSet);
 			Dictionary<SimPin, int> rootInputSlots = new();
