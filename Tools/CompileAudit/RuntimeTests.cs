@@ -14,6 +14,7 @@ namespace DLS.Simulation
 			Run("feedback unchanged-input zero sweep", TestFeedbackZeroSweep);
 			Run("feedback state materialization", TestFeedbackMaterialization);
 			Run("waveform transition compression", TestWaveformTransitionCompression);
+			Run("deterministic replay round-trip", TestReplayRoundTrip);
 
 			if (failures != 0)
 			{
@@ -87,6 +88,61 @@ namespace DLS.Simulation
 			executor.MaterializeState();
 			Assert(Bit(nandQ.OutputPins[0].State) == 0, "Q primitive output was not materialized");
 			Assert(Bit(nandNotQ.OutputPins[0].State) == 1, "/Q primitive output was not materialized");
+		}
+
+		static void TestReplayRoundTrip()
+		{
+			ChipDescription description = new()
+			{
+				Name = "NAND_REPLAY",
+				ChipType = ChipType.Nand,
+				InputPins = new[] { Pin(300), Pin(301) },
+				OutputPins = new[] { Pin(302) },
+				SubChips = Array.Empty<SubChipDescription>(),
+				Wires = Array.Empty<WireDescription>(),
+				Displays = Array.Empty<DisplayDescription>()
+			};
+
+			SimChip root = new(description, -1, null, Array.Empty<SimChip>());
+			DevPinInstance inputA = new();
+			DevPinInstance inputB = new();
+			inputA.Pin.Address = new PinAddress(300, 0);
+			inputB.Pin.Address = new PinAddress(301, 0);
+			DevPinInstance[] inputs = { inputA, inputB };
+
+			DeterministicSimulator.Reset();
+			Simulator.Reset();
+			SimulationReplayRecorder.StartRecording(8);
+
+			inputA.Pin.PlayerInputState = PinState.LogicHigh;
+			inputB.Pin.PlayerInputState = PinState.LogicHigh;
+			DeterministicSimulator.RunSimulationStep(root, inputs, null);
+			Assert(Bit(root.OutputPins[0].State) == 0, "NAND replay frame 0 output mismatch");
+
+			inputB.Pin.PlayerInputState = PinState.LogicLow;
+			DeterministicSimulator.RunSimulationStep(root, inputs, null);
+			Assert(Bit(root.OutputPins[0].State) == 1, "NAND replay frame 1 output mismatch");
+
+			SimulationReplayRecording recording = SimulationReplayRecorder.StopRecording();
+			Assert(recording.FrameCount == 2, $"expected 2 replay frames, got {recording.FrameCount}");
+
+			// Disturb the live state before restoring the recording.
+			inputA.Pin.PlayerInputState = PinState.LogicLow;
+			inputB.Pin.PlayerInputState = PinState.LogicLow;
+			DeterministicSimulator.RunSimulationStep(root, inputs, null);
+
+			SimulationReplayResult result = SimulationReplayRecorder.Replay(
+				recording,
+				root,
+				inputs,
+				null);
+
+			Assert(result.Success, "replay round-trip diverged: " + result.Message);
+			Assert(result.FramesReplayed == 2, $"expected 2 replayed frames, got {result.FramesReplayed}");
+			Assert(Bit(root.OutputPins[0].State) == 1, "replay did not finish at recorded final NAND state");
+
+			DeterministicSimulator.Reset();
+			Simulator.Reset();
 		}
 
 		static void TestWaveformTransitionCompression()
