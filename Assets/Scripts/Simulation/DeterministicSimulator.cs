@@ -189,6 +189,7 @@ namespace DLS.Simulation
 			audioState = newAudioState;
 			audioState?.InitFrame();
 			SimulationProfiler.BeginStep();
+			SimulationBenchmark.BeginStep();
 
 			LastDeltaCycles = 0;
 			LastGateEvaluations = 0;
@@ -325,6 +326,7 @@ namespace DLS.Simulation
 			SimulationProfiler.Reset();
 			SimulationWaveformRecorder.ClearAll();
 			SimulationReplayRecorder.Reset();
+			SimulationBenchmark.Reset();
 		}
 
 		public static void RegisterDiagnosticPaths(SimChip root, ChipDescription rootDescription, ChipLibrary library)
@@ -991,6 +993,18 @@ namespace DLS.Simulation
 			SimulationProfiler.EndStep(
 				Simulator.simulationFrame,
 				LastDeltaCycles,
+				LastGateEvaluations,
+				LastSignalPropagations,
+				LastTargetResolutions,
+				LastCacheHits,
+				LastCacheMisses,
+				LastJitHits,
+				LastFeedbackJitHits,
+				LastFeedbackJitSweeps,
+				LastFeedbackJitFallbacks,
+				LastSettleConverged);
+
+			SimulationBenchmark.EndStep(
 				LastGateEvaluations,
 				LastSignalPropagations,
 				LastTargetResolutions,
