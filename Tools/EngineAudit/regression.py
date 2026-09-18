@@ -325,6 +325,72 @@ def test_feedback_state_ownership_uses_runtime_active_not_ready() -> None:
 
 
 
+def test_stateful_projects_keep_upstream_compatibility_timing() -> None:
+    facade = source("Assets/Scripts/Game/Project/SimulationFacade.cs")
+    run = extract_method(facade, "public static void RunSimulationStep(")
+    classify = extract_method(facade, "static bool RequiresUpstreamTiming(")
+    apply = extract_method(facade, "public static void ApplyModifications()")
+
+    compat = run.index("DLS.Simulation.Simulator.RunSimulationStep")
+    fast = run.index("DeterministicSimulator.RunSimulationStep")
+    assert compat < fast
+    assert "if (UseLegacyCompatibilityEngine(rootSimChip))" in run
+    assert "return !analysis.CanCache;" in classify
+    assert 'CompatibilityReason = analysis.CanCache ? "pure combinational graph" : analysis.Reason;' in classify
+    assert "forceLegacyCompatibilityAfterEdit = true;" in apply
+
+
+def test_compatibility_classifier_still_rejects_feedback_and_state_sources() -> None:
+    cache = source("Assets/Scripts/Simulation/CombinationalChipCache.cs")
+    analyze = extract_method(cache, "static ChipCacheAnalysis AnalyzeRecursive(")
+
+    assert "HasFeedback(subChips, wires)" in analyze
+    assert "feedback loop detected" in analyze
+    assert "IsPureBuiltin(subDescription.ChipType)" in analyze
+    assert "contains state/source chip" in analyze
+
+
+def test_native_c_is_experimental_and_downstream_of_safe_combinational_analysis() -> None:
+    project_desc = source("Assets/Scripts/Description/Types/ProjectDescription.cs")
+    prefs = source("Assets/Scripts/Graphics/UI/Menus/PreferencesMenu.cs")
+    native = source("Assets/Scripts/Simulation/NativeCombinationalBackend.cs")
+    jit = source("Assets/Scripts/Simulation/CombinationalJitCompiler.cs")
+
+    for field in (
+        "Prefs_ExperimentalNativeCMode",
+        "Prefs_ExperimentalEngineDiagnostics",
+        "Prefs_ExperimentalNativeCValidation",
+    ):
+        assert field in project_desc
+
+    assert '"EXPERIMENTAL:"' in prefs
+    assert '"Native C fast engine"' in prefs
+    assert '"NAND only"' in prefs
+    assert '"All supported"' in prefs
+    assert '"C/JIT cross-check"' in prefs
+
+    attach = extract_method(jit, "internal static void Attach(")
+    assert "CombinationalChipCacheManager.Analyze(description, library)" in attach
+    assert "if (!analysis.CanCache) return;" in attach
+    assert "NativeCombinationalBackend.TryCreate(" in jit
+    assert "mode == 2 || (mode == 1 && nandOnlyProgram)" in native
+
+
+def test_native_c_crosscheck_keeps_jit_as_authoritative_result() -> None:
+    jit = source("Assets/Scripts/Simulation/CombinationalJitCompiler.cs")
+    run = extract_method(jit, "public void Run(uint[] scratch, uint[] outputs)")
+
+    assert "NativeCombinationalBackend.ValidationEnabled" in run
+    assert "Array.Copy(outputs, validationOutputs" in run
+    assert "outputWriter(scratch, outputs);" in run
+    assert "native-c-jit-mismatch" in run
+
+    native_copy = run.index("Array.Copy(outputs, validationOutputs")
+    jit_writer = run.index("outputWriter(scratch, outputs);")
+    mismatch = run.index("native-c-jit-mismatch")
+    assert native_copy < jit_writer < mismatch
+
+
 TESTS = (
     test_feedback_jit_is_dormant_until_after_first_normal_tick,
     test_feedback_jit_uses_two_delta_buffers,
@@ -346,6 +412,10 @@ TESTS = (
     test_replay_ui_requests_are_executed_on_simulation_thread,
     test_feedback_jit_skips_stable_unchanged_input_ticks,
     test_feedback_state_ownership_uses_runtime_active_not_ready,
+    test_stateful_projects_keep_upstream_compatibility_timing,
+    test_compatibility_classifier_still_rejects_feedback_and_state_sources,
+    test_native_c_is_experimental_and_downstream_of_safe_combinational_analysis,
+    test_native_c_crosscheck_keeps_jit_as_authoritative_result,
 )
 
 
