@@ -17,6 +17,7 @@ namespace DLS.Simulation
 			Run("deterministic replay round-trip", TestReplayRoundTrip);
 			Run("8-bit feedback latch bank isolation", TestEightBitLatchBank);
 			Run("dormant feedback executor cannot overwrite live state", TestDormantFeedbackOwnership);
+			Run("active child feedback executor materializes on deopt", TestActiveChildFeedbackHandoff);
 
 			if (failures != 0)
 			{
@@ -90,6 +91,113 @@ namespace DLS.Simulation
 			executor.MaterializeState();
 			Assert(Bit(nandQ.OutputPins[0].State) == 0, "Q primitive output was not materialized");
 			Assert(Bit(nandNotQ.OutputPins[0].State) == 1, "/Q primitive output was not materialized");
+		}
+
+		static void TestActiveChildFeedbackHandoff()
+		{
+			ChipDescription nandDescription = new()
+			{
+				Name = "NAND",
+				ChipType = ChipType.Nand,
+				InputPins = new[] { Pin(0), Pin(1) },
+				OutputPins = new[] { Pin(2) },
+				SubChips = Array.Empty<SubChipDescription>(),
+				Wires = Array.Empty<WireDescription>(),
+				Displays = Array.Empty<DisplayDescription>()
+			};
+
+			SimChip nandQ = new(nandDescription, 1, null, Array.Empty<SimChip>());
+			SimChip nandNotQ = new(nandDescription, 2, null, Array.Empty<SimChip>());
+
+			ChipDescription latchDescription = new()
+			{
+				Name = "CHILD_LATCH",
+				ChipType = ChipType.Custom,
+				InputPins = new[] { Pin(10), Pin(11) },
+				OutputPins = new[] { Pin(12), Pin(13) },
+				SubChips = Array.Empty<SubChipDescription>(),
+				Wires = Array.Empty<WireDescription>(),
+				Displays = Array.Empty<DisplayDescription>()
+			};
+
+			SimChip latch = new(latchDescription, 50, null, new[] { nandQ, nandNotQ });
+			latch.AddConnection(new PinAddress(10, 0), new PinAddress(1, 0));
+			latch.AddConnection(new PinAddress(2, 2), new PinAddress(1, 1));
+			latch.AddConnection(new PinAddress(11, 0), new PinAddress(2, 0));
+			latch.AddConnection(new PinAddress(1, 2), new PinAddress(2, 1));
+			latch.AddConnection(new PinAddress(1, 2), new PinAddress(12, 0));
+			latch.AddConnection(new PinAddress(2, 2), new PinAddress(13, 0));
+
+			// Seed the same valid power-on state used by the live solver.
+			nandQ.OutputPins[0].State = PinState.LogicHigh;
+			nandNotQ.OutputPins[0].State = PinState.LogicLow;
+
+			FeedbackJitCompiler.Attach(latch, latchDescription, new ChipLibrary());
+			Assert(latch.FeedbackExecutor != null, "child feedback executor was not compiled");
+
+			ChipDescription rootDescription = new()
+			{
+				Name = "HANDOFF_ROOT",
+				ChipType = ChipType.Custom,
+				InputPins = new[] { Pin(100), Pin(101) },
+				OutputPins = new[] { Pin(102), Pin(103) },
+				SubChips = Array.Empty<SubChipDescription>(),
+				Wires = Array.Empty<WireDescription>(),
+				Displays = Array.Empty<DisplayDescription>()
+			};
+
+			SimChip root = new(rootDescription, -1, null, new[] { latch });
+			root.AddConnection(new PinAddress(100, 0), new PinAddress(50, 10));
+			root.AddConnection(new PinAddress(101, 0), new PinAddress(50, 11));
+			root.AddConnection(new PinAddress(50, 12), new PinAddress(102, 0));
+			root.AddConnection(new PinAddress(50, 13), new PinAddress(103, 0));
+
+			DevPinInstance sBar = new();
+			DevPinInstance rBar = new();
+			sBar.Pin.Address = new PinAddress(100, 0);
+			rBar.Pin.Address = new PinAddress(101, 0);
+			DevPinInstance[] inputs = { sBar, rBar };
+
+			DeterministicSimulator.Reset();
+			Simulator.Reset();
+
+			// First step performs power-on/live settle and synchronizes feedback buffers.
+			sBar.Pin.PlayerInputState = PinState.LogicHigh;
+			rBar.Pin.PlayerInputState = PinState.LogicHigh;
+			DeterministicSimulator.RunSimulationStep(root, inputs, null);
+
+			// Second step rebuilds topology and selects CHILD_LATCH as an accelerated
+			// feedback region.
+			DeterministicSimulator.RunSimulationStep(root, inputs, null);
+			Assert(latch.FeedbackExecutor.RuntimeActive, "child feedback executor did not become authoritative");
+
+			// Change the stored state while the child is collapsed. Primitive NAND pins
+			// should remain materialized at the old value until deoptimization.
+			sBar.Pin.PlayerInputState = PinState.LogicHigh;
+			rBar.Pin.PlayerInputState = PinState.LogicLow;
+			DeterministicSimulator.RunSimulationStep(root, inputs, null);
+			Assert(Bit(root.OutputPins[0].State) == 0 && Bit(root.OutputPins[1].State) == 1,
+				"accelerated child latch did not change state");
+
+			Assert(Bit(nandQ.OutputPins[0].State) == 1 && Bit(nandNotQ.OutputPins[0].State) == 0,
+				"primitive gate state unexpectedly changed while child was collapsed");
+
+			// Entering the child must materialize the authoritative native state before
+			// the topology expands for inspection.
+			DeterministicSimulator.SetInspectionChip(nandQ);
+
+			Assert(Bit(nandQ.OutputPins[0].State) == 0, "active feedback executor did not materialize Q on deopt");
+			Assert(Bit(nandNotQ.OutputPins[0].State) == 1, "active feedback executor did not materialize /Q on deopt");
+
+			// Next step runs the expanded live network and must preserve the same state.
+			sBar.Pin.PlayerInputState = PinState.LogicHigh;
+			rBar.Pin.PlayerInputState = PinState.LogicHigh;
+			DeterministicSimulator.RunSimulationStep(root, inputs, null);
+			Assert(Bit(root.OutputPins[0].State) == 0 && Bit(root.OutputPins[1].State) == 1,
+				"deoptimized child failed to preserve materialized latch state");
+
+			DeterministicSimulator.Reset();
+			Simulator.Reset();
 		}
 
 		static void TestDormantFeedbackOwnership()
