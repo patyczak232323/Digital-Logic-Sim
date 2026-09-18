@@ -606,15 +606,15 @@ def test_source_integration_static() -> None:
     assert "HashSet<SimChip>" not in hot_path
     assert "Dictionary<SimPin, SimPin[]>" not in hot_path
 
-    # Release architecture is compatibility-first: stateful/feedback roots take the
-    # upstream timing path before the deterministic combinational fast path.
-    assert "if (UseLegacyCompatibilityEngine(rootSimChip))" in facade
-    compat = facade.index("DLS.Simulation.Simulator.RunSimulationStep")
-    fast = facade.index("DeterministicSimulator.RunSimulationStep")
-    assert compat < fast
+    # Final release uses the Rewired deterministic engine for every root,
+    # including feedback/register projects.
+    assert "DeterministicSimulator.RunSimulationStep" in facade
+    assert "DLS.Simulation.Simulator.RunSimulationStep" not in facade
+    assert "UseLegacyCompatibilityEngine" not in facade
+    assert "RequiresUpstreamTiming" not in facade
 
     assert "bool topologyChanged = DLS.Simulation.Simulator.ApplyModifications();" in facade
-    assert "forceLegacyCompatibilityAfterEdit = true;" in facade
+    assert "topologyRecoveryPending = true;" in facade
     assert "DeterministicSimulator.InvalidateTopology();" in facade
     assert "pendingTopologyModification" not in facade
 
