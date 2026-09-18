@@ -276,7 +276,7 @@ namespace DLS.Graphics
 					: FormatState(samples[^1].State, probe.BitCount);
 
 				UI.DrawText(
-					$"{probe.Name}  [{probe.BitCount}b]  now={latest}  samples={probe.SampleCount}",
+					$"{probe.Name}  [{probe.BitCount}b]  now={latest}  transitions={probe.SampleCount}",
 					theme.FontRegular,
 					theme.FontSizeRegular * 0.88f,
 					traceBounds.TopLeft + new Vector2(0.8f, -0.8f),
@@ -334,12 +334,19 @@ namespace DLS.Graphics
 				float highY = bounds.Bottom + 3.3f;
 				float lowY = bounds.Bottom + 0.9f;
 				float zY = bounds.Bottom + 2.1f;
-				float step = count <= 1 ? 0 : (right - left) / (count - 1);
 
-				Vector2 previous = new(left, StateY(samples[start].State));
+				int startFrame = samples[start].Frame;
+				int endFrame = Math.Max(samples[^1].Frame, Simulator.simulationFrame);
+				int frameSpan = Math.Max(1, endFrame - startFrame);
+
+				float XForFrame(int frame) =>
+					left + (right - left) * Mathf.Clamp01((frame - startFrame) / (float)frameSpan);
+
+				Vector2 previous = new(XForFrame(samples[start].Frame), StateY(samples[start].State));
 				for (int i = 1; i < count; i++)
 				{
-					Vector2 next = new(left + i * step, StateY(samples[start + i].State));
+					WaveformSample sample = samples[start + i];
+					Vector2 next = new(XForFrame(sample.Frame), StateY(sample.State));
 					UI.DrawLine(previous, new Vector2(next.x, previous.y), 0.08f, Color.white * 0.82f);
 					if (Mathf.Abs(previous.y - next.y) > 0.001f)
 					{
@@ -347,6 +354,8 @@ namespace DLS.Graphics
 					}
 					previous = next;
 				}
+
+				UI.DrawLine(previous, new Vector2(right, previous.y), 0.08f, Color.white * 0.82f);
 
 				UI.DrawText("1", theme.FontRegular, theme.FontSizeRegular * 0.72f, new Vector2(left, highY), Anchor.TextCentreRight, dim);
 				UI.DrawText("Z", theme.FontRegular, theme.FontSizeRegular * 0.72f, new Vector2(left, zY), Anchor.TextCentreRight, dim);
