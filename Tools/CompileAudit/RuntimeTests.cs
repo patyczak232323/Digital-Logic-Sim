@@ -1,0 +1,183 @@
+using System;
+using DLS.Description;
+using DLS.Game;
+
+namespace DLS.Simulation
+{
+	internal static class RuntimeTests
+	{
+		static int failures;
+
+		static void Main()
+		{
+			Run("feedback NAND latch", TestFeedbackNandLatch);
+			Run("feedback unchanged-input zero sweep", TestFeedbackZeroSweep);
+			Run("feedback state materialization", TestFeedbackMaterialization);
+
+			if (failures != 0)
+			{
+				throw new Exception($"{failures} runtime test(s) failed");
+			}
+
+			Console.WriteLine("ALL SIMULATION RUNTIME TESTS PASSED");
+		}
+
+		static void Run(string name, Action test)
+		{
+			try
+			{
+				test();
+				Console.WriteLine("PASS  " + name);
+			}
+			catch (Exception ex)
+			{
+				failures++;
+				Console.WriteLine("FAIL  " + name + ": " + ex.Message);
+			}
+		}
+
+		static void TestFeedbackNandLatch()
+		{
+			(SimChip root, CompiledFeedbackExecutor executor, SimChip nandQ, SimChip nandNotQ) = BuildLatch();
+
+			SetRootInputs(root, 1, 1);
+			Assert(executor.Evaluate(root, out uint[] outputs, out int initialSweeps), "initial latch state failed to converge");
+			Assert(initialSweeps > 0, "first feedback evaluation unexpectedly skipped all sweeps");
+			Assert(Bit(outputs[0]) == 1 && Bit(outputs[1]) == 0, "unexpected initial latch state");
+
+			// Active-low reset.
+			SetRootInputs(root, 1, 0);
+			Assert(executor.Evaluate(root, out outputs, out int resetSweeps), "reset transition failed to converge");
+			Assert(resetSweeps > 0, "reset transition did not execute feedback sweeps");
+			Assert(Bit(outputs[0]) == 0 && Bit(outputs[1]) == 1, "reset transition produced wrong state");
+
+			// Release reset: state must remain stored.
+			SetRootInputs(root, 1, 1);
+			Assert(executor.Evaluate(root, out outputs, out int releaseSweeps), "reset release failed to converge");
+			Assert(releaseSweeps > 0, "reset release did not execute feedback sweeps");
+			Assert(Bit(outputs[0]) == 0 && Bit(outputs[1]) == 1, "latch did not retain reset state");
+
+			_ = nandQ;
+			_ = nandNotQ;
+		}
+
+		static void TestFeedbackZeroSweep()
+		{
+			(SimChip root, CompiledFeedbackExecutor executor, _, _) = BuildLatch();
+
+			SetRootInputs(root, 1, 1);
+			Assert(executor.Evaluate(root, out uint[] outputs, out _), "initial evaluation failed");
+			Assert(Bit(outputs[0]) == 1 && Bit(outputs[1]) == 0, "unexpected initial state");
+
+			Assert(executor.Evaluate(root, out outputs, out int sweeps), "unchanged-input evaluation failed");
+			Assert(sweeps == 0, $"expected zero sweeps for unchanged stable inputs, got {sweeps}");
+			Assert(executor.LastSweepCount == 0, "LastSweepCount did not report zero-sweep fast path");
+			Assert(Bit(outputs[0]) == 1 && Bit(outputs[1]) == 0, "zero-sweep fast path changed outputs");
+		}
+
+		static void TestFeedbackMaterialization()
+		{
+			(SimChip root, CompiledFeedbackExecutor executor, SimChip nandQ, SimChip nandNotQ) = BuildLatch();
+
+			SetRootInputs(root, 1, 0);
+			Assert(executor.Evaluate(root, out uint[] outputs, out _), "reset evaluation failed");
+			Assert(Bit(outputs[0]) == 0 && Bit(outputs[1]) == 1, "reset state mismatch");
+
+			executor.MaterializeState();
+			Assert(Bit(nandQ.OutputPins[0].State) == 0, "Q primitive output was not materialized");
+			Assert(Bit(nandNotQ.OutputPins[0].State) == 1, "/Q primitive output was not materialized");
+		}
+
+		static (SimChip root, CompiledFeedbackExecutor executor, SimChip nandQ, SimChip nandNotQ) BuildLatch()
+		{
+			ChipDescription nandDescription = new()
+			{
+				Name = "NAND",
+				ChipType = ChipType.Nand,
+				InputPins = new[]
+				{
+					Pin(0),
+					Pin(1)
+				},
+				OutputPins = new[]
+				{
+					Pin(2)
+				},
+				SubChips = Array.Empty<SubChipDescription>(),
+				Wires = Array.Empty<WireDescription>(),
+				Displays = Array.Empty<DisplayDescription>()
+			};
+
+			SimChip nandQ = new(nandDescription, 1, null, Array.Empty<SimChip>());
+			SimChip nandNotQ = new(nandDescription, 2, null, Array.Empty<SimChip>());
+
+			ChipDescription rootDescription = new()
+			{
+				Name = "SR_LATCH",
+				ChipType = ChipType.Custom,
+				InputPins = new[]
+				{
+					Pin(100),
+					Pin(101)
+				},
+				OutputPins = new[]
+				{
+					Pin(102),
+					Pin(103)
+				},
+				SubChips = Array.Empty<SubChipDescription>(),
+				Wires = Array.Empty<WireDescription>(),
+				Displays = Array.Empty<DisplayDescription>()
+			};
+
+			SimChip root = new(rootDescription, -1, null, new[] { nandQ, nandNotQ });
+
+			// Sbar -> Q NAND input 0.
+			root.AddConnection(new PinAddress(100, 0), new PinAddress(1, 0));
+			// /Q feedback -> Q NAND input 1.
+			root.AddConnection(new PinAddress(2, 2), new PinAddress(1, 1));
+			// Rbar -> /Q NAND input 0.
+			root.AddConnection(new PinAddress(101, 0), new PinAddress(2, 0));
+			// Q feedback -> /Q NAND input 1.
+			root.AddConnection(new PinAddress(1, 2), new PinAddress(2, 1));
+			// Latch outputs.
+			root.AddConnection(new PinAddress(1, 2), new PinAddress(102, 0));
+			root.AddConnection(new PinAddress(2, 2), new PinAddress(103, 0));
+
+			// Seed a valid fixed point, exactly as the deterministic power-on solver does
+			// before feedback JIT is activated.
+			nandQ.OutputPins[0].State = PinState.LogicHigh;
+			nandNotQ.OutputPins[0].State = PinState.LogicLow;
+
+			FeedbackJitCompiler.Attach(root, rootDescription, new ChipLibrary());
+			Assert(root.FeedbackExecutor != null, "feedback JIT compiler did not attach to cyclic NAND latch");
+
+			root.FeedbackExecutor.SynchronizeFromChipTree();
+			Assert(root.FeedbackExecutor.Ready, "feedback executor did not become ready");
+
+			return (root, root.FeedbackExecutor, nandQ, nandNotQ);
+		}
+
+		static PinDescription Pin(int id)
+		{
+			return new PinDescription
+			{
+				ID = id,
+				BitCount = PinBitCount.Bit1
+			};
+		}
+
+		static void SetRootInputs(SimChip root, uint sBar, uint rBar)
+		{
+			root.InputPins[0].State = sBar;
+			root.InputPins[1].State = rBar;
+		}
+
+		static uint Bit(uint state) => PinState.GetBitStates(state) & 1u;
+
+		static void Assert(bool condition, string message)
+		{
+			if (!condition) throw new InvalidOperationException(message);
+		}
+	}
+}
