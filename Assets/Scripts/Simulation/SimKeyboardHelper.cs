@@ -18,7 +18,9 @@ namespace DLS.Simulation
 		};
 
 		static readonly HashSet<char> KeyLookup = new();
+		static readonly HashSet<char> ReplayKeyLookup = new();
 		static bool HasAnyInput;
+		static bool ReplayOverrideActive;
 
 		// Call from Main Thread
 		public static void RefreshInputState()
@@ -50,10 +52,51 @@ namespace DLS.Simulation
 
 			lock (KeyLookup)
 			{
-				isHeld = HasAnyInput && KeyLookup.Contains(key);
+				isHeld = ReplayOverrideActive
+					? ReplayKeyLookup.Contains(char.ToUpper(key))
+					: HasAnyInput && KeyLookup.Contains(key);
 			}
 
 			return isHeld;
+		}
+
+		internal static char[] CaptureHeldKeys()
+		{
+			lock (KeyLookup)
+			{
+				HashSet<char> source = ReplayOverrideActive ? ReplayKeyLookup : KeyLookup;
+				if (source.Count == 0) return System.Array.Empty<char>();
+
+				char[] result = new char[source.Count];
+				source.CopyTo(result);
+				System.Array.Sort(result);
+				return result;
+			}
+		}
+
+		internal static void SetReplayInputState(char[] heldKeys)
+		{
+			lock (KeyLookup)
+			{
+				ReplayKeyLookup.Clear();
+				if (heldKeys != null)
+				{
+					for (int i = 0; i < heldKeys.Length; i++)
+					{
+						ReplayKeyLookup.Add(char.ToUpper(heldKeys[i]));
+					}
+				}
+				ReplayOverrideActive = true;
+			}
+		}
+
+		internal static void ClearReplayInputState()
+		{
+			lock (KeyLookup)
+			{
+				ReplayKeyLookup.Clear();
+				ReplayOverrideActive = false;
+			}
 		}
 	}
 }
