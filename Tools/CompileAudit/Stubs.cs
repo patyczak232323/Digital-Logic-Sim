@@ -151,7 +151,9 @@ namespace DLS.Description
 
 namespace DLS.Game
 {
+    using System.Collections.Generic;
     using DLS.Description;
+    using DLS.Simulation;
 
     public class PinInstance
     {
@@ -179,12 +181,24 @@ namespace DLS.Game
     public class ProjectDescription
     {
         public string ProjectName;
+        public int Prefs_ExperimentalNativeCMode;
+        public bool Prefs_ExperimentalEngineDiagnostics;
+        public bool Prefs_ExperimentalNativeCValidation;
+    }
+
+    public class DevChipInstance
+    {
+        public SimChip SimChip;
     }
 
     public class Project
     {
         public static Project ActiveProject;
         public ProjectDescription description = new ProjectDescription();
+        public readonly ChipLibrary chipLibrary = new ChipLibrary();
+        public bool simPaused;
+        public readonly Stack<DevChipInstance> chipViewStack = new Stack<DevChipInstance>();
+        public DevChipInstance ViewedChip => chipViewStack.Count > 0 ? chipViewStack.Peek() : new DevChipInstance();
     }
 }
 
