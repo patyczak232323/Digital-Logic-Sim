@@ -88,10 +88,34 @@ namespace DLS.Simulation
 
 			lock (sync)
 			{
+				foreach (Probe existing in probes.Values)
+				{
+					if (ReferenceEquals(existing.Pin, pin)) return existing.Id;
+				}
+
 				int id = nextId++;
 				probes.Add(id, new Probe(id, string.IsNullOrWhiteSpace(name) ? $"PIN {pin.ID}" : name, pin, capacity));
 				return id;
 			}
+		}
+
+		public static bool TryGetProbeId(SimPin pin, out int id)
+		{
+			if (pin != null)
+			{
+				lock (sync)
+				{
+					foreach (Probe probe in probes.Values)
+					{
+						if (!ReferenceEquals(probe.Pin, pin)) continue;
+						id = probe.Id;
+						return true;
+					}
+				}
+			}
+
+			id = -1;
+			return false;
 		}
 
 		public static int AddProbe(string name, SimChip root, PinAddress address)
