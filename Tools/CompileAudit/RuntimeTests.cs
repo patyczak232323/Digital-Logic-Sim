@@ -92,10 +92,23 @@ namespace DLS.Simulation
 
 		static void TestReplayRoundTrip()
 		{
-			ChipDescription description = new()
+			ChipDescription nandDescription = new()
 			{
-				Name = "NAND_REPLAY",
+				Name = "NAND",
 				ChipType = ChipType.Nand,
+				InputPins = new[] { Pin(0), Pin(1) },
+				OutputPins = new[] { Pin(2) },
+				SubChips = Array.Empty<SubChipDescription>(),
+				Wires = Array.Empty<WireDescription>(),
+				Displays = Array.Empty<DisplayDescription>()
+			};
+
+			SimChip nand = new(nandDescription, 1, null, Array.Empty<SimChip>());
+
+			ChipDescription rootDescription = new()
+			{
+				Name = "REPLAY_ROOT",
+				ChipType = ChipType.Custom,
 				InputPins = new[] { Pin(300), Pin(301) },
 				OutputPins = new[] { Pin(302) },
 				SubChips = Array.Empty<SubChipDescription>(),
@@ -103,7 +116,11 @@ namespace DLS.Simulation
 				Displays = Array.Empty<DisplayDescription>()
 			};
 
-			SimChip root = new(description, -1, null, Array.Empty<SimChip>());
+			SimChip root = new(rootDescription, -1, null, new[] { nand });
+			root.AddConnection(new PinAddress(300, 0), new PinAddress(1, 0));
+			root.AddConnection(new PinAddress(301, 0), new PinAddress(1, 1));
+			root.AddConnection(new PinAddress(1, 2), new PinAddress(302, 0));
+
 			DevPinInstance inputA = new();
 			DevPinInstance inputB = new();
 			inputA.Pin.Address = new PinAddress(300, 0);
