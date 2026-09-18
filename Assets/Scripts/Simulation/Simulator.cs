@@ -738,7 +738,11 @@ namespace DLS.Simulation
 				for (SimChip invalidate = cmd.modifyTarget; invalidate != null; invalidate = invalidate.ParentChip)
 				{
 					invalidate.CompiledExecutor = null;
-					invalidate.FeedbackExecutor = null;
+					if (invalidate.FeedbackExecutor != null)
+					{
+						invalidate.FeedbackExecutor.MaterializeState();
+						invalidate.FeedbackExecutor = null;
+					}
 				}
 
 				if (cmd.type == SimModifyCommand.ModificationType.AddSubchip)
