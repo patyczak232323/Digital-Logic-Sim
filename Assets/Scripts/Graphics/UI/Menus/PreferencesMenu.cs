@@ -12,7 +12,7 @@ namespace DLS.Graphics
 	{
 		const float entrySpacing = 0.5f;
 		const float menuWidth = 55;
-		const float verticalOffset = 22;
+		const float verticalOffset = 30;
 
 		public const int DisplayMode_Always = 0;
 		public const int DisplayMode_OnHover = 1;
@@ -51,6 +51,19 @@ namespace DLS.Graphics
 			"Paused"
 		};
 
+		static readonly string[] ExperimentalToggleOptions =
+		{
+			"Off",
+			"On"
+		};
+
+		static readonly string[] NativeCModeOptions =
+		{
+			"Off",
+			"NAND only",
+			"All supported"
+		};
+
 		static readonly Vector2 entrySize = new(menuWidth, DrawSettings.SelectorWheelHeight);
 		public static readonly Vector2 settingFieldSize = new(entrySize.x / 3, entrySize.y);
 
@@ -63,6 +76,8 @@ namespace DLS.Graphics
 		static readonly UIHandle ID_SimStatus = new("PREFS_SimStatus");
 		static readonly UIHandle ID_SimFrequencyField = new("PREFS_SimTickTarget");
 		static readonly UIHandle ID_ClockSpeedInput = new("PREFS_ClockSpeed");
+		static readonly UIHandle ID_ExperimentalNativeC = new("PREFS_ExperimentalNativeC");
+		static readonly UIHandle ID_ExperimentalDiagnostics = new("PREFS_ExperimentalDiagnostics");
 
 		static readonly string showGridLabel = "Show grid" + CreateShortcutString("Ctrl+G");
 		static readonly string simStatusLabel = "Sim Status" + CreateShortcutString("Ctrl+Space");
@@ -115,6 +130,24 @@ namespace DLS.Graphics
 				UI.DrawPanel(tickLabelRight, settingFieldSize, new Color(0.18f, 0.18f, 0.18f), Anchor.CentreRight);
 				UI.DrawText(currentSimSpeedString, theme.FontBold, theme.FontSizeRegular, tickLabelRight + new Vector2(inputTextPad - settingFieldSize.x, 0), Anchor.TextCentreLeft, currentSimSpeedStringColour);
 
+				DrawHeader("EXPERIMENTAL:");
+				int nativeCMode = DrawNextWheel("Native C fast engine", NativeCModeOptions, ID_ExperimentalNativeC);
+				bool engineDiagnostics = DrawNextWheel("Engine diagnostics", ExperimentalToggleOptions, ID_ExperimentalDiagnostics) == 1;
+
+				if (engineDiagnostics)
+				{
+					string enginePath = DLS.Game.Simulator.UsingLegacyCompatibilityEngine ? "COMPATIBILITY" : "FAST";
+					DrawReadOnlyValue("Active engine", enginePath);
+					DrawReadOnlyValue("Compatibility reason", DLS.Game.Simulator.CompatibilityReason);
+					DrawReadOnlyValue("Native C status", GetNativeCStatus());
+					DrawReadOnlyValue(
+						"Fast / compatibility steps",
+						$"{DLS.Game.Simulator.FastEngineSteps} / {DLS.Game.Simulator.LegacyCompatibilitySteps}");
+					DrawReadOnlyValue(
+						"C / JIT evaluations",
+						$"{DLS.Simulation.NativeCombinationalBackend.NativeEvaluationCount} / {DLS.Simulation.NativeCombinationalBackend.DynamicJitEvaluationCount}");
+				}
+
 				// Draw cancel/confirm buttons
 				Vector2 buttonTopLeft = new(labelPosCurr.x, UI.PrevBounds.Bottom);
 				MenuHelper.CancelConfirmResult result = MenuHelper.DrawCancelConfirmButtons(buttonTopLeft, menuWidth, true);
@@ -141,6 +174,8 @@ namespace DLS.Graphics
 				project.description.Prefs_SimTargetStepsPerSecond = targetSimTicksPerSecond;
 				project.description.Prefs_SimStepsPerClockTick = clockSpeed;
 				project.description.Prefs_SimPaused = pauseSim;
+				project.description.Prefs_ExperimentalNativeCMode = nativeCMode;
+				project.description.Prefs_ExperimentalEngineDiagnostics = engineDiagnostics;
 
 				// Cancel / Confirm
 				if (result == MenuHelper.CancelConfirmResult.Cancel)
@@ -171,6 +206,28 @@ namespace DLS.Graphics
 				AddHeaderSpacing();
 				UI.DrawText(text, theme.FontBold, theme.FontSizeRegular, labelPosCurr, Anchor.TextCentreLeft, headerCol);
 				AddHeaderSpacing();
+			}
+
+			void DrawReadOnlyValue(string label, string value)
+			{
+				Vector2 valueRight = MenuHelper.DrawLabelSectionOfLabelInputPair(labelPosCurr, entrySize, label, labelCol * 0.75f, true);
+				UI.DrawPanel(valueRight, settingFieldSize, new Color(0.18f, 0.18f, 0.18f), Anchor.CentreRight);
+				UI.DrawText(value ?? string.Empty, theme.FontBold, theme.FontSizeRegular, valueRight + new Vector2(inputTextPad - settingFieldSize.x, 0), Anchor.TextCentreLeft, Color.white * 0.8f);
+				AddSpacing();
+			}
+
+			string GetNativeCStatus()
+			{
+				if (!DLS.Simulation.NativeCombinationalBackend.Available)
+				{
+					return string.IsNullOrWhiteSpace(DLS.Simulation.NativeCombinationalBackend.LastFailureReason)
+						? "Unavailable"
+						: "Unavailable";
+				}
+
+				return nativeCMode == 0
+					? "Ready (off)"
+					: $"Ready ({NativeCModeOptions[Mathf.Clamp(nativeCMode, 0, NativeCModeOptions.Length - 1)]})";
 			}
 
 			void AddSpacing()
