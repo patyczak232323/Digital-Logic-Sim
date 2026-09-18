@@ -325,29 +325,34 @@ def test_feedback_state_ownership_uses_runtime_active_not_ready() -> None:
 
 
 
-def test_stateful_projects_keep_upstream_compatibility_timing() -> None:
+def test_all_projects_use_rewired_deterministic_engine() -> None:
     facade = source("Assets/Scripts/Game/Project/SimulationFacade.cs")
     run = extract_method(facade, "public static void RunSimulationStep(")
-    classify = extract_method(facade, "static bool RequiresUpstreamTiming(")
+    ensure = extract_method(facade, "public static void EnsureInitialized(")
     apply = extract_method(facade, "public static void ApplyModifications()")
 
-    compat = run.index("DLS.Simulation.Simulator.RunSimulationStep")
-    fast = run.index("DeterministicSimulator.RunSimulationStep")
-    assert compat < fast
-    assert "if (UseLegacyCompatibilityEngine(rootSimChip))" in run
-    assert "return !analysis.CanCache;" in classify
-    assert 'CompatibilityReason = analysis.CanCache ? "pure combinational graph" : analysis.Reason;' in classify
-    assert "forceLegacyCompatibilityAfterEdit = true;" in apply
+    assert "DeterministicSimulator.RunSimulationStep" in run
+    assert "DLS.Simulation.Simulator.RunSimulationStep" not in run
+    assert "UseLegacyCompatibilityEngine" not in facade
+    assert "RequiresUpstreamTiming" not in facade
+    assert "forceLegacyCompatibilityAfterEdit" not in facade
+    assert "CompatibilityReason" not in facade
+    assert "topologyRecoveryPending" in ensure
+    assert "DeterministicSimulator.InvalidateTopology();" in apply
 
 
-def test_compatibility_classifier_still_rejects_feedback_and_state_sources() -> None:
-    cache = source("Assets/Scripts/Simulation/CombinationalChipCache.cs")
-    analyze = extract_method(cache, "static ChipCacheAnalysis AnalyzeRecursive(")
+def test_feedback_graphs_use_feedback_jit_instead_of_legacy_routing() -> None:
+    feedback = source("Assets/Scripts/Simulation/FeedbackJitCompiler.cs")
+    simulator = source("Assets/Scripts/Simulation/Simulator.cs")
+    deterministic = source("Assets/Scripts/Simulation/DeterministicSimulator.cs")
 
-    assert "HasFeedback(subChips, wires)" in analyze
-    assert "feedback loop detected" in analyze
-    assert "IsPureBuiltin(subDescription.ChipType)" in analyze
-    assert "contains state/source chip" in analyze
+    compile_program = extract_method(feedback, "static CompiledFeedbackProgram CompileProgram(")
+    attach = extract_method(feedback, "internal static void Attach(")
+
+    assert "if (!ContainsCycle(indegree, outgoing)) return null;" in compile_program
+    assert "simChip.FeedbackExecutor = executor;" in attach
+    assert "FeedbackJitCompiler.Attach(simChip, chipDesc, library);" in simulator
+    assert "chip.FeedbackExecutor != null" in deterministic
 
 
 def test_native_c_is_experimental_and_downstream_of_safe_combinational_analysis() -> None:
@@ -412,8 +417,8 @@ TESTS = (
     test_replay_ui_requests_are_executed_on_simulation_thread,
     test_feedback_jit_skips_stable_unchanged_input_ticks,
     test_feedback_state_ownership_uses_runtime_active_not_ready,
-    test_stateful_projects_keep_upstream_compatibility_timing,
-    test_compatibility_classifier_still_rejects_feedback_and_state_sources,
+    test_all_projects_use_rewired_deterministic_engine,
+    test_feedback_graphs_use_feedback_jit_instead_of_legacy_routing,
     test_native_c_is_experimental_and_downstream_of_safe_combinational_analysis,
     test_native_c_crosscheck_keeps_jit_as_authoritative_result,
 )
