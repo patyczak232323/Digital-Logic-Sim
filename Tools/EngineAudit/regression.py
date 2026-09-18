@@ -158,6 +158,28 @@ def test_feedback_jit_is_invalidated_with_description_cache() -> None:
     assert "FeedbackJitCompiler.NotifyDescriptionsChanged();" in method
 
 
+def test_nonconvergence_summary_is_available_without_diagnostic_sink() -> None:
+    sim = source("Assets/Scripts/Simulation/DeterministicSimulator.cs")
+    assert "public static string LastNonConvergenceDetails" in sim
+
+    nonconv = extract_method(sim, "static void TraceNonConvergence(")
+    summary = nonconv.index("LastNonConvergenceDetails =")
+    guard = nonconv.index("if (!DiagnosticsEnabled || DiagnosticSink == null) return;")
+    assert summary < guard
+    assert "DescribePendingWork()" in nonconv
+
+
+def test_combinational_test_runner_uses_isolated_netlist() -> None:
+    runner = source("Assets/Scripts/Simulation/CombinationalChipTestRunner.cs")
+    run = extract_method(runner, "public static ChipTestRunResult Run(")
+
+    assert "CombinationalChipCacheManager.Analyze(description, library)" in run
+    assert "BuildIsolatedChip(description, library)" in run
+    assert "Simulator.BuildSimChip(description, library)" not in run
+    assert "Simulator.EvaluatePureCombinationalForMemo(chip);" in run
+
+
+
 TESTS = (
     test_feedback_jit_is_dormant_until_after_first_normal_tick,
     test_feedback_jit_uses_two_delta_buffers,
@@ -169,6 +191,8 @@ TESTS = (
     test_waveform_ring_keeps_newest_samples,
     test_cross_coupled_nand_state_survives_synchronous_feedback_sweeps,
     test_feedback_jit_is_invalidated_with_description_cache,
+    test_nonconvergence_summary_is_available_without_diagnostic_sink,
+    test_combinational_test_runner_uses_isolated_netlist,
 )
 
 
