@@ -340,6 +340,8 @@ namespace DLS.Game
 			CompatibilityReason = "not evaluated";
 			LegacyCompatibilitySteps = 0;
 			FastEngineSteps = 0;
+			NativeCombinationalBackend.ResetCounters();
+			EngineDiagnostics.Clear();
 			DLS.Simulation.Simulator.Reset();
 			DeterministicSimulator.Reset();
 		}
