@@ -284,6 +284,19 @@ def test_replay_ui_requests_are_executed_on_simulation_thread() -> None:
 
 
 
+def test_feedback_jit_skips_stable_unchanged_input_ticks() -> None:
+    jit = source("Assets/Scripts/Simulation/FeedbackJitCompiler.cs")
+    evaluate = extract_method(jit, "public bool Evaluate(")
+
+    assert "hasStableInputSnapshot" in evaluate
+    assert "chip.InputPins[i].State == lastStableInputs[i]" in evaluate
+    unchanged_return = evaluate.index("if (unchanged) return true;")
+    sweep = evaluate.index("program.RunSweep(current, next);")
+    assert unchanged_return < sweep
+    assert "hasStableInputSnapshot = true;" in evaluate
+
+
+
 TESTS = (
     test_feedback_jit_is_dormant_until_after_first_normal_tick,
     test_feedback_jit_uses_two_delta_buffers,
@@ -303,6 +316,7 @@ TESTS = (
     test_waveform_ui_supports_scalar_and_bus_traces,
     test_probes_keep_their_signal_path_out_of_collapsed_acceleration,
     test_replay_ui_requests_are_executed_on_simulation_thread,
+    test_feedback_jit_skips_stable_unchanged_input_ticks,
 )
 
 
