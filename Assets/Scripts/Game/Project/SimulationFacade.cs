@@ -10,6 +10,11 @@ namespace DLS.Game
 	public static class Simulator
 	{
 		static bool topologyRecoveryPending;
+		static SimChip compatibilityModeRoot;
+		static bool compatibilityModeLegacy;
+		static bool forceLegacyCompatibilityAfterEdit;
+
+		public static bool UsingLegacyCompatibilityEngine => compatibilityModeLegacy || forceLegacyCompatibilityAfterEdit;
 
 		readonly struct SequentialEdgeSnapshot
 		{
@@ -53,6 +58,16 @@ namespace DLS.Game
 
 		public static void RunSimulationStep(SimChip rootSimChip, DevPinInstance[] inputPins, SimAudio audioState)
 		{
+			if (UseLegacyCompatibilityEngine(rootSimChip))
+			{
+				// Stateful/feedback projects must keep Sebastian's one-pass-per-tick timing
+				// semantics. The deterministic fixed-point solver is faster for acyclic logic,
+				// but changes observable behaviour of NAND-built latches/DFFs and therefore
+				// can break existing computers that are valid in the upstream simulator.
+				topologyRecoveryPending = false;
+				DLS.Simulation.Simulator.RunSimulationStep(rootSimChip, inputPins, audioState);
+				return;
+			}
 			// Debug/main-thread simulation does not call the explicit initialization pass
 			// used by Project.SimThread. Only pay for the extra call when an edit actually
 			// queued a topology recovery check; the steady-state hot path is unchanged.
@@ -66,6 +81,14 @@ namespace DLS.Game
 
 		public static void EnsureInitialized(SimChip rootSimChip, DevPinInstance[] inputPins, SimAudio audioState)
 		{
+			if (UseLegacyCompatibilityEngine(rootSimChip))
+			{
+				// Upstream-compatible simulation has no separate fixed-point power-on phase.
+				// In particular, do not advance a paused circuit merely to initialize it.
+				topologyRecoveryPending = false;
+				return;
+			}
+
 			Project project = Project.ActiveProject;
 
 			// The simulation loop calls EnsureInitialized even while paused, before the
@@ -182,9 +205,44 @@ namespace DLS.Game
 			}
 		}
 
-		public static void SetInspectionChip(SimChip chip) => DeterministicSimulator.SetInspectionChip(chip);
+		static bool UseLegacyCompatibilityEngine(SimChip rootSimChip)
+		{
+			if (rootSimChip == null) return false;
 
-		public static void UpdateInPausedState() => DeterministicSimulator.UpdateInPausedState();
+			if (!ReferenceEquals(compatibilityModeRoot, rootSimChip))
+			{
+				compatibilityModeRoot = rootSimChip;
+				forceLegacyCompatibilityAfterEdit = false;
+				compatibilityModeLegacy = RequiresUpstreamTiming(rootSimChip);
+			}
+
+			return compatibilityModeLegacy || forceLegacyCompatibilityAfterEdit;
+		}
+
+		static bool RequiresUpstreamTiming(SimChip rootSimChip)
+		{
+			Project project = Project.ActiveProject;
+			if (rootSimChip?.Description == null || project?.chipLibrary == null)
+			{
+				// Unsaved/incomplete editor graphs cannot be proven acyclic and pure.
+				// Compatibility is the safe default while they are being constructed.
+				return true;
+			}
+
+			ChipCacheAnalysis analysis = CombinationalChipCacheManager.Analyze(rootSimChip.Description, project.chipLibrary);
+			return !analysis.CanCache;
+		}
+
+		public static void SetInspectionChip(SimChip chip)
+		{
+			if (!UsingLegacyCompatibilityEngine) DeterministicSimulator.SetInspectionChip(chip);
+		}
+
+		public static void UpdateInPausedState()
+		{
+			if (UsingLegacyCompatibilityEngine) DLS.Simulation.Simulator.UpdateInPausedState();
+			else DeterministicSimulator.UpdateInPausedState();
+		}
 
 		public static void UpdateKeyboardInputFromMainThread() => DLS.Simulation.Simulator.UpdateKeyboardInputFromMainThread();
 
@@ -246,6 +304,11 @@ namespace DLS.Game
 			bool topologyChanged = DLS.Simulation.Simulator.ApplyModifications();
 			if (topologyChanged)
 			{
+				// SimChip.Description represents the saved graph and can temporarily lag live
+				// editor modifications. After any structural edit, prefer upstream timing until
+				// the root is rebuilt; this prevents a newly-created feedback loop from being
+				// misclassified as pure combinational logic.
+				forceLegacyCompatibilityAfterEdit = true;
 				topologyRecoveryPending = true;
 				DeterministicSimulator.InvalidateTopology();
 			}
@@ -254,6 +317,9 @@ namespace DLS.Game
 		public static void Reset()
 		{
 			topologyRecoveryPending = false;
+			compatibilityModeRoot = null;
+			compatibilityModeLegacy = false;
+			forceLegacyCompatibilityAfterEdit = false;
 			DLS.Simulation.Simulator.Reset();
 			DeterministicSimulator.Reset();
 		}
