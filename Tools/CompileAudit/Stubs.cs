@@ -2,6 +2,18 @@ using System;
 
 namespace UnityEngine
 {
+    public struct Vector2
+    {
+        public float x, y;
+        public Vector2(float x, float y) { this.x = x; this.y = y; }
+    }
+
+    public struct Color
+    {
+        public float r, g, b, a;
+        public Color(float r, float g, float b, float a = 1) { this.r = r; this.g = g; this.b = b; this.a = a; }
+    }
+
     public enum KeyCode
     {
         A='A', B='B', C='C', D='D', E='E', F='F', G='G', H='H', I='I', J='J', K='K', L='L', M='M', N='N',
@@ -51,6 +63,37 @@ namespace DLS.Description
         Cached
     }
 
+    public enum NameDisplayLocation
+    {
+        Centre,
+        Top,
+        Hidden
+    }
+
+    public enum PinBitCount
+    {
+        Bit1 = 1,
+        Bit4 = 4,
+        Bit8 = 8
+    }
+
+    public enum PinColour
+    {
+        Red, Orange, Yellow, Green, Blue, Violet, Pink, White
+    }
+
+    public enum PinValueDisplayMode
+    {
+        Off, UnsignedDecimal, SignedDecimal, HEX
+    }
+
+    public enum WireConnectionType
+    {
+        ToPins,
+        ToWireSource,
+        ToWireTarget
+    }
+
     public static class ChipTypeHelper
     {
         public static bool IsBusOriginType(ChipType type) => type is ChipType.Bus_1Bit or ChipType.Bus_4Bit or ChipType.Bus_8Bit;
@@ -64,18 +107,40 @@ namespace DLS.Description
         public PinAddress(int pinOwnerID, int pinID) { PinOwnerID = pinOwnerID; PinID = pinID; }
     }
 
-    public struct PinDescription { public int ID; }
+    public struct PinDescription
+    {
+        public string Name;
+        public int ID;
+        public UnityEngine.Vector2 Position;
+        public PinBitCount BitCount;
+        public PinColour Colour;
+        public PinValueDisplayMode ValueDisplayMode;
+    }
+
     public struct SubChipDescription { public string Name; public int ID; public uint[] InternalData; }
-    public struct WireDescription { public PinAddress SourcePinAddress; public PinAddress TargetPinAddress; }
+
+    public struct WireDescription
+    {
+        public PinAddress SourcePinAddress;
+        public PinAddress TargetPinAddress;
+        public WireConnectionType ConnectionType;
+        public int ConnectedWireIndex;
+        public int ConnectedWireSegmentIndex;
+        public UnityEngine.Vector2[] Points;
+    }
     public struct DisplayDescription { }
 
     public class ChipDescription
     {
         public const StringComparison NameComparison = StringComparison.OrdinalIgnoreCase;
         public static readonly StringComparer NameComparer = StringComparer.OrdinalIgnoreCase;
+        public string DLSVersion;
         public string Name;
+        public NameDisplayLocation NameLocation;
         public ChipType ChipType;
         public ChipCacheMode CacheMode;
+        public UnityEngine.Vector2 Size;
+        public UnityEngine.Color Colour;
         public PinDescription[] InputPins = Array.Empty<PinDescription>();
         public PinDescription[] OutputPins = Array.Empty<PinDescription>();
         public SubChipDescription[] SubChips = Array.Empty<SubChipDescription>();
@@ -108,6 +173,18 @@ namespace DLS.Game
             description = GetChipDescription(name);
             return description != null;
         }
+        public ChipDescription[] GetDirectParentChips(string chipName) => Array.Empty<ChipDescription>();
+    }
+
+    public class ProjectDescription
+    {
+        public string ProjectName;
+    }
+
+    public class Project
+    {
+        public static Project ActiveProject;
+        public ProjectDescription description = new ProjectDescription();
     }
 }
 
