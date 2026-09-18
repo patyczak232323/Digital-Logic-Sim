@@ -21,12 +21,14 @@ namespace DLS.Simulation
 		public readonly int Id;
 		public readonly string Name;
 		public readonly int SampleCount;
+		public readonly int BitCount;
 
-		public WaveformProbeInfo(int id, string name, int sampleCount)
+		public WaveformProbeInfo(int id, string name, int sampleCount, int bitCount)
 		{
 			Id = id;
 			Name = name;
 			SampleCount = sampleCount;
+			BitCount = bitCount;
 		}
 	}
 
@@ -39,6 +41,7 @@ namespace DLS.Simulation
 			public readonly int Id;
 			public readonly string Name;
 			public readonly SimPin Pin;
+			public readonly int BitCount;
 			public WaveformSample[] Samples;
 			public int WriteIndex;
 			public int Count;
@@ -48,6 +51,7 @@ namespace DLS.Simulation
 				Id = id;
 				Name = name;
 				Pin = pin;
+				BitCount = ResolveBitCount(pin);
 				Samples = new WaveformSample[capacity];
 			}
 		}
@@ -175,7 +179,7 @@ namespace DLS.Simulation
 				int index = 0;
 				foreach (Probe probe in probes.Values)
 				{
-					result[index++] = new WaveformProbeInfo(probe.Id, probe.Name, probe.Count);
+					result[index++] = new WaveformProbeInfo(probe.Id, probe.Name, probe.Count, probe.BitCount);
 				}
 				Array.Sort(result, (a, b) => a.Id.CompareTo(b.Id));
 				return result;
@@ -199,6 +203,23 @@ namespace DLS.Simulation
 				}
 				return result;
 			}
+		}
+
+		static int ResolveBitCount(SimPin pin)
+		{
+			ChipDescription description = pin?.parentChip?.Description;
+			if (description == null) return 1;
+
+			PinDescription[] descriptions = pin.isInput
+				? description.InputPins ?? Array.Empty<PinDescription>()
+				: description.OutputPins ?? Array.Empty<PinDescription>();
+
+			for (int i = 0; i < descriptions.Length; i++)
+			{
+				if (descriptions[i].ID == pin.ID) return Math.Max(1, (int)descriptions[i].BitCount);
+			}
+
+			return 1;
 		}
 
 		static void ResizeProbe(Probe probe, int newCapacity)
