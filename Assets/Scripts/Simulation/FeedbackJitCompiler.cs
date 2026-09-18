@@ -758,6 +758,7 @@ namespace DLS.Simulation
 
 		public bool Ready { get; private set; }
 		public bool Disabled => disabled;
+		public bool RuntimeActive { get; private set; }
 		public int PrimitiveNodeCount => program.PrimitiveNodeCount;
 		public double CompileMilliseconds => program.CompileMilliseconds;
 		public int LastSweepCount { get; private set; }
@@ -788,6 +789,11 @@ namespace DLS.Simulation
 			Ready = true;
 		}
 
+		public void SetRuntimeActive(bool active)
+		{
+			RuntimeActive = active && Ready && !disabled;
+		}
+
 		public void MaterializeState()
 		{
 			if (!Ready) return;
@@ -804,6 +810,7 @@ namespace DLS.Simulation
 			MaterializeState();
 			disabled = true;
 			hasStableInputSnapshot = false;
+			RuntimeActive = false;
 			Ready = false;
 		}
 
