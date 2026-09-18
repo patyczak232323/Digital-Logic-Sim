@@ -81,11 +81,7 @@ namespace DLS.Graphics
 				UI.DrawText("PERFORMANCE", theme.FontBold, theme.FontSizeRegular, pos, Anchor.TextCentreLeft, textCol);
 				pos.y -= 2.2f;
 
-				bool compatibilityEngine = DLS.Game.Simulator.UsingLegacyCompatibilityEngine;
-				string engineText = compatibilityEngine
-					? $"Engine: COMPATIBILITY | {DLS.Game.Simulator.CompatibilityReason}"
-					: $"Engine: FAST | {DLS.Game.Simulator.CompatibilityReason}";
-				DrawInfoRow(ref pos, engineText, compatibilityEngine ? Color.yellow : dim);
+				DrawInfoRow(ref pos, "Engine: REWIRED FAST | deterministic + feedback JIT", dim);
 
 				int profilerMode = MenuHelper.LabeledOptionsWheel(
 					"Hot-chip profiler",
