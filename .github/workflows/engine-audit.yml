@@ -20,3 +20,5 @@ jobs:
         run: python3 Tools/EngineAudit/regression.py
       - name: Compile simulation runtime
         run: dotnet build Tools/CompileAudit/SimulationCompileAudit.csproj --configuration Release
+      - name: Run simulation runtime tests
+        run: dotnet run --project Tools/CompileAudit/SimulationCompileAudit.csproj --configuration Release --no-build
