@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - 'exp/native-c-fast-engine'
+      - 'exp/sebastian-engine-baseline'
   pull_request:
     paths:
       - 'Native/dls_native_fast/**'
