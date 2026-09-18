@@ -17,6 +17,20 @@ import random
 import time
 
 
+def extract_method(text: str, signature: str) -> str:
+    start = text.index(signature)
+    brace = text.index("{", start)
+    depth = 0
+    for i in range(brace, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start:i + 1]
+    raise AssertionError(f"unterminated method: {signature}")
+
+
 class DeltaNet:
     def __init__(self) -> None:
         self.state: dict[str, int] = {}
