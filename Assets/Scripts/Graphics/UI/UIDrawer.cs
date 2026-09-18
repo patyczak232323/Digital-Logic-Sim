@@ -13,6 +13,7 @@ namespace DLS.Graphics
 			BottomBarMenuPopup,
 			ChipCustomization,
 			Preferences,
+			SimulationDiagnostics,
 			PinRename,
 			MainMenu,
 			RebindKeyChip,
@@ -61,6 +62,7 @@ namespace DLS.Graphics
 			else if (menuToDraw == MenuType.ChipLibrary) ChipLibraryMenu.DrawMenu();
 			else if (menuToDraw == MenuType.ChipCustomization) ChipCustomizationMenu.DrawMenu();
 			else if (menuToDraw == MenuType.Preferences) PreferencesMenu.DrawMenu(project);
+			else if (menuToDraw == MenuType.SimulationDiagnostics) SimulationDiagnosticsMenu.DrawMenu();
 			else if (menuToDraw == MenuType.PinRename) PinEditMenu.DrawMenu();
 			else if (menuToDraw == MenuType.RebindKeyChip) RebindKeyChipMenu.DrawMenu();
 			else if (menuToDraw == MenuType.RomEdit) RomEditMenu.DrawMenu();
@@ -92,6 +94,7 @@ namespace DLS.Graphics
 				else if (ActiveMenu == MenuType.ChipCustomization) ChipCustomizationMenu.OnMenuOpened();
 				else if (ActiveMenu == MenuType.PinRename) PinEditMenu.OnMenuOpened();
 				else if (ActiveMenu == MenuType.Preferences) PreferencesMenu.OnMenuOpened();
+				else if (ActiveMenu == MenuType.SimulationDiagnostics) SimulationDiagnosticsMenu.OnMenuOpened();
 				else if (ActiveMenu == MenuType.MainMenu) MainMenu.OnMenuOpened();
 				else if (ActiveMenu == MenuType.RebindKeyChip) RebindKeyChipMenu.OnMenuOpened();
 				else if (ActiveMenu == MenuType.RomEdit) RomEditMenu.OnMenuOpened();
