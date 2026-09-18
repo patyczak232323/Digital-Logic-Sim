@@ -35,6 +35,7 @@ typedef struct {
     int32_t scratch_count;
     int32_t code_words;
     int32_t all_nand;
+    int32_t all_nand_direct;
     int32_t *code;
     int32_t *output_refs;
 } dls_native_program;
@@ -92,6 +93,7 @@ DLS_EXPORT void *dls_native_create_program(
     program->output_count = output_count;
     program->scratch_count = scratch_count;
     program->all_nand = node_count > 0 ? 1 : 0;
+    program->all_nand_direct = node_count > 0 ? 1 : 0;
 
     int32_t words = 0;
     for (int32_t i = 0; i < node_count; ++i) {
@@ -101,7 +103,12 @@ DLS_EXPORT void *dls_native_create_program(
             return NULL;
         }
         words += nwords;
-        if (nodes[i].op != DLS_OP_NAND) program->all_nand = 0;
+        if (nodes[i].op != DLS_OP_NAND) {
+            program->all_nand = 0;
+            program->all_nand_direct = 0;
+        } else if (nodes[i].in_ref[0] < 0 || nodes[i].in_ref[1] < 0) {
+            program->all_nand_direct = 0;
+        }
     }
 
     // NAND-only programs get a denser 3-word instruction format with no opcode.
@@ -206,7 +213,16 @@ DLS_EXPORT int32_t dls_native_eval(
 
     const int32_t *pc = program->code;
 
-    if (program->all_nand) {
+    if (program->all_nand_direct) {
+        const int32_t *end = pc + (program->node_count * 3);
+        while (pc < end) {
+            int32_t a_ref = pc[0];
+            int32_t b_ref = pc[1];
+            int32_t out_ref = pc[2];
+            pc += 3;
+            scratch[out_ref] = (1u ^ (scratch[a_ref] & scratch[b_ref])) & 1u;
+        }
+    } else if (program->all_nand) {
         for (int32_t i = 0; i < program->node_count; ++i) {
             int32_t a_ref = *pc++;
             int32_t b_ref = *pc++;
