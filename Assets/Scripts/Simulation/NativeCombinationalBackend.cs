@@ -1,6 +1,8 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Threading;
 using DLS.Description;
+using DLS.Game;
 
 namespace DLS.Simulation
 {
@@ -16,6 +18,45 @@ namespace DLS.Simulation
 
         internal static bool Available { get; private set; } = true;
         internal static string LastFailureReason { get; private set; } = string.Empty;
+        internal static long NativeEvaluationCount => Interlocked.Read(ref nativeEvaluationCount);
+        internal static long DynamicJitEvaluationCount => Interlocked.Read(ref dynamicJitEvaluationCount);
+
+        static long nativeEvaluationCount;
+        static long dynamicJitEvaluationCount;
+
+        internal static int PreferenceMode
+        {
+            get
+            {
+                Project project = Project.ActiveProject;
+                int mode = project?.description.Prefs_ExperimentalNativeCMode ?? 0;
+                if (mode < 0) return 0;
+                if (mode > 2) return 2;
+                return mode;
+            }
+        }
+
+        internal static bool ShouldUseNative(bool nandOnlyProgram)
+        {
+            int mode = PreferenceMode;
+            return mode == 2 || (mode == 1 && nandOnlyProgram);
+        }
+
+        internal static string PreferenceLabel => PreferenceMode switch
+        {
+            1 => "NAND only",
+            2 => "All supported",
+            _ => "Off"
+        };
+
+        internal static void RecordNativeEvaluation() => Interlocked.Increment(ref nativeEvaluationCount);
+        internal static void RecordDynamicJitEvaluation() => Interlocked.Increment(ref dynamicJitEvaluationCount);
+
+        internal static void ResetCounters()
+        {
+            Interlocked.Exchange(ref nativeEvaluationCount, 0);
+            Interlocked.Exchange(ref dynamicJitEvaluationCount, 0);
+        }
 
         [StructLayout(LayoutKind.Sequential)]
         internal struct NativeNode
@@ -87,10 +128,8 @@ namespace DLS.Simulation
         {
             if (!Available) return null;
 
-            // Keep the proven DynamicMethod path as the default. The native backend is
-            // experimental until it wins on the actual Unity/Mono runtime used by DLS.
-            if (Environment.GetEnvironmentVariable("DLS_NATIVE_FAST") != "1") return null;
-
+            // Build the optional native twin regardless of the current menu selection.
+            // This lets the user switch between JIT and C live without rebuilding the chip.
             try
             {
                 uint abi = dls_native_abi_version();
@@ -143,8 +182,18 @@ namespace DLS.Simulation
                     return null;
                 }
 
+                bool nandOnly = true;
+                for (int i = 0; i < nodes.Length; i++)
+                {
+                    if (nodes[i].Type != ChipType.Nand)
+                    {
+                        nandOnly = false;
+                        break;
+                    }
+                }
+
                 LastFailureReason = string.Empty;
-                return new NativeCombinationalProgram(handle, scratchCount, outputRefs.Length);
+                return new NativeCombinationalProgram(handle, scratchCount, outputRefs.Length, nandOnly);
             }
             catch (DllNotFoundException e)
             {
@@ -246,11 +295,14 @@ namespace DLS.Simulation
         readonly int scratchCount;
         readonly int outputCount;
 
-        public NativeCombinationalProgram(IntPtr handle, int scratchCount, int outputCount)
+        public bool IsNandOnly { get; }
+
+        public NativeCombinationalProgram(IntPtr handle, int scratchCount, int outputCount, bool isNandOnly)
         {
             this.handle = handle;
             this.scratchCount = scratchCount;
             this.outputCount = outputCount;
+            IsNandOnly = isNandOnly;
         }
 
         ~NativeCombinationalProgram()
