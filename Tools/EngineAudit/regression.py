@@ -106,12 +106,57 @@ def test_removed_connection_still_clears_last_driver_state() -> None:
     assert "PinState.SetAllDisconnected(ref removeTargetPin.State);" in method
 
 
+def test_stateful_projects_route_to_upstream_compatible_timing() -> None:
+    facade = source("Assets/Scripts/Game/Project/SimulationFacade.cs")
+    run_method = extract_method(facade, "public static void RunSimulationStep(")
+    compat_method = extract_method(facade, "static bool RequiresUpstreamTiming(")
+    apply_method = extract_method(facade, "public static void ApplyModifications()")
+
+    assert "if (UseLegacyCompatibilityEngine(rootSimChip))" in run_method
+    assert "DLS.Simulation.Simulator.RunSimulationStep(rootSimChip, inputPins, audioState);" in run_method
+    assert "DeterministicSimulator.RunSimulationStep(rootSimChip, inputPins, audioState);" in run_method
+    assert run_method.index("DLS.Simulation.Simulator.RunSimulationStep") < run_method.index(
+        "DeterministicSimulator.RunSimulationStep"
+    )
+
+    # A graph that cannot be represented as a pure input->output combinational function
+    # must preserve the upstream one-pass-per-tick timing model.
+    assert "return !analysis.CanCache;" in compat_method
+
+    # Live editor topology can temporarily be newer than SimChip.Description.
+    assert "forceLegacyCompatibilityAfterEdit = true;" in apply_method
+
+
+def test_fixed_point_semantics_are_not_upstream_equivalent_for_feedback() -> None:
+    # Cross-coupled NANDs illustrate the semantic difference. The upstream engine
+    # evaluates each primitive once in traversal order. A synchronous fixed-point
+    # batch instead evaluates both from the same old state and can oscillate.
+    def nand(a: int, b: int) -> int:
+        return 1 ^ (a & b)
+
+    # Upstream-style immediate one-pass ordering.
+    q, qb = 0, 0
+    q = nand(1, qb)
+    qb = nand(1, q)
+    assert (q, qb) == (1, 0)
+
+    # Fixed-point batch ordering from the same starting state.
+    q, qb = 0, 0
+    states = []
+    for _ in range(4):
+        q, qb = nand(1, qb), nand(1, q)
+        states.append((q, qb))
+    assert states == [(1, 1), (0, 0), (1, 1), (0, 0)]
+
+
 TESTS = (
     test_paused_inspection_is_synchronized_before_initialization,
     test_topology_edit_recovery_is_one_shot_and_nonconvergence_only,
     test_symmetric_nand_latch_model_needs_asynchronous_recovery,
     test_jit_still_rejects_multiple_drivers,
     test_removed_connection_still_clears_last_driver_state,
+    test_stateful_projects_route_to_upstream_compatible_timing,
+    test_fixed_point_semantics_are_not_upstream_equivalent_for_feedback,
 )
 
 
