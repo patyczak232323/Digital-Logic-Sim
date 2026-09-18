@@ -20,6 +20,21 @@ Key goals of the engine are:
 
 Feedback-based storage elements do not require arbitrary gate outputs to be randomized during normal operation. Circuit initialization is treated separately from normal deterministic simulation so that gate logic itself always remains logically correct.
 
+### Development branch (`main`)
+
+Current `main` extends v0.2.0 with:
+
+- native feedback JIT for safe cyclic gate networks such as NAND-built latches, flip-flops and registers
+- deterministic fallback when a compiled feedback region fails to converge
+- state materialization before inspection or structural edits
+- opt-in hot-chip simulation profiler
+- opt-in ring-buffer waveform recorder backend
+- actionable non-convergence summaries with suspect chip/pin paths
+- isolated combinational Custom Chip test-vector runner
+- CI regression checks plus a standalone C# simulation compile audit
+
+The released v0.2.0 binaries predate these development changes.
+
 ## Downloads
 
 Prebuilt releases are available for:
@@ -27,9 +42,9 @@ Prebuilt releases are available for:
 - **Windows x64:** `DLSRewired-Windows-x64.zip`
 - **Linux x86_64:** `DLSRewired-Linux-x86_64.zip`
 
-Latest release: **v0.1.0**
+Latest release: **v0.2.0**
 
-https://github.com/patyczak232323/Digital-Logic-Sim/releases/tag/v0.1.0
+https://github.com/patyczak232323/Digital-Logic-Sim/releases/tag/v0.2.0
 
 ## Compatibility
 
