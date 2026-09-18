@@ -22,3 +22,5 @@ jobs:
         run: dotnet build Tools/CompileAudit/SimulationCompileAudit.csproj --configuration Release
       - name: Run simulation runtime tests
         run: dotnet run --project Tools/CompileAudit/SimulationCompileAudit.csproj --configuration Release --no-build
+      - name: Parse all C# sources
+        run: dotnet run --project Tools/SyntaxAudit/SyntaxAudit.csproj --configuration Release -- .
