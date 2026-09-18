@@ -180,6 +180,48 @@ def test_combinational_test_runner_uses_isolated_netlist() -> None:
 
 
 
+def test_replay_captures_authoritative_state_and_verifies_outputs() -> None:
+    replay = source("Assets/Scripts/Simulation/SimulationReplayRecorder.cs")
+    sim = source("Assets/Scripts/Simulation/DeterministicSimulator.cs")
+    keyboard = source("Assets/Scripts/Simulation/SimKeyboardHelper.cs")
+
+    capture = extract_method(replay, "internal static void CaptureStepStart(")
+    assert "DeterministicSimulator.MaterializeStateForSnapshot(root);" in capture
+    assert "SimulationStateSnapshot.Capture(root)" in capture
+    assert "SimKeyboardHelper.CaptureHeldKeys()" in capture
+
+    run = extract_method(replay, "public static SimulationReplayResult Replay(")
+    assert "DeterministicSimulator.PrepareForSnapshotRestore(root);" in run
+    assert "SimKeyboardHelper.SetReplayInputState(frame.HeldKeys);" in run
+    assert "actual == expected[output]" in run
+    assert "diverged at replay frame" in run
+
+    prepare = extract_method(sim, "internal static void PrepareForSnapshotRestore(")
+    assert "DisableFeedbackExecutorsRecursive(root);" in prepare
+    assert "needsPowerOnSettle = false;" in prepare
+
+    key_read = extract_method(keyboard, "public static bool KeyIsHeld(")
+    assert "ReplayOverrideActive" in key_read
+    assert "ReplayKeyLookup" in key_read
+
+
+def test_benchmark_measures_inside_step_without_advancing_extra_steps() -> None:
+    benchmark = source("Assets/Scripts/Simulation/SimulationBenchmark.cs")
+    sim = source("Assets/Scripts/Simulation/DeterministicSimulator.cs")
+
+    run = extract_method(sim, "public static void RunSimulationStep(")
+    assert "SimulationBenchmark.BeginStep();" in run
+
+    end_profile = extract_method(sim, "static void EndProfilingStep(")
+    assert "SimulationBenchmark.EndStep(" in end_profile
+
+    # Benchmark is observational; it must never call the simulator itself.
+    assert "RunSimulationStep(" not in benchmark
+    assert "RawStepsPerSecond" in benchmark
+    assert "Stopwatch.GetTimestamp()" in benchmark
+
+
+
 TESTS = (
     test_feedback_jit_is_dormant_until_after_first_normal_tick,
     test_feedback_jit_uses_two_delta_buffers,
@@ -193,6 +235,8 @@ TESTS = (
     test_feedback_jit_is_invalidated_with_description_cache,
     test_nonconvergence_summary_is_available_without_diagnostic_sink,
     test_combinational_test_runner_uses_isolated_netlist,
+    test_replay_captures_authoritative_state_and_verifies_outputs,
+    test_benchmark_measures_inside_step_without_advancing_extra_steps,
 )
 
 
