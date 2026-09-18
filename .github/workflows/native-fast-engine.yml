@@ -1,0 +1,35 @@
+name: Native C Fast Engine
+
+on:
+  push:
+    branches:
+      - 'exp/native-c-fast-engine'
+  pull_request:
+    paths:
+      - 'Native/dls_native_fast/**'
+      - 'Tools/NativeFastEngine/**'
+      - 'Assets/Scripts/Simulation/NativeCombinationalBackend.cs'
+      - 'Assets/Scripts/Simulation/CombinationalJitCompiler.cs'
+      - '.github/workflows/native-fast-engine.yml'
+
+jobs:
+  native-fast-engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build and test native backend
+        run: |
+          chmod +x Tools/NativeFastEngine/build_linux.sh
+          chmod +x Tools/NativeFastEngine/run_benchmark.sh
+          Tools/NativeFastEngine/run_benchmark.sh
+
+      - name: Run existing engine audit regressions
+        run: python3 Tools/EngineAudit/regression.py
