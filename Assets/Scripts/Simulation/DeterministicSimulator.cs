@@ -74,6 +74,7 @@ namespace DLS.Simulation
 		static int observedCacheGeneration;
 		static bool needsInitialPropagation = true;
 		static bool needsPowerOnSettle = true;
+		static bool feedbackActivationPending;
 		static ulong stateChangeSerial;
 
 		static SimAudio audioState;
@@ -162,10 +163,10 @@ namespace DLS.Simulation
 				// The initialization itself is not an edge.
 				SynchronizeSequentialEdgeState();
 
-				// Feedback JIT is intentionally dormant during power-on. Seed its two
-				// delta buffers from the fixed point found by the proven solver, then
-				// rebuild topology on the next step so safe cyclic custom chips collapse.
-				if (SynchronizeFeedbackExecutors(rootSimChip)) topologyDirty = true;
+				// Feedback JIT stays dormant for the first normal tick as well. That tick
+				// can legitimately change a latch/register after power-on. We seed the
+				// native state only after the normal pre/edge/post settle sequence finishes.
+				feedbackActivationPending = true;
 				needsPowerOnSettle = false;
 			}
 			else
@@ -221,6 +222,13 @@ namespace DLS.Simulation
 			LastSettleConverged &= postConverged;
 
 			UpdateBuzzers();
+
+			if (feedbackActivationPending)
+			{
+				if (SynchronizeFeedbackExecutors(rootSimChip)) topologyDirty = true;
+				feedbackActivationPending = false;
+			}
+
 			UpdateAudioState();
 		}
 
@@ -255,6 +263,7 @@ namespace DLS.Simulation
 			observedCacheGeneration = CombinationalChipCacheManager.ReadyGeneration;
 			needsInitialPropagation = true;
 			needsPowerOnSettle = true;
+			feedbackActivationPending = false;
 
 			combinationalChips.Clear();
 			sourceChips.Clear();
