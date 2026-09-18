@@ -107,7 +107,7 @@ def test_profiler_and_waveform_are_opt_in() -> None:
     assert "static volatile bool enabled;" in profiler
     assert "if (!enabled) return;" in profiler
     assert "static volatile bool enabled;" in wave
-    assert "if (!enabled) return;" in wave
+    assert "if (!enabled || Volatile.Read(ref probeCount) == 0) return;" in wave
     assert "if (SimulationProfiler.Enabled)" in sim
     assert "SimulationWaveformRecorder.Capture(Simulator.simulationFrame);" in sim
 
