@@ -1,3 +1,5 @@
+using System;
+using System.Text;
 using DLS.Simulation;
 using Seb.Types;
 using Seb.Vis;
@@ -8,15 +10,21 @@ namespace DLS.Graphics
 {
 	public static class SimulationDiagnosticsMenu
 	{
-		const float menuWidth = 74;
+		const float menuWidth = 96;
+		const float columnGap = 2;
+		const float columnWidth = (menuWidth - columnGap) / 2;
 		const float rowHeight = 2.8f;
 		const float spacing = 0.3f;
+		const float traceHeight = 7.1f;
+
 		static readonly string[] OffOn = { "OFF", "ON" };
 		static readonly UIHandle ID_Profiler = new("SIM_DIAG_Profiler");
+		static readonly UIHandle ID_Waveform = new("SIM_DIAG_Waveform");
 
 		public static void OnMenuOpened()
 		{
 			UI.GetWheelSelectorState(ID_Profiler).index = SimulationProfiler.Enabled ? 1 : 0;
+			UI.GetWheelSelectorState(ID_Waveform).index = SimulationWaveformRecorder.Enabled ? 1 : 0;
 		}
 
 		public static void DrawMenu()
@@ -25,37 +33,74 @@ namespace DLS.Graphics
 			MenuHelper.DrawBackgroundOverlay();
 			Draw.ID panelID = UI.ReservePanel();
 
-			Vector2 topLeft = UI.Centre + new Vector2(-menuWidth / 2, 25);
-			Vector2 pos = topLeft;
+			Vector2 topLeft = UI.Centre + new Vector2(-menuWidth / 2, 25.5f);
 			Color rowCol = new(0.12f, 0.12f, 0.12f, 0.92f);
 			Color textCol = Color.white;
 			Color dim = Color.white * 0.72f;
 
 			using (UI.BeginBoundsScope(true))
 			{
-				UI.DrawText("SIMULATION DIAGNOSTICS", theme.FontBold, theme.FontSizeRegular * 1.15f, pos, Anchor.TextCentreLeft, textCol);
-				Next(1.4f);
+				UI.DrawText(
+					"SIMULATION DIAGNOSTICS",
+					theme.FontBold,
+					theme.FontSizeRegular * 1.15f,
+					topLeft,
+					Anchor.TextCentreLeft,
+					textCol);
+
+				Vector2 leftPos = topLeft + Vector2.down * 3.2f;
+				Vector2 rightPos = leftPos + Vector2.right * (columnWidth + columnGap);
+
+				DrawPerformanceColumn(ref leftPos);
+				DrawWaveformColumn(ref rightPos);
+
+				float bottom = Mathf.Min(leftPos.y, rightPos.y) - 0.8f;
+				Vector2 closePos = new(topLeft.x, bottom);
+				bool close = UI.Button(
+					"CLOSE",
+					theme.ButtonTheme,
+					closePos,
+					new Vector2(menuWidth, DrawSettings.ButtonHeight),
+					true,
+					false,
+					true,
+					Anchor.TopLeft);
+
+				if (close || KeyboardShortcuts.CancelShortcutTriggered)
+				{
+					UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
+				}
+
+				Bounds2D bounds = UI.GetCurrentBoundsScope();
+				MenuHelper.DrawReservedMenuPanel(panelID, bounds);
+			}
+
+			void DrawPerformanceColumn(ref Vector2 pos)
+			{
+				UI.DrawText("PERFORMANCE", theme.FontBold, theme.FontSizeRegular, pos, Anchor.TextCentreLeft, textCol);
+				pos.y -= 2.2f;
 
 				int profilerMode = MenuHelper.LabeledOptionsWheel(
 					"Hot-chip profiler",
 					textCol,
 					pos,
-					new Vector2(menuWidth, rowHeight),
+					new Vector2(columnWidth, rowHeight),
 					ID_Profiler,
 					OffOn,
-					12,
+					10,
 					true);
 				SimulationProfiler.Enabled = profilerMode == 1;
-				Next();
+				pos.y -= rowHeight + spacing;
 
 				int benchmarkButton = MenuHelper.DrawButtonPair(
 					SimulationBenchmark.Active ? "CANCEL BENCH" : "START BENCH",
 					"RESET STATS",
 					pos,
-					menuWidth,
+					columnWidth,
 					false,
 					true,
 					true);
+
 				if (benchmarkButton == 0)
 				{
 					if (SimulationBenchmark.Active) SimulationBenchmark.Cancel();
@@ -70,89 +115,264 @@ namespace DLS.Graphics
 
 				SimulationBenchmarkResult benchmark = SimulationBenchmark.Latest;
 				string benchmarkText = SimulationBenchmark.Active
-					? "Benchmark: sampling raw engine compute time..."
+					? "Benchmark: sampling raw engine time..."
 					: benchmark.SampledSteps > 0
-						? $"Benchmark: {benchmark.RawStepsPerSecond:0} steps/s raw | {benchmark.AverageMicrosecondsPerStep:0.###} us/step | max {benchmark.MaxMicrosecondsPerStep:0.###} us"
+						? $"Raw: {benchmark.RawStepsPerSecond:0} steps/s | {benchmark.AverageMicrosecondsPerStep:0.###} us avg | {benchmark.MaxMicrosecondsPerStep:0.###} us max"
 						: "Benchmark: not run";
-				DrawRow(benchmarkText, benchmark.SampledSteps > 0 || SimulationBenchmark.Active ? textCol : dim);
+				DrawInfoRow(ref pos, benchmarkText, benchmark.SampledSteps > 0 || SimulationBenchmark.Active ? textCol : dim);
 
 				SimulationStepProfile last = SimulationProfiler.LastStep;
 				string lastStepText = last.Frame > 0
-					? $"Last step: {last.StepMilliseconds:0.###} ms | gates {last.GateEvaluations:N0} | signals {last.SignalPropagations:N0} | delta {last.DeltaCycles}"
-					: "Last step: profiler has no sample yet";
-				DrawRow(lastStepText, SimulationProfiler.Enabled ? textCol : dim);
+					? $"Step: {last.StepMilliseconds:0.###} ms | gates {last.GateEvaluations:N0} | signals {last.SignalPropagations:N0} | delta {last.DeltaCycles}"
+					: "Step: profiler has no sample";
+				DrawInfoRow(ref pos, lastStepText, SimulationProfiler.Enabled ? textCol : dim);
 
 				string accelerationText = last.Frame > 0
-					? $"Acceleration: LUT {last.CacheHits:N0} | JIT {last.JitHits:N0} | feedback JIT {last.FeedbackJitHits:N0} ({last.FeedbackJitSweeps:N0} sweeps)"
-					: "Acceleration: no profiler sample";
-				DrawRow(accelerationText, SimulationProfiler.Enabled ? textCol : dim);
+					? $"Accel: LUT {last.CacheHits:N0} | JIT {last.JitHits:N0} | FB JIT {last.FeedbackJitHits:N0} / {last.FeedbackJitSweeps:N0} sweeps"
+					: "Accel: no profiler sample";
+				DrawInfoRow(ref pos, accelerationText, SimulationProfiler.Enabled ? textCol : dim);
 
 				string convergence = DeterministicSimulator.LastSettleConverged
 					? "Convergence: OK"
-					: "Convergence: FAILED - " + DeterministicSimulator.LastNonConvergenceDetails;
-				DrawRow(convergence, DeterministicSimulator.LastSettleConverged ? dim : Color.yellow);
+					: "FAILED: " + DeterministicSimulator.LastNonConvergenceDetails;
+				DrawInfoRow(ref pos, convergence, DeterministicSimulator.LastSettleConverged ? dim : Color.yellow);
 
-				Next(0.5f);
+				pos.y -= 0.5f;
 				UI.DrawText("HOT CHIPS", theme.FontBold, theme.FontSizeRegular, pos, Anchor.TextCentreLeft, textCol);
-				Next(1.1f);
+				pos.y -= 2.1f;
 
-				SimulationHotChip[] hot = SimulationProfiler.GetHotChips(5);
+				SimulationHotChip[] hot = SimulationProfiler.GetHotChips(4);
 				if (!SimulationProfiler.Enabled)
 				{
-					DrawRow("Profiler is OFF. Enable it above to collect hot-chip timings.", dim);
+					DrawInfoRow(ref pos, "Profiler is OFF.", dim);
 				}
 				else if (hot.Length == 0)
 				{
-					DrawRow("No hot-chip samples yet.", dim);
+					DrawInfoRow(ref pos, "No samples yet.", dim);
 				}
 				else
 				{
 					for (int i = 0; i < hot.Length; i++)
 					{
 						SimulationHotChip chip = hot[i];
-						DrawRow(
-							$"{i + 1}. {chip.Path} | {chip.ExecutionPath} | {chip.AverageMicroseconds:0.###} us avg | {chip.Evaluations:N0} eval",
+						DrawInfoRow(
+							ref pos,
+							$"{i + 1}. {chip.Path} | {chip.ExecutionPath} | {chip.AverageMicroseconds:0.###} us | {chip.Evaluations:N0} eval",
 							textCol);
 					}
 				}
+			}
 
-				Next(0.7f);
-				bool close = UI.Button(
-					"CLOSE",
-					theme.ButtonTheme,
+			void DrawWaveformColumn(ref Vector2 pos)
+			{
+				UI.DrawText("LOGIC ANALYZER", theme.FontBold, theme.FontSizeRegular, pos, Anchor.TextCentreLeft, textCol);
+				pos.y -= 2.2f;
+
+				int waveformMode = MenuHelper.LabeledOptionsWheel(
+					"Waveform capture",
+					textCol,
 					pos,
-					new Vector2(menuWidth, DrawSettings.ButtonHeight),
+					new Vector2(columnWidth, rowHeight),
+					ID_Waveform,
+					OffOn,
+					10,
+					true);
+				SimulationWaveformRecorder.Enabled = waveformMode == 1;
+				pos.y -= rowHeight + spacing;
+
+				int waveformButton = MenuHelper.DrawButtonPair(
+					"CLEAR SAMPLES",
+					"REMOVE ALL",
+					pos,
+					columnWidth,
+					false,
+					true,
+					true);
+
+				if (waveformButton == 0) SimulationWaveformRecorder.ClearSamples();
+				else if (waveformButton == 1) SimulationWaveformRecorder.ClearAll();
+
+				pos = UI.PrevBounds.BottomLeft + Vector2.down * spacing;
+
+				WaveformProbeInfo[] probes = SimulationWaveformRecorder.GetProbes();
+				if (probes.Length == 0)
+				{
+					DrawInfoRow(ref pos, "No probes. Right-click a pin -> TOGGLE PROBE.", dim);
+					return;
+				}
+
+				int count = Math.Min(4, probes.Length);
+				for (int i = 0; i < count; i++)
+				{
+					DrawProbe(ref pos, probes[i]);
+				}
+
+				if (probes.Length > count)
+				{
+					DrawInfoRow(ref pos, $"+ {probes.Length - count} more probes (remove some to display them)", dim);
+				}
+			}
+
+			void DrawProbe(ref Vector2 pos, WaveformProbeInfo probe)
+			{
+				Vector2 traceTopLeft = pos;
+				UI.DrawPanel(traceTopLeft, new Vector2(columnWidth, traceHeight), rowCol, Anchor.TopLeft);
+				Bounds2D traceBounds = UI.PrevBounds;
+
+				WaveformSample[] samples = SimulationWaveformRecorder.GetSamples(probe.Id);
+				string latest = samples.Length == 0
+					? "--"
+					: FormatState(samples[^1].State, probe.BitCount);
+
+				UI.DrawText(
+					$"{probe.Name}  [{probe.BitCount}b]  now={latest}  samples={probe.SampleCount}",
+					theme.FontRegular,
+					theme.FontSizeRegular * 0.88f,
+					traceBounds.TopLeft + new Vector2(0.8f, -0.8f),
+					Anchor.TextCentreLeft,
+					textCol);
+
+				bool remove = UI.Button(
+					"X",
+					theme.ButtonTheme,
+					traceBounds.TopRight + new Vector2(-0.4f, -0.35f),
+					new Vector2(2.1f, 1.8f),
 					true,
 					false,
 					true,
-					Anchor.TopLeft);
-				if (close || KeyboardShortcuts.CancelShortcutTriggered)
+					Anchor.TopRight);
+
+				if (remove)
 				{
-					UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
+					SimulationWaveformRecorder.RemoveProbe(probe.Id);
+					pos = traceBounds.BottomLeft + Vector2.down * spacing;
+					return;
 				}
 
-				Bounds2D bounds = UI.GetCurrentBoundsScope();
-				MenuHelper.DrawReservedMenuPanel(panelID, bounds);
+				if (samples.Length == 0)
+				{
+					UI.DrawText(
+						"waiting for samples...",
+						theme.FontRegular,
+						theme.FontSizeRegular * 0.85f,
+						traceBounds.Centre + Vector2.down * 0.7f,
+						Anchor.TextCentre,
+						dim);
+				}
+				else if (probe.BitCount == 1)
+				{
+					DrawSingleBitTrace(traceBounds, samples);
+				}
+				else
+				{
+					DrawBusHistory(traceBounds, samples, probe.BitCount);
+				}
+
+				pos = traceBounds.BottomLeft + Vector2.down * spacing;
 			}
 
-			void DrawRow(string text, Color col)
+			void DrawSingleBitTrace(Bounds2D bounds, WaveformSample[] samples)
+			{
+				const int maxSamples = 64;
+				int start = Math.Max(0, samples.Length - maxSamples);
+				int count = samples.Length - start;
+				if (count <= 0) return;
+
+				float left = bounds.Left + 0.8f;
+				float right = bounds.Right - 0.8f;
+				float highY = bounds.Bottom + 3.3f;
+				float lowY = bounds.Bottom + 0.9f;
+				float zY = bounds.Bottom + 2.1f;
+				float step = count <= 1 ? 0 : (right - left) / (count - 1);
+
+				Vector2 previous = new(left, StateY(samples[start].State));
+				for (int i = 1; i < count; i++)
+				{
+					Vector2 next = new(left + i * step, StateY(samples[start + i].State));
+					UI.DrawLine(previous, new Vector2(next.x, previous.y), 0.08f, Color.white * 0.82f);
+					if (Mathf.Abs(previous.y - next.y) > 0.001f)
+					{
+						UI.DrawLine(new Vector2(next.x, previous.y), next, 0.08f, Color.white * 0.82f);
+					}
+					previous = next;
+				}
+
+				UI.DrawText("1", theme.FontRegular, theme.FontSizeRegular * 0.72f, new Vector2(left, highY), Anchor.TextCentreRight, dim);
+				UI.DrawText("Z", theme.FontRegular, theme.FontSizeRegular * 0.72f, new Vector2(left, zY), Anchor.TextCentreRight, dim);
+				UI.DrawText("0", theme.FontRegular, theme.FontSizeRegular * 0.72f, new Vector2(left, lowY), Anchor.TextCentreRight, dim);
+
+				float StateY(uint state)
+				{
+					ushort value = PinState.GetBitTristatedValue(state, 0);
+					return value switch
+					{
+						PinState.LogicHigh => highY,
+						PinState.LogicDisconnected => zY,
+						_ => lowY
+					};
+				}
+			}
+
+			void DrawBusHistory(Bounds2D bounds, WaveformSample[] samples, int bitCount)
+			{
+				const int maxValues = 9;
+				int start = Math.Max(0, samples.Length - maxValues);
+				StringBuilder history = new();
+
+				for (int i = start; i < samples.Length; i++)
+				{
+					if (history.Length > 0) history.Append("  ->  ");
+					history.Append(FormatState(samples[i].State, bitCount));
+				}
+
+				UI.DrawText(
+					history.ToString(),
+					theme.FontRegular,
+					theme.FontSizeRegular * 0.82f,
+					bounds.CentreLeft + new Vector2(0.8f, -1.0f),
+					Anchor.TextCentreLeft,
+					textCol);
+			}
+
+			void DrawInfoRow(ref Vector2 pos, string text, Color col)
 			{
 				MenuHelper.DrawLeftAlignTextWithBackground(
 					text,
 					pos,
-					new Vector2(menuWidth, rowHeight),
+					new Vector2(columnWidth, rowHeight),
 					Anchor.TopLeft,
 					col,
 					rowCol,
 					false,
-					1);
+					0.8f);
 				pos = UI.PrevBounds.BottomLeft + Vector2.down * spacing;
 			}
+		}
 
-			void Next(float multiplier = 1)
+		static string FormatState(uint state, int bitCount)
+		{
+			int width = Math.Max(1, Math.Min(16, bitCount));
+			ushort bits = PinState.GetBitStates(state);
+			ushort tri = PinState.GetTristateFlags(state);
+			uint mask = width >= 16 ? 0xFFFFu : (1u << width) - 1u;
+
+			if (((uint)tri & mask) == mask) return "Z";
+
+			if (((uint)tri & mask) == 0)
 			{
-				pos.y -= (rowHeight + spacing) * multiplier;
+				uint value = (uint)bits & mask;
+				if (width <= 1) return value == 0 ? "0" : "1";
+				return width <= 4 ? $"0x{value:X1}" : $"0x{value:X2}";
 			}
+
+			StringBuilder text = new(width);
+			for (int bit = width - 1; bit >= 0; bit--)
+			{
+				uint bitMask = 1u << bit;
+				if (((uint)tri & bitMask) != 0) text.Append('Z');
+				else text.Append(((uint)bits & bitMask) != 0 ? '1' : '0');
+			}
+			return text.ToString();
 		}
 	}
 }
