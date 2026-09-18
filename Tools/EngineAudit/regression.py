@@ -222,6 +222,32 @@ def test_benchmark_measures_inside_step_without_advancing_extra_steps() -> None:
 
 
 
+def test_waveform_probe_context_menu_is_wired_to_live_simpin() -> None:
+    context = source("Assets/Scripts/Graphics/UI/Menus/ContextMenu.cs")
+
+    assert 'new(Format("TOGGLE PROBE"), ToggleProbe, CanProbePin)' in context
+    assert "viewedSimChip.GetSimPinFromAddress(pin.Address)" in context
+    assert "SimulationWaveformRecorder.TryGetProbeId(simPin" in context
+    assert "SimulationWaveformRecorder.RemoveProbe(existingId);" in context
+    assert "SimulationWaveformRecorder.AddProbe(" in context
+    assert "SimulationWaveformRecorder.Enabled = true;" in context
+
+
+def test_waveform_ui_supports_scalar_and_bus_traces() -> None:
+    menu = source("Assets/Scripts/Graphics/UI/Menus/SimulationDiagnosticsMenu.cs")
+    recorder = source("Assets/Scripts/Simulation/SimulationWaveformRecorder.cs")
+
+    assert '"LOGIC ANALYZER"' in menu
+    assert "SimulationWaveformRecorder.GetProbes()" in menu
+    assert "SimulationWaveformRecorder.GetSamples(probe.Id)" in menu
+    assert "DrawSingleBitTrace(traceBounds, samples)" in menu
+    assert "DrawBusHistory(traceBounds, samples, probe.BitCount)" in menu
+    assert "PinState.GetBitTristatedValue(state, 0)" in menu
+    assert "public readonly int BitCount;" in recorder
+    assert "ResolveBitCount(pin)" in recorder
+
+
+
 TESTS = (
     test_feedback_jit_is_dormant_until_after_first_normal_tick,
     test_feedback_jit_uses_two_delta_buffers,
@@ -237,6 +263,8 @@ TESTS = (
     test_combinational_test_runner_uses_isolated_netlist,
     test_replay_captures_authoritative_state_and_verifies_outputs,
     test_benchmark_measures_inside_step_without_advancing_extra_steps,
+    test_waveform_probe_context_menu_is_wired_to_live_simpin,
+    test_waveform_ui_supports_scalar_and_bus_traces,
 )
 
 
