@@ -86,6 +86,9 @@ namespace DLS.Game
 				Prefs_SimTargetStepsPerSecond = 1000,
 				Prefs_SimStepsPerClockTick = 250,
 				Prefs_SimPaused = false,
+				Prefs_ExperimentalNativeCMode = 0,
+				Prefs_ExperimentalEngineDiagnostics = false,
+				Prefs_ExperimentalNativeCValidation = false,
 				AllCustomChipNames = Array.Empty<string>(),
 				StarredList = BuiltinCollectionCreator.GetDefaultStarredList().ToList(),
 				ChipCollections = new List<ChipCollection>(BuiltinCollectionCreator.CreateDefaultChipCollections())
