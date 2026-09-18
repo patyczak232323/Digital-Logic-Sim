@@ -12,7 +12,7 @@ namespace DLS.Graphics
 	{
 		const float entrySpacing = 0.5f;
 		const float menuWidth = 55;
-		const float verticalOffset = 34;
+		const float verticalOffset = 36;
 
 		public const int DisplayMode_Always = 0;
 		public const int DisplayMode_OnHover = 1;
@@ -148,6 +148,7 @@ namespace DLS.Graphics
 					DrawReadOnlyValue(
 						"C / JIT evaluations",
 						$"{DLS.Simulation.NativeCombinationalBackend.NativeEvaluationCount} / {DLS.Simulation.NativeCombinationalBackend.DynamicJitEvaluationCount}");
+					DrawReadOnlyValue("Last engine event", GetLatestEngineEvent());
 				}
 
 				// Draw cancel/confirm buttons
@@ -217,6 +218,24 @@ namespace DLS.Graphics
 				UI.DrawPanel(valueRight, settingFieldSize, new Color(0.18f, 0.18f, 0.18f), Anchor.CentreRight);
 				UI.DrawText(value ?? string.Empty, theme.FontBold, theme.FontSizeRegular, valueRight + new Vector2(inputTextPad - settingFieldSize.x, 0), Anchor.TextCentreLeft, Color.white * 0.8f);
 				AddSpacing();
+			}
+
+			string GetLatestEngineEvent()
+			{
+				string diagnostic = DLS.Simulation.EngineDiagnostics.LatestEvent;
+				if (string.IsNullOrWhiteSpace(diagnostic) || diagnostic == "none") return "none";
+
+				string[] lines = diagnostic.Split('\n');
+				for (int i = 0; i < lines.Length; i++)
+				{
+					const string eventPrefix = "event=";
+					if (lines[i].StartsWith(eventPrefix, StringComparison.Ordinal))
+					{
+						return lines[i].Substring(eventPrefix.Length);
+					}
+				}
+
+				return lines.Length > 0 ? lines[0] : "none";
 			}
 
 			string GetNativeCStatus()
