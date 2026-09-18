@@ -708,6 +708,7 @@ namespace DLS.Simulation
 		readonly CombinationalJitCompiler.NativeBlock[] blocks;
 		readonly CombinationalJitCompiler.NativeOutputWriter outputWriter;
 		readonly NativeCombinationalProgram nativeProgram;
+		readonly uint[] validationOutputs;
 
 		public readonly int ScratchCount;
 		public readonly int InputCount;
@@ -728,6 +729,7 @@ namespace DLS.Simulation
 			this.blocks = blocks;
 			this.outputWriter = outputWriter;
 			this.nativeProgram = nativeProgram;
+			validationOutputs = new uint[outputCount];
 			ScratchCount = scratchCount;
 			InputCount = inputCount;
 			OutputCount = outputCount;
@@ -744,6 +746,22 @@ namespace DLS.Simulation
 			    nativeProgram.TryRun(scratch, outputs))
 			{
 				NativeCombinationalBackend.RecordNativeEvaluation();
+
+				if (!NativeCombinationalBackend.ValidationEnabled) return;
+
+				Array.Copy(outputs, validationOutputs, Math.Min(outputs.Length, validationOutputs.Length));
+				NativeCombinationalBackend.RecordDynamicJitEvaluation();
+				for (int i = 0; i < blocks.Length; i++) blocks[i](scratch);
+				outputWriter(scratch, outputs);
+
+				int compareCount = Math.Min(outputs.Length, validationOutputs.Length);
+				for (int i = 0; i < compareCount; i++)
+				{
+					if (outputs[i] == validationOutputs[i]) continue;
+					EngineDiagnostics.Record(
+						$"event=native-c-jit-mismatch\noutput={i}\nnative={validationOutputs[i]}\njit={outputs[i]}");
+					break;
+				}
 				return;
 			}
 
