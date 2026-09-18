@@ -22,6 +22,12 @@ namespace DLS.Description
 		public int Prefs_SimTargetStepsPerSecond;
 		public int Prefs_SimStepsPerClockTick;
 
+		// Experimental engine preferences. Missing fields in older project files
+		// deserialize to zero/false, which intentionally means "disabled".
+		public int Prefs_ExperimentalNativeCMode;
+		public bool Prefs_ExperimentalEngineDiagnostics;
+		public bool Prefs_ExperimentalNativeCValidation;
+
 		// List of all player-created chips (in order of creation -- oldest first)
 		public string[] AllCustomChipNames;
 
