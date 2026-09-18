@@ -74,6 +74,7 @@ namespace DLS.Game
 			ActiveProject = this;
 			this.description = description;
 			this.chipLibrary = chipLibrary;
+			DeterministicSimulator.DiagnosticSink = EngineDiagnostics.Record;
 			SearchPopup.ClearRecentChips();
 		}
 
@@ -511,6 +512,7 @@ namespace DLS.Game
 
 			while (simThreadActive)
 			{
+				DeterministicSimulator.DiagnosticsEnabled = description.Prefs_ExperimentalEngineDiagnostics;
 				Simulator.ApplyModifications();
 
 				// Power-on/topology settling is not a simulation tick and must also run
@@ -612,6 +614,7 @@ namespace DLS.Game
 
 		void Debug_RunMainThreadSimStep()
 		{
+			DeterministicSimulator.DiagnosticsEnabled = description.Prefs_ExperimentalEngineDiagnostics;
 			Simulator.stepsPerClockTransition = stepsPerClockTransition;
 			Simulator.ApplyModifications();
 			Simulator.SetInspectionChip(ViewedSimChip);
