@@ -31,9 +31,12 @@ Current `main` extends v0.2.0 with:
 - opt-in ring-buffer waveform recorder backend
 - actionable non-convergence summaries with suspect chip/pin paths
 - isolated combinational Custom Chip test-vector runner
-- CI regression checks plus a standalone C# simulation compile audit
+- integrated `MENU -> SIM DIAGNOSTICS` panel with hot-chip profiling, raw benchmark, pin probes/logic analyzer and deterministic replay
+- CI regression checks, native runtime execution tests, whole-repo C# syntax audit and full 8-bit computer stress regressions
 
 The released v0.2.0 binaries predate these development changes.
+
+See `Docs/SIMULATION_DIAGNOSTICS.md` for usage and current engine diagnostics.
 
 ## Downloads
 
