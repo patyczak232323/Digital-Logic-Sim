@@ -72,8 +72,8 @@ namespace DLS.Graphics
 
 		static int selectedProjectIndex;
 
-		static readonly string authorString = "Created by: Sebastian Lague";
-		static readonly string versionString = $"Version: {Main.DLSVersion} ({Main.LastUpdatedString})";
+		static readonly string authorString = "Original by Sebastian Lague | Rewired by patyczak232323";
+		static readonly string versionString = $"Rewired {Main.RewiredVersion} | DLS format {Main.DLSVersion}";
 		static string SelectedProjectName => allProjectDescriptions[selectedProjectIndex].ProjectName;
 
 		static string FormatButtonString(string s) => capitalize ? s.ToUpper() : s;
