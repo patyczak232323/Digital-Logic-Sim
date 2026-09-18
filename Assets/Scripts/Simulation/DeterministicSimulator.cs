@@ -23,6 +23,9 @@ namespace DLS.Simulation
 		public static int LastCacheHits { get; private set; }
 		public static int LastCacheMisses { get; private set; }
 		public static int LastJitHits { get; private set; }
+		public static int LastFeedbackJitHits { get; private set; }
+		public static int LastFeedbackJitSweeps { get; private set; }
+		public static int LastFeedbackJitFallbacks { get; private set; }
 		public static bool LastSettleConverged { get; private set; } = true;
 
 		static readonly Stopwatch stopwatch = Stopwatch.StartNew();
@@ -122,6 +125,9 @@ namespace DLS.Simulation
 			LastCacheHits = 0;
 			LastCacheMisses = 0;
 			LastJitHits = 0;
+			LastFeedbackJitHits = 0;
+			LastFeedbackJitSweeps = 0;
+			LastFeedbackJitFallbacks = 0;
 			LastSettleConverged = true;
 
 			ApplyExternalInputs(inputPins);
@@ -155,6 +161,11 @@ namespace DLS.Simulation
 				// Edge-sensitive built-ins start from the already-settled level.
 				// The initialization itself is not an edge.
 				SynchronizeSequentialEdgeState();
+
+				// Feedback JIT is intentionally dormant during power-on. Seed its two
+				// delta buffers from the fixed point found by the proven solver, then
+				// rebuild topology on the next step so safe cyclic custom chips collapse.
+				if (SynchronizeFeedbackExecutors(rootSimChip)) topologyDirty = true;
 				needsPowerOnSettle = false;
 			}
 			else
@@ -182,6 +193,9 @@ namespace DLS.Simulation
 			LastCacheHits = 0;
 			LastCacheMisses = 0;
 			LastJitHits = 0;
+			LastFeedbackJitHits = 0;
+			LastFeedbackJitSweeps = 0;
+			LastFeedbackJitFallbacks = 0;
 			LastSettleConverged = true;
 
 			EnsureInitialized(rootSimChip, inputPins, newAudioState);
@@ -226,6 +240,10 @@ namespace DLS.Simulation
 		public static void SetInspectionChip(SimChip chip)
 		{
 			if (ReferenceEquals(inspectionChip, chip)) return;
+
+			// A collapsed feedback executor owns the authoritative internal gate state.
+			// Materialize it before expanding a hierarchy for editor inspection.
+			MaterializeOutermostFeedbackState(topologyRoot);
 			inspectionChip = chip;
 			topologyDirty = true;
 		}
@@ -281,6 +299,9 @@ namespace DLS.Simulation
 			LastCacheHits = 0;
 			LastCacheMisses = 0;
 			LastJitHits = 0;
+			LastFeedbackJitHits = 0;
+			LastFeedbackJitSweeps = 0;
+			LastFeedbackJitFallbacks = 0;
 			LastSettleConverged = true;
 		}
 
@@ -496,7 +517,9 @@ namespace DLS.Simulation
 				allowMemoCache &&
 				chip.ChipType == ChipType.Custom &&
 				!inspectionPath.Contains(chip) &&
-				((chip.MemoCache != null && chip.MemoCache.Ready) || chip.CompiledExecutor != null);
+				((chip.MemoCache != null && chip.MemoCache.Ready) ||
+				 chip.CompiledExecutor != null ||
+				 (chip.FeedbackExecutor != null && chip.FeedbackExecutor.Ready));
 
 			bool isCombinational =
 				acceleratedCustom ||
@@ -1063,6 +1086,31 @@ namespace DLS.Simulation
 					for (int i = 0; i < count; i++) StageOutput(outputStart + i, compiledOutputs[i]);
 					return;
 				}
+
+				if (chip.FeedbackExecutor != null && chip.FeedbackExecutor.Ready)
+				{
+					bool converged = chip.FeedbackExecutor.Evaluate(
+						chip,
+						out uint[] feedbackOutputs,
+						out int sweepCount);
+
+					LastFeedbackJitHits++;
+					LastFeedbackJitSweeps += sweepCount;
+
+					int count = Math.Min(feedbackOutputs.Length, chip.OutputPins.Length);
+					for (int i = 0; i < count; i++) StageOutput(outputStart + i, feedbackOutputs[i]);
+
+					if (!converged)
+					{
+						LastFeedbackJitFallbacks++;
+						LastSettleConverged = false;
+						TraceFeedbackJitFallback(chip, sweepCount);
+						chip.FeedbackExecutor.Disable();
+						topologyDirty = true;
+					}
+
+					return;
+				}
 			}
 
 			switch (chip.ChipType)
@@ -1368,6 +1416,43 @@ namespace DLS.Simulation
 				PinState.FirstBitHigh(chip.InputPins[clockInputIndex].State) ? 1u : 0u;
 		}
 
+		static bool SynchronizeFeedbackExecutors(SimChip chip)
+		{
+			if (chip == null) return false;
+
+			bool changed = false;
+			for (int i = 0; i < chip.SubChips.Length; i++)
+			{
+				changed |= SynchronizeFeedbackExecutors(chip.SubChips[i]);
+			}
+
+			CompiledFeedbackExecutor executor = chip.FeedbackExecutor;
+			if (executor != null && !executor.Ready && !executor.Disabled)
+			{
+				executor.SynchronizeFromChipTree();
+				changed |= executor.Ready;
+			}
+
+			return changed;
+		}
+
+		static void MaterializeOutermostFeedbackState(SimChip chip)
+		{
+			if (chip == null) return;
+
+			CompiledFeedbackExecutor executor = chip.FeedbackExecutor;
+			if (executor != null && executor.Ready)
+			{
+				executor.MaterializeState();
+				return;
+			}
+
+			for (int i = 0; i < chip.SubChips.Length; i++)
+			{
+				MaterializeOutermostFeedbackState(chip.SubChips[i]);
+			}
+		}
+
 		static void MarkDirty(int chipIndex)
 		{
 			if (chipIndex < 0 || dirtyChipFlags[chipIndex]) return;
@@ -1485,6 +1570,19 @@ namespace DLS.Simulation
 				$"chipPath={GetChipPath(chip)}\n" +
 				$"chipID={chip.ID}\n" +
 				$"evaluations={MaxEvaluationsPerChipPerSettle}");
+		}
+
+		static void TraceFeedbackJitFallback(SimChip chip, int sweeps)
+		{
+			if (!DiagnosticsEnabled || DiagnosticSink == null) return;
+
+			DiagnosticSink(
+				$"frame={Simulator.simulationFrame}\n" +
+				$"event=feedback-jit-non-convergent\n" +
+				$"chipPath={GetChipPath(chip)}\n" +
+				$"chipID={chip.ID}\n" +
+				$"sweeps={sweeps}\n" +
+				"action=disable-jit-and-expand-next-step");
 		}
 	}
 }
