@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using DLS.Description;
 using DLS.Game;
+using DLS.Simulation;
 using Seb.Helpers;
 using Seb.Types;
 using Seb.Vis;
@@ -32,6 +33,7 @@ namespace DLS.Graphics
 		static readonly MenuEntry deleteEntry = new(Format("DELETE"), Delete, CanDelete);
 		static readonly MenuEntry openChipEntry = new(Format("OPEN"), OpenChip, CanOpenChip);
 		static readonly MenuEntry labelChipEntry = new(Format("LABEL"), OpenChipLabelPopup, CanLabelChip);
+		static readonly MenuEntry toggleProbeEntry = new(Format("TOGGLE PROBE"), ToggleProbe, CanProbePin);
 
 		static readonly MenuEntry[] entries_customSubchip =
 		{
@@ -78,19 +80,22 @@ namespace DLS.Graphics
 		};
 
 
-		static readonly MenuEntry[] entries_subChipOutput = pinColEntries;
+		static readonly MenuEntry[] entries_subChipOutput =
+			new[] { toggleProbeEntry, dividerMenuEntry }.Concat(pinColEntries).ToArray();
 
 		static readonly MenuEntry[] entries_inputDevPin = new[]
 		{
 			new(Format("EDIT"), OpenPinEditMenu, CanEditCurrentChip),
 			new(Format("DELETE"), Delete, CanDelete),
+			toggleProbeEntry,
 			dividerMenuEntry
 		}.Concat(pinColEntries).ToArray();
 
 		static readonly MenuEntry[] entries_outputDevPin =
 		{
 			entries_inputDevPin[0],
-			entries_inputDevPin[1]
+			entries_inputDevPin[1],
+			toggleProbeEntry
 		};
 
 		static readonly MenuEntry[] entries_wire =
@@ -340,6 +345,59 @@ namespace DLS.Graphics
 
 		static bool CanDelete() => Project.ActiveProject.CanEditViewedChip;
 		static bool CanFlipBus() => Project.ActiveProject.CanEditViewedChip;
+
+		static bool CanProbePin()
+		{
+			return TryGetContextSimPin(out _);
+		}
+
+		static void ToggleProbe()
+		{
+			if (!(interactionContext is PinInstance pin)) return;
+			if (!TryGetContextSimPin(out SimPin simPin)) return;
+
+			if (SimulationWaveformRecorder.TryGetProbeId(simPin, out int existingId))
+			{
+				SimulationWaveformRecorder.RemoveProbe(existingId);
+				return;
+			}
+
+			string ownerName = pin.parent switch
+			{
+				SubChipInstance subchip => subchip.Description?.Name ?? "CHIP",
+				DevPinInstance => "I/O",
+				_ => "PIN"
+			};
+
+			string pinName = string.IsNullOrWhiteSpace(pin.Name)
+				? $"PIN {simPin.ID}"
+				: pin.Name;
+
+			SimulationWaveformRecorder.AddProbe($"{ownerName}: {pinName}", simPin);
+			SimulationWaveformRecorder.Enabled = true;
+		}
+
+		static bool TryGetContextSimPin(out SimPin simPin)
+		{
+			simPin = null;
+			if (!(interactionContext is PinInstance pin)) return false;
+
+			try
+			{
+				SimChip viewedSimChip = Project.ActiveProject?.ViewedChip?.SimChip;
+				if (viewedSimChip == null) return false;
+
+				simPin = viewedSimChip.GetSimPinFromAddress(pin.Address);
+				return simPin != null;
+			}
+			catch
+			{
+				// The editor and simulation thread can briefly disagree during a live
+				// structural edit. In that case simply disable probing for this menu open.
+				simPin = null;
+				return false;
+			}
+		}
 
 		static bool CanSetCol()
 		{
