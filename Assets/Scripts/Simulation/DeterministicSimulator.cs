@@ -231,6 +231,7 @@ namespace DLS.Simulation
 				feedbackActivationPending = false;
 			}
 
+			SimulationWaveformRecorder.Capture(Simulator.simulationFrame);
 			UpdateAudioState();
 			EndProfilingStep();
 		}
@@ -316,6 +317,7 @@ namespace DLS.Simulation
 			LastFeedbackJitFallbacks = 0;
 			LastSettleConverged = true;
 			SimulationProfiler.Reset();
+			SimulationWaveformRecorder.ClearAll();
 		}
 
 		public static void RegisterDiagnosticPaths(SimChip root, ChipDescription rootDescription, ChipLibrary library)
