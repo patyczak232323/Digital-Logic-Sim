@@ -29,7 +29,7 @@ jobs:
         run: test "$(cat VERSION)" = "0.3.0"
 
       - name: Diff hygiene
-        run: git diff --check HEAD^ HEAD || true
+        run: git diff --check
 
       - name: Engine audit regressions
         run: python3 Tools/EngineAudit/regression.py
