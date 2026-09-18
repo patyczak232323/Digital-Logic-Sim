@@ -11,9 +11,13 @@ namespace DLS.Game
 {
 	public static class Main
 	{
+		// Keep the upstream DLS format version separate from the Rewired release version.
+		// Project compatibility continues to use DLS 2.1.6 semantics.
 		public static readonly Version DLSVersion = new(2, 1, 6);
 		public static readonly Version DLSVersion_EarliestCompatible = new(2, 0, 0);
 		public const string LastUpdatedString = "5 May 2025";
+		public const string RewiredVersion = "0.3.0";
+		public const string RewiredReleaseDate = "18 Sep 2026";
 		public static AppSettings ActiveAppSettings;
 
 		public static Project ActiveProject { get; private set; }
