@@ -204,6 +204,7 @@ namespace DLS.Simulation
 			LastNonConvergenceDetails = string.Empty;
 
 			EnsureInitialized(rootSimChip, inputPins, newAudioState);
+			if (rootSimChip != null) SimulationReplayRecorder.CaptureStepStart(rootSimChip, inputPins);
 			if (rootSimChip == null)
 			{
 				UpdateAudioState();
@@ -235,6 +236,7 @@ namespace DLS.Simulation
 			}
 
 			SimulationWaveformRecorder.Capture(Simulator.simulationFrame);
+			SimulationReplayRecorder.CaptureStepEnd(rootSimChip);
 			UpdateAudioState();
 			EndProfilingStep();
 		}
@@ -322,6 +324,7 @@ namespace DLS.Simulation
 			LastNonConvergenceDetails = string.Empty;
 			SimulationProfiler.Reset();
 			SimulationWaveformRecorder.ClearAll();
+			SimulationReplayRecorder.Reset();
 		}
 
 		public static void RegisterDiagnosticPaths(SimChip root, ChipDescription rootDescription, ChipLibrary library)
@@ -1498,6 +1501,38 @@ namespace DLS.Simulation
 			}
 
 			return changed;
+		}
+
+		internal static void MaterializeStateForSnapshot(SimChip chip)
+		{
+			MaterializeOutermostFeedbackState(chip);
+		}
+
+		internal static void PrepareForSnapshotRestore(SimChip root)
+		{
+			DisableFeedbackExecutorsRecursive(root);
+			topologyRoot = root;
+			topologyDirty = true;
+			needsInitialPropagation = true;
+			needsPowerOnSettle = false;
+			feedbackActivationPending = false;
+			ClearWorkQueues();
+		}
+
+		static void DisableFeedbackExecutorsRecursive(SimChip chip)
+		{
+			if (chip == null) return;
+
+			if (chip.FeedbackExecutor != null)
+			{
+				chip.FeedbackExecutor.MaterializeState();
+				chip.FeedbackExecutor = null;
+			}
+
+			for (int i = 0; i < chip.SubChips.Length; i++)
+			{
+				DisableFeedbackExecutorsRecursive(chip.SubChips[i]);
+			}
 		}
 
 		static void MaterializeOutermostFeedbackState(SimChip chip)
