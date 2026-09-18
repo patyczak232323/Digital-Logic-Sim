@@ -553,7 +553,8 @@ def test_source_integration_static() -> None:
 
     required_solver_tokens = (
         "SettleCombinational",
-        "PrimeInitialCombinationalState",
+        "PowerOnAsynchronousSettle",
+        "FullDeterministicResettle",
         "maxDeltaCycles",
         "ResolveDrivenState",
         "AdvanceSequentialComponents",
@@ -579,14 +580,28 @@ def test_source_integration_static() -> None:
 
     assert "sourceIndices.Length" not in solver, "stale jagged-adjacency reference breaks the CSR build"
 
-    assert "RandomBool()" not in solver
-    assert "rng.Next" not in solver
-    assert "HashSet<SimPin>" not in solver
-    assert "HashSet<SimChip>" not in solver
-    assert "Dictionary<SimPin, SimPin[]>" not in solver
-    assert "DeterministicSimulator.RunSimulationStep" in facade
+    # Random scheduling is allowed only in the bounded power-on recovery path.
+    # The ordinary deterministic settle/propagation hot path must remain random-free.
+    settle = extract_method(solver, "static (bool converged, int deltaCycles) SettleCombinational(")
+    queue_fanout = extract_method(solver, "static void QueueFanout(")
+    drain = extract_method(solver, "static void DrainTargetQueue(")
+    hot_path = settle + queue_fanout + drain
+    assert "RandomBool()" not in hot_path
+    assert "rng.Next" not in hot_path
+    assert "HashSet<SimPin>" not in hot_path
+    assert "HashSet<SimChip>" not in hot_path
+    assert "Dictionary<SimPin, SimPin[]>" not in hot_path
+
+    # Release architecture is compatibility-first: stateful/feedback roots take the
+    # upstream timing path before the deterministic combinational fast path.
+    assert "if (UseLegacyCompatibilityEngine(rootSimChip))" in facade
+    compat = facade.index("DLS.Simulation.Simulator.RunSimulationStep")
+    fast = facade.index("DeterministicSimulator.RunSimulationStep")
+    assert compat < fast
+
     assert "bool topologyChanged = DLS.Simulation.Simulator.ApplyModifications();" in facade
-    assert "if (topologyChanged) DeterministicSimulator.InvalidateTopology();" in facade
+    assert "forceLegacyCompatibilityAfterEdit = true;" in facade
+    assert "DeterministicSimulator.InvalidateTopology();" in facade
     assert "pendingTopologyModification" not in facade
 
 
