@@ -227,6 +227,20 @@ def test_register_bits_must_not_be_order_dependent() -> None:
     assert capture([3, 7, 0, 5, 2, 6, 1, 4]) == data
 
 
+def test_native_c_backend_is_opt_in_and_keeps_dynamic_jit_fallback() -> None:
+    native = source("Assets/Scripts/Simulation/NativeCombinationalBackend.cs")
+    jit = source("Assets/Scripts/Simulation/CombinationalJitCompiler.cs")
+
+    assert 'Environment.GetEnvironmentVariable("DLS_NATIVE_FAST") != "1"' in native
+    assert 'NativeCombinationalBackend.TryCreate(' in jit
+
+    program = extract_method(jit, "public void Run(uint[] scratch, uint[] outputs)")
+    native_try = program.index("nativeProgram != null && nativeProgram.TryRun")
+    managed_fallback = program.index("for (int i = 0; i < blocks.Length; i++)")
+    assert native_try < managed_fallback
+    assert "outputWriter(scratch, outputs);" in program
+
+
 TESTS = (
     test_paused_inspection_is_synchronized_before_initialization,
     test_topology_edit_recovery_is_one_shot_and_nonconvergence_only,
@@ -239,6 +253,7 @@ TESTS = (
     test_compatibility_classifier_guards_register_building_blocks,
     test_eight_bit_register_reference_model_captures_only_on_rising_edge,
     test_register_bits_must_not_be_order_dependent,
+    test_native_c_backend_is_opt_in_and_keeps_dynamic_jit_fallback,
 )
 
 
