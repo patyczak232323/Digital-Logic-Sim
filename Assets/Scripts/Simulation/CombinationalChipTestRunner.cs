@@ -113,11 +113,11 @@ namespace DLS.Simulation
 			SimChip chip;
 			try
 			{
-				chip = Simulator.BuildSimChip(description, library);
+				chip = BuildIsolatedChip(description, library);
 			}
 			catch (Exception ex)
 			{
-				return Unsupported("could not build chip: " + ex.GetType().Name + ": " + ex.Message);
+				return Unsupported("could not build isolated chip: " + ex.GetType().Name + ": " + ex.Message);
 			}
 
 			List<ChipTestFailure> failures = new();
@@ -211,6 +211,54 @@ namespace DLS.Simulation
 
 			ChipTestRunResult Unsupported(string reason) =>
 				new(false, reason, vectors?.Count ?? 0, 0, Array.Empty<ChipTestFailure>());
+		}
+		static SimChip BuildIsolatedChip(ChipDescription root, ChipLibrary library)
+		{
+			HashSet<string> active = new(ChipDescription.NameComparer);
+			return BuildRecursive(root, -1, null);
+
+			SimChip BuildRecursive(ChipDescription description, int id, uint[] internalState)
+			{
+				if (description == null) throw new InvalidOperationException("null chip description");
+
+				string name = description.Name ?? string.Empty;
+				if (!active.Add(name))
+				{
+					throw new InvalidOperationException("recursive chip dependency: " + name);
+				}
+
+				try
+				{
+					SubChipDescription[] subDescriptions =
+						description.SubChips ?? Array.Empty<SubChipDescription>();
+					SimChip[] children =
+						subDescriptions.Length == 0 ? Array.Empty<SimChip>() : new SimChip[subDescriptions.Length];
+
+					for (int i = 0; i < subDescriptions.Length; i++)
+					{
+						SubChipDescription sub = subDescriptions[i];
+						if (!library.TryGetChipDescription(sub.Name, out ChipDescription childDescription))
+						{
+							throw new InvalidOperationException("missing subchip description: " + sub.Name);
+						}
+
+						children[i] = BuildRecursive(childDescription, sub.ID, sub.InternalData);
+					}
+
+					SimChip chip = new(description, id, internalState, children);
+					WireDescription[] wires = description.Wires ?? Array.Empty<WireDescription>();
+					for (int i = 0; i < wires.Length; i++)
+					{
+						chip.AddConnection(wires[i].SourcePinAddress, wires[i].TargetPinAddress);
+					}
+
+					return chip;
+				}
+				finally
+				{
+					active.Remove(name);
+				}
+			}
 		}
 	}
 }
