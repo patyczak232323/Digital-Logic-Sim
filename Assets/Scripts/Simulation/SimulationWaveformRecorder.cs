@@ -99,6 +99,7 @@ namespace DLS.Simulation
 
 				int id = nextId++;
 				probes.Add(id, new Probe(id, string.IsNullOrWhiteSpace(name) ? $"PIN {pin.ID}" : name, pin, capacity));
+				DeterministicSimulator.InvalidateTopology();
 				return id;
 			}
 		}
@@ -130,7 +131,12 @@ namespace DLS.Simulation
 
 		public static bool RemoveProbe(int id)
 		{
-			lock (sync) return probes.Remove(id);
+			lock (sync)
+			{
+				bool removed = probes.Remove(id);
+				if (removed) DeterministicSimulator.InvalidateTopology();
+				return removed;
+			}
 		}
 
 		public static void ClearSamples()
@@ -149,8 +155,10 @@ namespace DLS.Simulation
 		{
 			lock (sync)
 			{
+				bool hadProbes = probes.Count > 0;
 				probes.Clear();
 				nextId = 1;
+				if (hadProbes) DeterministicSimulator.InvalidateTopology();
 			}
 		}
 
