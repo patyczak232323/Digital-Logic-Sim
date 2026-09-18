@@ -239,6 +239,8 @@ def test_native_c_backend_is_menu_selectable_and_keeps_dynamic_jit_fallback() ->
     assert '"All supported"' in prefs
     assert "Prefs_ExperimentalEngineDiagnostics" in project_desc
     assert '"Engine diagnostics"' in prefs
+    assert "Prefs_ExperimentalNativeCValidation" in project_desc
+    assert '"C/JIT cross-check"' in prefs
 
     # Native mode is selected by the project preference and can only be Off/NAND/All.
     assert "Prefs_ExperimentalNativeCMode" in native
@@ -252,6 +254,8 @@ def test_native_c_backend_is_menu_selectable_and_keeps_dynamic_jit_fallback() ->
     assert native_try < managed_fallback
     assert "RecordNativeEvaluation" in program
     assert "RecordDynamicJitEvaluation" in program
+    assert "NativeCombinationalBackend.ValidationEnabled" in program
+    assert "native-c-jit-mismatch" in program
     assert "outputWriter(scratch, outputs);" in program
 
 
