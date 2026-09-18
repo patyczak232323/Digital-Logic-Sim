@@ -103,5 +103,18 @@ namespace DLS.Game
     public class ChipLibrary
     {
         public ChipDescription GetChipDescription(string name) => new ChipDescription { Name = name };
+        public bool TryGetChipDescription(string name, out ChipDescription description)
+        {
+            description = GetChipDescription(name);
+            return description != null;
+        }
+    }
+}
+
+namespace DLS.SaveSystem
+{
+    public static class SavePaths
+    {
+        public static string GetProjectPath(string projectName) => projectName ?? string.Empty;
     }
 }
