@@ -23,6 +23,7 @@ namespace DLS.Simulation
 		public SimChip[] SubChips = Array.Empty<SimChip>();
 		internal CombinationalChipMemoCache MemoCache;
 		internal CompiledChipExecutor CompiledExecutor;
+		internal CompiledFeedbackExecutor FeedbackExecutor;
 
 
 		public SimChip()
