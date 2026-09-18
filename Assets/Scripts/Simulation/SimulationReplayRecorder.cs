@@ -188,6 +188,14 @@ namespace DLS.Simulation
 
 		public static bool Enabled => enabled;
 
+		public static int RecordedFrameCount
+		{
+			get
+			{
+				lock (sync) return frames.Count;
+			}
+		}
+
 		public static int MaxFrames
 		{
 			get => maxFrames;
