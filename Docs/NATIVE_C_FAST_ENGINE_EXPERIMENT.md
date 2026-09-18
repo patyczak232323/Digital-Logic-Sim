@@ -32,19 +32,24 @@ The native test harness checks:
 ## Benchmark
 
 GitHub Actions Ubuntu runner, .NET 8 benchmark harness, 4,096-node acyclic NAND DAG,
-20,000 evaluations:
+20,000 evaluations per round. Final comparison uses the median of 7 rounds and alternates
+execution order to reduce turbo/thermal/scheduler bias:
 
-| implementation | time |
+| implementation | median time |
 | --- | ---: |
-| managed compact interpreter | 165.729 ms |
-| DynamicMethod JIT (current fast path style) | 71.104 ms |
-| optimized native C | 75.790 ms |
+| managed compact interpreter | 113.743 ms |
+| DynamicMethod JIT (current fast path style) | 61.720 ms |
+| optimized native C | 75.628 ms |
 
-Native C was about **2.19x faster** than the managed interpreter, but about **6.6% slower**
-than DynamicMethod JIT on this runner.
+Observed ranges were 113.357–195.075 ms (managed interpreter), 61.612–71.562 ms
+(DynamicMethod JIT), and 75.510–77.558 ms (native C).
 
-Earlier C layouts measured 151.156 ms and 96.339 ms. Compact bytecode plus a direct
-NAND hot loop reduced that to 75.790 ms.
+Native C was about **1.50x faster** than the managed interpreter, but the current
+DynamicMethod JIT had about **1.23x the throughput of native C** on this runner.
+
+Earlier native C layouts measured 151.156 ms and 96.339 ms in single-run tests.
+Compact bytecode plus a direct connected-NAND hot loop reduced the native result to
+a stable ~75–78 ms range.
 
 This does not prove the result will be identical under Unity's Mono runtime. The native
 backend therefore remains opt-in until an actual Unity build is benchmarked.
