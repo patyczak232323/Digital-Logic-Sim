@@ -75,9 +75,10 @@ def test_runtime_edits_materialize_feedback_state_before_invalidation() -> None:
     sim = source("Assets/Scripts/Simulation/Simulator.cs")
     apply = extract_method(sim, "public static bool ApplyModifications()")
 
+    active_guard = apply.index("if (invalidate.FeedbackExecutor.RuntimeActive)")
     materialize = apply.index("invalidate.FeedbackExecutor.MaterializeState();")
     clear = apply.index("invalidate.FeedbackExecutor = null;")
-    assert materialize < clear
+    assert active_guard < materialize < clear
 
 
 def test_acceleration_priority_is_lut_then_acyclic_jit_then_feedback_jit() -> None:
@@ -297,6 +298,33 @@ def test_feedback_jit_skips_stable_unchanged_input_ticks() -> None:
 
 
 
+def test_feedback_state_ownership_uses_runtime_active_not_ready() -> None:
+    sim = source("Assets/Scripts/Simulation/DeterministicSimulator.cs")
+    jit = source("Assets/Scripts/Simulation/FeedbackJitCompiler.cs")
+
+    ensure = extract_method(sim, "static void EnsureTopology(")
+    collect = extract_method(sim, "static void CollectTopologyRecursive(")
+    materialize = extract_method(sim, "static void MaterializeOutermostFeedbackState(")
+    synchronize = extract_method(sim, "static bool SynchronizeFeedbackExecutors(")
+
+    assert "public bool RuntimeActive { get; private set; }" in jit
+    assert "SetRuntimeActive(bool active)" in jit
+
+    assert "MaterializeOutermostFeedbackState(topologyRoot);" in ensure
+    assert "SetFeedbackRuntimeActiveRecursive(root, false);" in ensure
+
+    assert "!needsPowerOnSettle" in collect
+    assert "chip.FeedbackExecutor.SynchronizeFromChipTree();" in collect
+    assert "chip.FeedbackExecutor.SetRuntimeActive(true);" in collect
+
+    assert "executor != null && executor.RuntimeActive" in materialize
+
+    # Activation after power-on must refresh even a previously-ready buffer.
+    assert "executor != null && !executor.Disabled" in synchronize
+    assert "executor.SynchronizeFromChipTree();" in synchronize
+
+
+
 TESTS = (
     test_feedback_jit_is_dormant_until_after_first_normal_tick,
     test_feedback_jit_uses_two_delta_buffers,
@@ -317,6 +345,7 @@ TESTS = (
     test_probes_keep_their_signal_path_out_of_collapsed_acceleration,
     test_replay_ui_requests_are_executed_on_simulation_thread,
     test_feedback_jit_skips_stable_unchanged_input_ticks,
+    test_feedback_state_ownership_uses_runtime_active_not_ready,
 )
 
 
