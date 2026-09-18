@@ -186,6 +186,7 @@ namespace DLS.Simulation
 			if (inputPins == null) inputPins = Array.Empty<DevPinInstance>();
 			audioState = newAudioState;
 			audioState?.InitFrame();
+			SimulationProfiler.BeginStep();
 
 			LastDeltaCycles = 0;
 			LastGateEvaluations = 0;
@@ -203,6 +204,7 @@ namespace DLS.Simulation
 			if (rootSimChip == null)
 			{
 				UpdateAudioState();
+				EndProfilingStep();
 				return;
 			}
 
@@ -230,6 +232,7 @@ namespace DLS.Simulation
 			}
 
 			UpdateAudioState();
+			EndProfilingStep();
 		}
 
 		public static void UpdateInPausedState()
@@ -312,6 +315,7 @@ namespace DLS.Simulation
 			LastFeedbackJitSweeps = 0;
 			LastFeedbackJitFallbacks = 0;
 			LastSettleConverged = true;
+			SimulationProfiler.Reset();
 		}
 
 		public static void RegisterDiagnosticPaths(SimChip root, ChipDescription rootDescription, ChipLibrary library)
@@ -934,7 +938,23 @@ namespace DLS.Simulation
 						return (false, deltaCycles);
 					}
 
-					EvaluateCombinationalChip(chipIndex);
+					if (SimulationProfiler.Enabled)
+					{
+						SimChip profiledChip = combinationalChips[chipIndex].Chip;
+						SimulationExecutionPath executionPath = GetExecutionPath(profiledChip);
+						long startTimestamp = Stopwatch.GetTimestamp();
+						EvaluateCombinationalChip(chipIndex);
+						long elapsedTicks = Stopwatch.GetTimestamp() - startTimestamp;
+						SimulationProfiler.RecordChip(
+							profiledChip,
+							GetChipPath(profiledChip),
+							executionPath,
+							elapsedTicks);
+					}
+					else
+					{
+						EvaluateCombinationalChip(chipIndex);
+					}
 					LastGateEvaluations++;
 				}
 
@@ -943,6 +963,35 @@ namespace DLS.Simulation
 			}
 
 			return (true, deltaCycles);
+		}
+
+		static SimulationExecutionPath GetExecutionPath(SimChip chip)
+		{
+			if (chip != null && chip.ChipType == ChipType.Custom)
+			{
+				if (chip.MemoCache != null && chip.MemoCache.Ready) return SimulationExecutionPath.FullLut;
+				if (chip.CompiledExecutor != null) return SimulationExecutionPath.NativeJit;
+				if (chip.FeedbackExecutor != null && chip.FeedbackExecutor.Ready) return SimulationExecutionPath.FeedbackJit;
+			}
+
+			return SimulationExecutionPath.Live;
+		}
+
+		static void EndProfilingStep()
+		{
+			SimulationProfiler.EndStep(
+				Simulator.simulationFrame,
+				LastDeltaCycles,
+				LastGateEvaluations,
+				LastSignalPropagations,
+				LastTargetResolutions,
+				LastCacheHits,
+				LastCacheMisses,
+				LastJitHits,
+				LastFeedbackJitHits,
+				LastFeedbackJitSweeps,
+				LastFeedbackJitFallbacks,
+				LastSettleConverged);
 		}
 
 		static int BeginEvaluationEpoch()
