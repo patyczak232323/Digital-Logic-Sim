@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using DLS.Game;
 using DLS.Simulation;
 using Seb.Types;
 using Seb.Vis;
@@ -160,6 +161,56 @@ namespace DLS.Graphics
 							$"{i + 1}. {chip.Path} | {chip.ExecutionPath} | {chip.AverageMicroseconds:0.###} us | {chip.Evaluations:N0} eval",
 							textCol);
 					}
+				}
+
+				pos.y -= 0.5f;
+				UI.DrawText("DETERMINISTIC REPLAY", theme.FontBold, theme.FontSizeRegular, pos, Anchor.TextCentreLeft, textCol);
+				pos.y -= 2.1f;
+
+				Project project = Project.ActiveProject;
+				bool replayPending = project != null && project.ReplayCommandPending;
+				bool recording = project != null && project.ReplayRecordingActive;
+				bool canReplay =
+					project != null &&
+					project.simPaused &&
+					project.HasReplayRecording &&
+					!recording &&
+					!replayPending;
+
+				int replayButton = MenuHelper.DrawButtonPair(
+					recording ? "STOP RECORD" : "START RECORD",
+					"REPLAY",
+					pos,
+					columnWidth,
+					false,
+					!replayPending,
+					canReplay);
+
+				if (project != null)
+				{
+					if (replayButton == 0)
+					{
+						if (recording) project.RequestStopReplayRecording();
+						else project.RequestStartReplayRecording(5000);
+					}
+					else if (replayButton == 1)
+					{
+						project.RequestReplayLatest();
+					}
+				}
+
+				pos = UI.PrevBounds.BottomLeft + Vector2.down * spacing;
+
+				string replayStatus = project == null
+					? "Replay: no active project"
+					: recording
+						? $"Replay: recording {project.ReplayRecordedFrames:N0} frames..."
+						: $"Replay: {project.ReplayStatus}";
+				DrawInfoRow(ref pos, replayStatus, project != null && project.LatestReplayResult.Success ? textCol : dim);
+
+				if (project != null && !project.simPaused && project.HasReplayRecording)
+				{
+					DrawInfoRow(ref pos, "Pause simulation to enable REPLAY.", dim);
 				}
 			}
 
