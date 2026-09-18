@@ -1,42 +1,49 @@
 # Digital Logic Sim Rewired v0.3.0
 
-Release candidate prepared from the current `main` development line.
+Release candidate based on the current `main` development line.
 
 ## Core runtime
 
-- restored compatibility-first routing for stateful and feedback-heavy projects
-- retained the fast deterministic/JIT/LUT path for proven pure combinational graphs
-- live structural edits conservatively use compatibility timing until the root is rebuilt
-- compatibility reason and execution counters are exposed for diagnostics
-- paused inspection synchronization and topology recovery guards are preserved
+- all projects use the Rewired deterministic engine
+- removed the legacy Sebastian timing fallback
+- pure combinational Custom Chips can use LUT / DynamicMethod JIT
+- cyclic feedback Custom Chips can use Feedback JIT
+- structural edits retain deterministic topology recovery
+- paused inspection synchronization and feedback-state materialization are preserved
 
-## Experimental native C backend
+## Registers and feedback
 
-A native C evaluator is available for the same pure acyclic graphs already accepted by the combinational JIT.
+The release keeps the fully Rewired register path rather than routing latches/DFFs/registers through the original simulator.
 
-Preferences: Off / NAND only / All supported.
+Feedback JIT deliberately accepts cyclic gate graphs. It uses separate current/next buffers per sweep, synchronizes only after the live deterministic network has settled, and materializes authoritative state before deoptimization or inspection.
 
-The native backend never bypasses the compatibility classifier.
+Runtime tests include:
 
-An optional C/JIT cross-check runs both implementations and compares outputs bit-for-bit. On divergence, the JIT result remains authoritative.
+- cross-coupled NAND latch
+- unchanged-input zero-sweep feedback fast path
+- feedback state materialization
+- active/dormant feedback ownership
+- 8-bit feedback latch bank
+- nested NAND DFF register writes
+- 4/8/16-bit counters
+- generated 8-bit computer netlist
 
-## Diagnostics retained from main
+## Experimental Native C backend
 
-- hot-chip profiler
-- raw engine benchmark
-- logic-analyzer probes
-- transition-compressed waveform capture
-- deterministic replay
-- non-convergence summaries
-- combinational Custom Chip test runner
+Native C remains available for eligible **acyclic combinational** programs only:
 
-These diagnostics remain useful on the fast path. Compatibility-mode projects intentionally prioritize original timing behaviour over deterministic-runtime instrumentation.
+- Off
+- NAND only
+- All supported
+
+Feedback/stateful acceleration remains the responsibility of the Rewired deterministic engine and Feedback JIT.
+
+An optional C/JIT cross-check compares both combinational implementations and retains JIT output as authoritative on validation.
 
 ## Versioning
 
 - Rewired release: **0.3.0**
 - upstream DLS project-format version: **2.1.6**
-- earliest compatible upstream project version remains unchanged
 
 ## Benchmark reference
 
@@ -44,20 +51,8 @@ Controlled GitHub Actions / .NET 8 microbenchmark, 4,096 NAND DAG, 20,000 evalua
 
 - Sebastian-style StepChip: ~1099 ms
 - compact managed interpreter: ~118 ms
-- native C: ~76 ms
+- Native C: ~76 ms
 - DynamicMethod JIT: ~62 ms
-
-The JIT result is roughly 17.7x faster than the Sebastian-style core baseline in this microbenchmark. Native C remains experimental because DynamicMethod JIT was faster in the stable median test on that environment.
-
-## Safety defaults
-
-For existing projects:
-
-- experimental Native C: Off
-- engine diagnostics: Off
-- C/JIT cross-check: Off
-
-Feedback, latches, DFFs, registers, counters, clocks and RAM are not forced through the new fixed-point fast path.
 
 ## Release gate
 
@@ -67,10 +62,10 @@ The release branch must pass:
 2. simulation runtime compile audit
 3. executable runtime tests
 4. whole-repository C# syntax audit
-5. full simulation stress regression
+5. deterministic propagation stress regression
 6. 8-bit computer behavioural regression
 7. generated computer netlist build/verification
 8. whole-program regression
-9. native C differential tests
+9. Native C differential tests
 
-A full Unity Editor/player build is still a separate release step because the repository does not currently have a licensed Unity build runner in CI.
+A licensed Unity Editor/player build is still a separate release step because the repository does not currently have a Unity build runner in CI.
