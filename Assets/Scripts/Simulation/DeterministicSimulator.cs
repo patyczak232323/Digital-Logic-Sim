@@ -382,10 +382,19 @@ namespace DLS.Simulation
 				return;
 			}
 
+			// Only executors selected by the previous runtime topology may own state
+			// newer than the primitive pins. Materialize those before changing ownership.
+			if (topologyRoot != null)
+			{
+				MaterializeOutermostFeedbackState(topologyRoot);
+			}
+
 			topologyRoot = root;
 			topologyDirty = false;
 			needsInitialPropagation = true;
 			if (rootChanged && root != null) needsPowerOnSettle = true;
+
+			SetFeedbackRuntimeActiveRecursive(root, false);
 
 			combinationalChips.Clear();
 			sourceChips.Clear();
@@ -539,6 +548,12 @@ namespace DLS.Simulation
 
 			runtimeDiagnosticPaths[chip] = path;
 
+			bool feedbackAccelerationAvailable =
+				!needsPowerOnSettle &&
+				chip.FeedbackExecutor != null &&
+				chip.FeedbackExecutor.Ready &&
+				!chip.FeedbackExecutor.Disabled;
+
 			bool acceleratedCustom =
 				allowMemoCache &&
 				chip.ChipType == ChipType.Custom &&
@@ -546,7 +561,21 @@ namespace DLS.Simulation
 				!SimulationWaveformRecorder.ContainsProbeInSubtree(chip) &&
 				((chip.MemoCache != null && chip.MemoCache.Ready) ||
 				 chip.CompiledExecutor != null ||
-				 (chip.FeedbackExecutor != null && chip.FeedbackExecutor.Ready));
+				 feedbackAccelerationAvailable);
+
+			bool feedbackAccelerationSelected =
+				acceleratedCustom &&
+				(chip.MemoCache == null || !chip.MemoCache.Ready) &&
+				chip.CompiledExecutor == null &&
+				feedbackAccelerationAvailable;
+
+			if (feedbackAccelerationSelected)
+			{
+				// The previous authoritative executor was materialized before the rebuild.
+				// Refresh this executor from live gate state before it becomes authoritative.
+				chip.FeedbackExecutor.SynchronizeFromChipTree();
+				chip.FeedbackExecutor.SetRuntimeActive(true);
+			}
 
 			bool isCombinational =
 				acceleratedCustom ||
@@ -1511,10 +1540,13 @@ namespace DLS.Simulation
 			}
 
 			CompiledFeedbackExecutor executor = chip.FeedbackExecutor;
-			if (executor != null && !executor.Ready && !executor.Disabled)
+			if (executor != null && !executor.Disabled)
 			{
+				// Power-on and the first real tick have now settled. Refresh even a
+				// previously-ready executor because a reused SimChip may contain an old
+				// native buffer from an earlier runtime topology.
 				executor.SynchronizeFromChipTree();
-				changed |= executor.Ready;
+				changed = true;
 			}
 
 			return changed;
@@ -1542,7 +1574,11 @@ namespace DLS.Simulation
 
 			if (chip.FeedbackExecutor != null)
 			{
-				chip.FeedbackExecutor.MaterializeState();
+				if (chip.FeedbackExecutor.RuntimeActive)
+				{
+					chip.FeedbackExecutor.MaterializeState();
+				}
+				chip.FeedbackExecutor.SetRuntimeActive(false);
 				chip.FeedbackExecutor = null;
 			}
 
@@ -1557,7 +1593,7 @@ namespace DLS.Simulation
 			if (chip == null) return;
 
 			CompiledFeedbackExecutor executor = chip.FeedbackExecutor;
-			if (executor != null && executor.Ready)
+			if (executor != null && executor.RuntimeActive)
 			{
 				executor.MaterializeState();
 				return;
@@ -1566,6 +1602,17 @@ namespace DLS.Simulation
 			for (int i = 0; i < chip.SubChips.Length; i++)
 			{
 				MaterializeOutermostFeedbackState(chip.SubChips[i]);
+			}
+		}
+
+		static void SetFeedbackRuntimeActiveRecursive(SimChip chip, bool active)
+		{
+			if (chip == null) return;
+
+			chip.FeedbackExecutor?.SetRuntimeActive(active);
+			for (int i = 0; i < chip.SubChips.Length; i++)
+			{
+				SetFeedbackRuntimeActiveRecursive(chip.SubChips[i], active);
 			}
 		}
 
