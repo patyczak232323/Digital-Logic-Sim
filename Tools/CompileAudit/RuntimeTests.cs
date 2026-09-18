@@ -16,6 +16,7 @@ namespace DLS.Simulation
 			Run("waveform transition compression", TestWaveformTransitionCompression);
 			Run("deterministic replay round-trip", TestReplayRoundTrip);
 			Run("8-bit feedback latch bank isolation", TestEightBitLatchBank);
+			Run("dormant feedback executor cannot overwrite live state", TestDormantFeedbackOwnership);
 
 			if (failures != 0)
 			{
@@ -89,6 +90,58 @@ namespace DLS.Simulation
 			executor.MaterializeState();
 			Assert(Bit(nandQ.OutputPins[0].State) == 0, "Q primitive output was not materialized");
 			Assert(Bit(nandNotQ.OutputPins[0].State) == 1, "/Q primitive output was not materialized");
+		}
+
+		static void TestDormantFeedbackOwnership()
+		{
+			(SimChip root, CompiledFeedbackExecutor executor, SimChip nandQ, SimChip nandNotQ) = BuildLatch();
+
+			DevPinInstance sBar = new();
+			DevPinInstance rBar = new();
+			sBar.Pin.Address = new PinAddress(100, 0);
+			rBar.Pin.Address = new PinAddress(101, 0);
+			DevPinInstance[] inputs = { sBar, rBar };
+
+			DeterministicSimulator.Reset();
+			Simulator.Reset();
+
+			sBar.Pin.PlayerInputState = PinState.LogicHigh;
+			rBar.Pin.PlayerInputState = PinState.LogicHigh;
+			DeterministicSimulator.RunSimulationStep(root, inputs, null);
+
+			uint initialQ = Bit(nandQ.OutputPins[0].State);
+			Assert(executor.Ready, "feedback executor was not synchronized after first settled tick");
+			Assert(!executor.RuntimeActive, "root feedback executor must not be authoritative");
+
+			// Force the live gate network to the opposite stable state. The root executor
+			// remains ready but intentionally stale because root custom chips are expanded.
+			if (initialQ == 1)
+			{
+				sBar.Pin.PlayerInputState = PinState.LogicHigh;
+				rBar.Pin.PlayerInputState = PinState.LogicLow;
+			}
+			else
+			{
+				sBar.Pin.PlayerInputState = PinState.LogicLow;
+				rBar.Pin.PlayerInputState = PinState.LogicHigh;
+			}
+
+			DeterministicSimulator.RunSimulationStep(root, inputs, null);
+			uint liveQ = Bit(nandQ.OutputPins[0].State);
+			uint liveNotQ = Bit(nandNotQ.OutputPins[0].State);
+
+			Assert(liveQ != initialQ, "test failed to move live latch to opposite state");
+			Assert(!executor.RuntimeActive, "dormant root executor unexpectedly became authoritative");
+
+			// Previously SetInspectionChip materialized every Ready executor. That could
+			// restore the stale initial state here and corrupt the live latch.
+			DeterministicSimulator.SetInspectionChip(nandQ);
+
+			Assert(Bit(nandQ.OutputPins[0].State) == liveQ, "dormant executor overwrote live Q during inspection handoff");
+			Assert(Bit(nandNotQ.OutputPins[0].State) == liveNotQ, "dormant executor overwrote live /Q during inspection handoff");
+
+			DeterministicSimulator.Reset();
+			Simulator.Reset();
 		}
 
 		static void TestEightBitLatchBank()
