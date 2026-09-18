@@ -227,18 +227,50 @@ def test_register_bits_must_not_be_order_dependent() -> None:
     assert capture([3, 7, 0, 5, 2, 6, 1, 4]) == data
 
 
-def test_native_c_backend_is_opt_in_and_keeps_dynamic_jit_fallback() -> None:
+def test_native_c_backend_is_menu_selectable_and_keeps_dynamic_jit_fallback() -> None:
+    native = source("Assets/Scripts/Simulation/NativeCombinationalBackend.cs")
+    jit = source("Assets/Scripts/Simulation/CombinationalJitCompiler.cs")
+    prefs = source("Assets/Scripts/Graphics/UI/Menus/PreferencesMenu.cs")
+    project_desc = source("Assets/Scripts/Description/Types/ProjectDescription.cs")
+
+    assert "Prefs_ExperimentalNativeCMode" in project_desc
+    assert '"Native C fast engine"' in prefs
+    assert '"NAND only"' in prefs
+    assert '"All supported"' in prefs
+    assert "Prefs_ExperimentalEngineDiagnostics" in project_desc
+    assert '"Engine diagnostics"' in prefs
+
+    # Native mode is selected by the project preference and can only be Off/NAND/All.
+    assert "Prefs_ExperimentalNativeCMode" in native
+    assert "mode == 2 || (mode == 1 && nandOnlyProgram)" in native
+    assert "NativeCombinationalBackend.TryCreate(" in jit
+
+    program = extract_method(jit, "public void Run(uint[] scratch, uint[] outputs)")
+    assert "NativeCombinationalBackend.ShouldUseNative(nativeProgram.IsNandOnly)" in program
+    native_try = program.index("nativeProgram.TryRun")
+    managed_fallback = program.index("for (int i = 0; i < blocks.Length; i++)")
+    assert native_try < managed_fallback
+    assert "RecordNativeEvaluation" in program
+    assert "RecordDynamicJitEvaluation" in program
+    assert "outputWriter(scratch, outputs);" in program
+
+
+def test_experimental_options_do_not_bypass_compatibility_routing() -> None:
+    facade = source("Assets/Scripts/Game/Project/SimulationFacade.cs")
     native = source("Assets/Scripts/Simulation/NativeCombinationalBackend.cs")
     jit = source("Assets/Scripts/Simulation/CombinationalJitCompiler.cs")
 
-    assert 'Environment.GetEnvironmentVariable("DLS_NATIVE_FAST") != "1"' in native
-    assert 'NativeCombinationalBackend.TryCreate(' in jit
+    run_method = extract_method(facade, "public static void RunSimulationStep(")
+    assert "if (UseLegacyCompatibilityEngine(rootSimChip))" in run_method
+    assert run_method.index("DLS.Simulation.Simulator.RunSimulationStep") < run_method.index(
+        "DeterministicSimulator.RunSimulationStep"
+    )
 
-    program = extract_method(jit, "public void Run(uint[] scratch, uint[] outputs)")
-    native_try = program.index("nativeProgram != null && nativeProgram.TryRun")
-    managed_fallback = program.index("for (int i = 0; i < blocks.Length; i++)")
-    assert native_try < managed_fallback
-    assert "outputWriter(scratch, outputs);" in program
+    # C remains downstream of the same cache/JIT safety analysis.
+    attach = extract_method(jit, "internal static void Attach(")
+    assert "CombinationalChipCacheManager.Analyze(description, library)" in attach
+    assert "if (!analysis.CanCache) return;" in attach
+    assert "ShouldUseNative" in native
 
 
 TESTS = (
@@ -253,7 +285,8 @@ TESTS = (
     test_compatibility_classifier_guards_register_building_blocks,
     test_eight_bit_register_reference_model_captures_only_on_rising_edge,
     test_register_bits_must_not_be_order_dependent,
-    test_native_c_backend_is_opt_in_and_keeps_dynamic_jit_fallback,
+    test_native_c_backend_is_menu_selectable_and_keeps_dynamic_jit_fallback,
+    test_experimental_options_do_not_bypass_compatibility_routing,
 )
 
 
