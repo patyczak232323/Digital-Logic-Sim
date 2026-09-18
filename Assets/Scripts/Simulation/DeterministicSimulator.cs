@@ -409,6 +409,8 @@ namespace DLS.Simulation
 				? registeredRootPath
 				: "ROOT";
 
+			SimulationWaveformRecorder.PruneToRoot(root);
+
 			inspectionPath.Clear();
 			if (inspectionChip != null) FindInspectionPath(root, inspectionChip);
 			CollectTopologyRecursive(root, rootPath, false);
@@ -541,6 +543,7 @@ namespace DLS.Simulation
 				allowMemoCache &&
 				chip.ChipType == ChipType.Custom &&
 				!inspectionPath.Contains(chip) &&
+				!SimulationWaveformRecorder.ContainsProbeInSubtree(chip) &&
 				((chip.MemoCache != null && chip.MemoCache.Ready) ||
 				 chip.CompiledExecutor != null ||
 				 (chip.FeedbackExecutor != null && chip.FeedbackExecutor.Ready));
