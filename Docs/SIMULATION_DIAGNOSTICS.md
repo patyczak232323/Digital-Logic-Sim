@@ -63,6 +63,8 @@ Replay recordings are cleared when switching the active chip.
 
 ## Feedback JIT diagnostics
 
+> **Compatibility-first release note (v0.3.0):** the root compatibility classifier runs before the deterministic runtime. Projects that require upstream timing because of feedback/stateful semantics are routed to the Sebastian-compatible engine, so the feedback JIT is not used for those ordinary compatibility-mode roots. The code and diagnostics remain available for deterministic-runtime testing and eligible contexts.
+
 Safe cyclic Custom Chips made only from supported logic primitives can use the feedback JIT. This covers gate-built storage structures such as SR latches, D latches, flip-flops and registers.
 
 Important behavior:
