@@ -739,8 +739,15 @@ namespace DLS.Simulation
 
 		public void Run(uint[] scratch, uint[] outputs)
 		{
-			if (nativeProgram != null && nativeProgram.TryRun(scratch, outputs)) return;
+			if (nativeProgram != null &&
+			    NativeCombinationalBackend.ShouldUseNative(nativeProgram.IsNandOnly) &&
+			    nativeProgram.TryRun(scratch, outputs))
+			{
+				NativeCombinationalBackend.RecordNativeEvaluation();
+				return;
+			}
 
+			NativeCombinationalBackend.RecordDynamicJitEvaluation();
 			for (int i = 0; i < blocks.Length; i++) blocks[i](scratch);
 			outputWriter(scratch, outputs);
 		}
