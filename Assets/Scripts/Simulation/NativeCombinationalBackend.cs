@@ -49,6 +49,9 @@ namespace DLS.Simulation
             _ => "Off"
         };
 
+        internal static bool ValidationEnabled =>
+            Project.ActiveProject?.description.Prefs_ExperimentalNativeCValidation ?? false;
+
         internal static void RecordNativeEvaluation() => Interlocked.Increment(ref nativeEvaluationCount);
         internal static void RecordDynamicJitEvaluation() => Interlocked.Increment(ref dynamicJitEvaluationCount);
 
