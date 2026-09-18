@@ -9,8 +9,8 @@ namespace DLS.Graphics
 	public static class SimulationDiagnosticsMenu
 	{
 		const float menuWidth = 74;
-		const float rowHeight = 3.1f;
-		const float spacing = 0.45f;
+		const float rowHeight = 2.8f;
+		const float spacing = 0.3f;
 		static readonly string[] OffOn = { "OFF", "ON" };
 		static readonly UIHandle ID_Profiler = new("SIM_DIAG_Profiler");
 
@@ -25,7 +25,7 @@ namespace DLS.Graphics
 			MenuHelper.DrawBackgroundOverlay();
 			Draw.ID panelID = UI.ReservePanel();
 
-			Vector2 topLeft = UI.Centre + new Vector2(-menuWidth / 2, 24);
+			Vector2 topLeft = UI.Centre + new Vector2(-menuWidth / 2, 25);
 			Vector2 pos = topLeft;
 			Color rowCol = new(0.12f, 0.12f, 0.12f, 0.92f);
 			Color textCol = Color.white;
@@ -96,7 +96,7 @@ namespace DLS.Graphics
 				UI.DrawText("HOT CHIPS", theme.FontBold, theme.FontSizeRegular, pos, Anchor.TextCentreLeft, textCol);
 				Next(1.1f);
 
-				SimulationHotChip[] hot = SimulationProfiler.GetHotChips(6);
+				SimulationHotChip[] hot = SimulationProfiler.GetHotChips(5);
 				if (!SimulationProfiler.Enabled)
 				{
 					DrawRow("Profiler is OFF. Enable it above to collect hot-chip timings.", dim);
