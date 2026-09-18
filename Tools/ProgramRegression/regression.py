@@ -137,9 +137,10 @@ def test_csharp_integration_guards() -> None:
     assert "return topologyChanged;" in simulator
     assert "bool topologyChanged = DLS.Simulation.Simulator.ApplyModifications();" in simulation_facade
     assert "if (topologyChanged)" in simulation_facade
-    assert "forceLegacyCompatibilityAfterEdit = true;" in simulation_facade
     assert "topologyRecoveryPending = true;" in simulation_facade
     assert "DeterministicSimulator.InvalidateTopology();" in simulation_facade
+    assert "UseLegacyCompatibilityEngine" not in simulation_facade
+    assert "forceLegacyCompatibilityAfterEdit" not in simulation_facade
     assert "pendingTopologyModification" not in simulation_facade
 
 
