@@ -53,3 +53,28 @@ a stable ~75–78 ms range.
 
 This does not prove the result will be identical under Unity's Mono runtime. The native
 backend therefore remains opt-in until an actual Unity build is benchmarked.
+
+
+## Preferences menu
+
+The experimental branch adds an **EXPERIMENTAL** section to Preferences:
+
+- **Native C fast engine**
+  - Off
+  - NAND only
+  - All supported
+- **Engine diagnostics**
+  - Off / On
+  - when enabled, the menu shows active engine, compatibility reason, native C status,
+    fast/compatibility step counters, C/JIT evaluation counters, and the latest engine event
+- **C/JIT cross-check**
+  - Off / On
+  - when native C is selected, evaluates the same block with C and DynamicMethod JIT,
+    compares outputs bit-for-bit, records `native-c-jit-mismatch` on divergence, and keeps
+    the JIT result as the safe result
+
+These preferences are persisted per project. Older project files deserialize them as
+Off, so compatibility with existing saves is preserved.
+
+None of these options bypass the compatibility classifier. Stateful/feedback projects
+still route through upstream-compatible timing before any experimental accelerator can run.
