@@ -15,6 +15,9 @@ namespace DLS.Game
 		static bool forceLegacyCompatibilityAfterEdit;
 
 		public static bool UsingLegacyCompatibilityEngine => compatibilityModeLegacy || forceLegacyCompatibilityAfterEdit;
+		public static string CompatibilityReason { get; private set; } = "not evaluated";
+		public static long LegacyCompatibilitySteps { get; private set; }
+		public static long FastEngineSteps { get; private set; }
 
 		readonly struct SequentialEdgeSnapshot
 		{
@@ -66,6 +69,7 @@ namespace DLS.Game
 				// can break existing computers that are valid in the upstream simulator.
 				topologyRecoveryPending = false;
 				DLS.Simulation.Simulator.RunSimulationStep(rootSimChip, inputPins, audioState);
+				LegacyCompatibilitySteps++;
 				return;
 			}
 			// Debug/main-thread simulation does not call the explicit initialization pass
@@ -77,6 +81,7 @@ namespace DLS.Game
 			}
 
 			DeterministicSimulator.RunSimulationStep(rootSimChip, inputPins, audioState);
+			FastEngineSteps++;
 		}
 
 		public static void EnsureInitialized(SimChip rootSimChip, DevPinInstance[] inputPins, SimAudio audioState)
@@ -207,7 +212,11 @@ namespace DLS.Game
 
 		static bool UseLegacyCompatibilityEngine(SimChip rootSimChip)
 		{
-			if (rootSimChip == null) return false;
+			if (rootSimChip == null)
+			{
+				CompatibilityReason = "no simulation root";
+				return false;
+			}
 
 			if (!ReferenceEquals(compatibilityModeRoot, rootSimChip))
 			{
@@ -216,7 +225,13 @@ namespace DLS.Game
 				compatibilityModeLegacy = RequiresUpstreamTiming(rootSimChip);
 			}
 
-			return compatibilityModeLegacy || forceLegacyCompatibilityAfterEdit;
+			if (forceLegacyCompatibilityAfterEdit)
+			{
+				CompatibilityReason = "live topology edit pending rebuild";
+				return true;
+			}
+
+			return compatibilityModeLegacy;
 		}
 
 		static bool RequiresUpstreamTiming(SimChip rootSimChip)
@@ -226,10 +241,12 @@ namespace DLS.Game
 			{
 				// Unsaved/incomplete editor graphs cannot be proven acyclic and pure.
 				// Compatibility is the safe default while they are being constructed.
+				CompatibilityReason = "incomplete live graph";
 				return true;
 			}
 
 			ChipCacheAnalysis analysis = CombinationalChipCacheManager.Analyze(rootSimChip.Description, project.chipLibrary);
+			CompatibilityReason = analysis.CanCache ? "pure combinational graph" : analysis.Reason;
 			return !analysis.CanCache;
 		}
 
@@ -320,6 +337,9 @@ namespace DLS.Game
 			compatibilityModeRoot = null;
 			compatibilityModeLegacy = false;
 			forceLegacyCompatibilityAfterEdit = false;
+			CompatibilityReason = "not evaluated";
+			LegacyCompatibilitySteps = 0;
+			FastEngineSteps = 0;
 			DLS.Simulation.Simulator.Reset();
 			DeterministicSimulator.Reset();
 		}
