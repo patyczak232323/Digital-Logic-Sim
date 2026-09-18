@@ -138,13 +138,10 @@ namespace DLS.Graphics
 
 				if (engineDiagnostics)
 				{
-					string enginePath = DLS.Game.Simulator.UsingLegacyCompatibilityEngine ? "COMPATIBILITY" : "FAST";
-					DrawReadOnlyValue("Active engine", enginePath);
-					DrawReadOnlyValue("Compatibility reason", DLS.Game.Simulator.CompatibilityReason);
+					DrawReadOnlyValue("Active engine", "REWIRED FAST");
+					DrawReadOnlyValue("Feedback JIT", DLS.Simulation.FeedbackJitCompiler.DynamicCodeAvailable ? "Available" : "Unavailable");
 					DrawReadOnlyValue("Native C status", GetNativeCStatus());
-					DrawReadOnlyValue(
-						"Fast / compatibility steps",
-						$"{DLS.Game.Simulator.FastEngineSteps} / {DLS.Game.Simulator.LegacyCompatibilitySteps}");
+					DrawReadOnlyValue("Engine steps", $"{DLS.Game.Simulator.EngineSteps}");
 					DrawReadOnlyValue(
 						"C / JIT evaluations",
 						$"{DLS.Simulation.NativeCombinationalBackend.NativeEvaluationCount} / {DLS.Simulation.NativeCombinationalBackend.DynamicJitEvaluationCount}");
