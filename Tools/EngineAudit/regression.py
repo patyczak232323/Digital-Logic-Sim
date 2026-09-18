@@ -149,6 +149,84 @@ def test_fixed_point_semantics_are_not_upstream_equivalent_for_feedback() -> Non
     assert states == [(1, 1), (0, 0), (1, 1), (0, 0)]
 
 
+def test_compatibility_diagnostics_are_exposed_without_changing_routing() -> None:
+    facade = source("Assets/Scripts/Game/Project/SimulationFacade.cs")
+    run_method = extract_method(facade, "public static void RunSimulationStep(")
+    compat_method = extract_method(facade, "static bool RequiresUpstreamTiming(")
+    reset_method = extract_method(facade, "public static void Reset()")
+
+    assert 'public static string CompatibilityReason' in facade
+    assert 'public static long LegacyCompatibilitySteps' in facade
+    assert 'public static long FastEngineSteps' in facade
+    assert 'LegacyCompatibilitySteps++;' in run_method
+    assert 'FastEngineSteps++;' in run_method
+
+    # Diagnostics must report the classifier result, not introduce a new classifier.
+    assert 'CompatibilityReason = analysis.CanCache ? "pure combinational graph" : analysis.Reason;' in compat_method
+    assert 'return !analysis.CanCache;' in compat_method
+
+    assert 'LegacyCompatibilitySteps = 0;' in reset_method
+    assert 'FastEngineSteps = 0;' in reset_method
+
+
+def test_compatibility_classifier_guards_register_building_blocks() -> None:
+    cache = source("Assets/Scripts/Simulation/CombinationalChipCache.cs")
+    analyze = extract_method(cache, "static ChipCacheAnalysis AnalyzeRecursive(")
+
+    # Anything with a state/source primitive must stay out of the fixed-point fast path.
+    assert 'contains state/source chip' in analyze
+    assert 'IsPureBuiltin(subDescription.ChipType)' in analyze
+
+    # NAND-built latches/registers contain a graph cycle even when every primitive
+    # by itself is pure; the cycle check is therefore equally important.
+    assert 'HasFeedback(subChips, wires)' in analyze
+    assert 'feedback loop detected' in analyze
+
+
+def test_eight_bit_register_reference_model_captures_only_on_rising_edge() -> None:
+    # Behavioural contract for a conventional edge-triggered register. This is the
+    # observable behaviour existing DLS computers rely on regardless of how the DFF
+    # is built internally from NAND latches.
+    q = [0] * 8
+    previous_clock = 0
+
+    sequence = [
+        (0, 0x12),
+        (1, 0x12),  # capture 0x12
+        (1, 0x34),  # no new edge: hold
+        (0, 0x34),
+        (1, 0xA5),  # capture 0xA5
+        (0, 0x5A),  # hold
+    ]
+
+    observed = []
+    for clock, data in sequence:
+        rising = clock == 1 and previous_clock == 0
+        if rising:
+            q = [(data >> bit) & 1 for bit in range(8)]
+        observed.append(sum(bit << i for i, bit in enumerate(q)))
+        previous_clock = clock
+
+    assert observed == [0x00, 0x12, 0x12, 0x12, 0xA5, 0xA5]
+
+
+def test_register_bits_must_not_be_order_dependent() -> None:
+    # A register bank must produce the same byte regardless of the order in which
+    # individual bit cells are visited. This guards against accidental shared-state
+    # or traversal-order coupling between parallel DFF instances.
+    data = 0b10100101
+
+    def capture(order):
+        q = [0] * 8
+        for bit in order:
+            q[bit] = (data >> bit) & 1
+        return sum(value << bit for bit, value in enumerate(q))
+
+    assert capture(range(8)) == data
+    assert capture(reversed(range(8))) == data
+    assert capture([3, 7, 0, 5, 2, 6, 1, 4]) == data
+
+
 TESTS = (
     test_paused_inspection_is_synchronized_before_initialization,
     test_topology_edit_recovery_is_one_shot_and_nonconvergence_only,
@@ -157,6 +235,10 @@ TESTS = (
     test_removed_connection_still_clears_last_driver_state,
     test_stateful_projects_route_to_upstream_compatible_timing,
     test_fixed_point_semantics_are_not_upstream_equivalent_for_feedback,
+    test_compatibility_diagnostics_are_exposed_without_changing_routing,
+    test_compatibility_classifier_guards_register_building_blocks,
+    test_eight_bit_register_reference_model_captures_only_on_rising_edge,
+    test_register_bits_must_not_be_order_dependent,
 )
 
 
