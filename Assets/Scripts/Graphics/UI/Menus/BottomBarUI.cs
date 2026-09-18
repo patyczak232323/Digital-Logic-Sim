@@ -25,6 +25,7 @@ namespace DLS.Graphics
 			$"FIND CHIP    {shortcutTextCol}Ctrl+F",
 			$"LIBRARY      {shortcutTextCol}Ctrl+L",
 			$"PREFS        {shortcutTextCol}Ctrl+P",
+			"SIM DIAGNOSTICS",
 			$"QUIT         {shortcutTextCol}Ctrl+Q"
 		};
 
@@ -33,7 +34,8 @@ namespace DLS.Graphics
 		const int FindChipButtonIndex = 2;
 		const int LibraryButtonIndex = 3;
 		const int OptionsButtonIndex = 4;
-		const int QuitButtonIndex = 5;
+		const int DiagnosticsButtonIndex = 5;
+		const int QuitButtonIndex = 6;
 
 		// ---- State ----
 		static float scrollX;
@@ -77,7 +79,7 @@ namespace DLS.Graphics
 			{
 				for (int i = menuButtonNames.Length - 1; i >= 0; i--)
 				{
-					bool buttonEnabled = MenuButtonsAndShortcutsEnabled || i is QuitButtonIndex or OptionsButtonIndex;
+					bool buttonEnabled = MenuButtonsAndShortcutsEnabled || i is QuitButtonIndex or OptionsButtonIndex or DiagnosticsButtonIndex;
 					string text = menuButtonNames[i];
 					if (UI.Button(text, theme, pos, size, buttonEnabled, false, false, Anchor.BottomLeft))
 					{
@@ -112,6 +114,7 @@ namespace DLS.Graphics
 				else if (i == FindChipButtonIndex) OpenSearchMenu();
 				else if (i == LibraryButtonIndex) OpenLibraryMenu();
 				else if (i == OptionsButtonIndex) OpenPreferencesMenu();
+				else if (i == DiagnosticsButtonIndex) OpenDiagnosticsMenu();
 				else if (i == QuitButtonIndex) ExitToMainMenu();
 			}
 		}
@@ -389,6 +392,7 @@ namespace DLS.Graphics
 		static void OpenSearchMenu() => UIDrawer.SetActiveMenu(UIDrawer.MenuType.Search);
 		static void OpenLibraryMenu() => UIDrawer.SetActiveMenu(UIDrawer.MenuType.ChipLibrary);
 		static void OpenPreferencesMenu() => UIDrawer.SetActiveMenu(UIDrawer.MenuType.Preferences);
+		static void OpenDiagnosticsMenu() => UIDrawer.SetActiveMenu(UIDrawer.MenuType.SimulationDiagnostics);
 
 		static void CreateNewChip()
 		{
