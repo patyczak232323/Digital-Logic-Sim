@@ -86,7 +86,10 @@ namespace DLS.Simulation
             int scratchCount)
         {
             if (!Available) return null;
-            if (Environment.GetEnvironmentVariable("DLS_NATIVE_FAST") == "0") return null;
+
+            // Keep the proven DynamicMethod path as the default. The native backend is
+            // experimental until it wins on the actual Unity/Mono runtime used by DLS.
+            if (Environment.GetEnvironmentVariable("DLS_NATIVE_FAST") != "1") return null;
 
             try
             {
