@@ -640,6 +640,7 @@ namespace DLS.Simulation
 
 				CombinationalChipCacheManager.Attach(simChip, chipDesc, library);
 				CombinationalJitCompiler.Attach(simChip, chipDesc, library);
+				FeedbackJitCompiler.Attach(simChip, chipDesc, library);
 				return simChip;
 			}
 			finally
@@ -737,6 +738,7 @@ namespace DLS.Simulation
 				for (SimChip invalidate = cmd.modifyTarget; invalidate != null; invalidate = invalidate.ParentChip)
 				{
 					invalidate.CompiledExecutor = null;
+					invalidate.FeedbackExecutor = null;
 				}
 
 				if (cmd.type == SimModifyCommand.ModificationType.AddSubchip)
