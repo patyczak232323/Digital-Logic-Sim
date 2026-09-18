@@ -330,6 +330,7 @@ namespace DLS.Game
 
 		void SetNewActiveDevChip(DevChipInstance devChip)
 		{
+			ResetReplayStateForChipChange();
 			editModeChip = devChip;
 			chipViewStack.Clear();
 			chipViewStack.Push(devChip);
@@ -338,6 +339,18 @@ namespace DLS.Game
 			if (devChip.LastSavedDescription != null)
 			{
 				SearchPopup.AddRecentChip(devChip.LastSavedDescription.Name);
+			}
+		}
+
+		void ResetReplayStateForChipChange()
+		{
+			SimulationReplayRecorder.Reset();
+			lock (replayControlLock)
+			{
+				pendingReplayCommand = ReplayControlCommand.None;
+				latestReplayRecording = null;
+				latestReplayResult = default;
+				replayStatus = "Idle";
 			}
 		}
 
