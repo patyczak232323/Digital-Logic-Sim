@@ -1,0 +1,32 @@
+name: Full simulation and computer regression
+
+on:
+  push:
+    branches: [ main, 'fix/**', 'perf/**', 'exp/**' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run deterministic propagation stress suite
+        run: python3 Tools/SimulationRegression/regression.py
+
+      - name: Run 8-bit computer behavioral suite
+        run: python3 Tools/ComputerRegression/regression.py
+
+      - name: Build and execute generated 8-bit computer netlist
+        run: |
+          python3 Tools/ComputerProjectBuilder/build_project.py
+          python3 Tools/ComputerProjectBuilder/verify_netlist.py
+
+      - name: Run whole-program regression suite
+        run: python3 Tools/ProgramRegression/regression.py
