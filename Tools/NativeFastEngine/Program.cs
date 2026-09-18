@@ -262,16 +262,39 @@ internal static class Program
             dls_native_eval(p, native, native.Length, output, 1);
         }
 
-        double managedMs = Time(iterations, () => ManagedEval(graph.Nodes, managed));
-        double jitMs = Time(iterations, () =>
+        const int rounds = 7;
+        double[] managedTimes = new double[rounds];
+        double[] jitTimes = new double[rounds];
+        double[] nativeTimes = new double[rounds];
+
+        Action managedAction = () => ManagedEval(graph.Nodes, managed);
+        Action jitAction = () =>
         {
             for (int i = 0; i < jit.Length; i++) jit[i](jitScratch);
-        });
-        double nativeMs = Time(iterations, () =>
+        };
+        Action nativeAction = () =>
         {
             if (dls_native_eval(p, native, native.Length, output, 1) == 0)
                 throw new Exception("native eval failed");
-        });
+        };
+
+        for (int round = 0; round < rounds; round++)
+        {
+            // Alternate order so turbo/thermal/scheduler drift does not systematically
+            // favour the same implementation.
+            if ((round & 1) == 0)
+            {
+                managedTimes[round] = Time(iterations, managedAction);
+                jitTimes[round] = Time(iterations, jitAction);
+                nativeTimes[round] = Time(iterations, nativeAction);
+            }
+            else
+            {
+                nativeTimes[round] = Time(iterations, nativeAction);
+                jitTimes[round] = Time(iterations, jitAction);
+                managedTimes[round] = Time(iterations, managedAction);
+            }
+        }
 
         dls_native_destroy_program(p);
 
@@ -279,12 +302,26 @@ internal static class Program
             output[0] != jitScratch[graph.OutputRef])
             throw new Exception("benchmark implementations diverged");
 
-        Console.WriteLine($"BENCH nodes={nodes} iterations={iterations}");
+        double managedMs = Median(managedTimes);
+        double jitMs = Median(jitTimes);
+        double nativeMs = Median(nativeTimes);
+
+        Console.WriteLine($"BENCH nodes={nodes} iterations={iterations} rounds={rounds} statistic=median");
         Console.WriteLine($"managed_interpreter_ms={managedMs:F3}");
         Console.WriteLine($"dynamic_jit_ms={jitMs:F3}");
         Console.WriteLine($"native_c_ms={nativeMs:F3}");
         Console.WriteLine($"native_vs_managed_speedup={managedMs / nativeMs:F3}x");
         Console.WriteLine($"native_vs_dynamic_jit_speedup={jitMs / nativeMs:F3}x");
+        Console.WriteLine($"managed_range_ms={managedTimes.Min():F3}..{managedTimes.Max():F3}");
+        Console.WriteLine($"dynamic_jit_range_ms={jitTimes.Min():F3}..{jitTimes.Max():F3}");
+        Console.WriteLine($"native_c_range_ms={nativeTimes.Min():F3}..{nativeTimes.Max():F3}");
+    }
+
+    static double Median(double[] values)
+    {
+        double[] copy = (double[])values.Clone();
+        Array.Sort(copy);
+        return copy[copy.Length / 2];
     }
 
     static double Time(int iterations, Action action)
