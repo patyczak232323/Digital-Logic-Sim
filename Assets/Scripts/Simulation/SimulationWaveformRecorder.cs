@@ -154,6 +154,60 @@ namespace DLS.Simulation
 			}
 		}
 
+		internal static bool ContainsProbeInSubtree(SimChip chip)
+		{
+			if (chip == null) return false;
+
+			lock (sync)
+			{
+				foreach (Probe probe in probes.Values)
+				{
+					for (SimChip owner = probe.Pin?.parentChip; owner != null; owner = owner.ParentChip)
+					{
+						if (ReferenceEquals(owner, chip)) return true;
+					}
+				}
+			}
+
+			return false;
+		}
+
+		internal static void PruneToRoot(SimChip root)
+		{
+			lock (sync)
+			{
+				if (probes.Count == 0) return;
+				if (root == null)
+				{
+					probes.Clear();
+					return;
+				}
+
+				HashSet<SimPin> livePins = new();
+				CollectPins(root, livePins);
+
+				List<int> removeIds = null;
+				foreach (KeyValuePair<int, Probe> pair in probes)
+				{
+					if (livePins.Contains(pair.Value.Pin)) continue;
+					(removeIds ??= new List<int>()).Add(pair.Key);
+				}
+
+				if (removeIds == null) return;
+				for (int i = 0; i < removeIds.Count; i++) probes.Remove(removeIds[i]);
+			}
+
+			static void CollectPins(SimChip chip, HashSet<SimPin> pins)
+			{
+				for (int i = 0; i < chip.InputPins.Length; i++) pins.Add(chip.InputPins[i]);
+				for (int i = 0; i < chip.OutputPins.Length; i++) pins.Add(chip.OutputPins[i]);
+				for (int i = 0; i < chip.SubChips.Length; i++)
+				{
+					if (chip.SubChips[i] != null) CollectPins(chip.SubChips[i], pins);
+				}
+			}
+		}
+
 		internal static void Capture(int frame)
 		{
 			if (!enabled) return;
