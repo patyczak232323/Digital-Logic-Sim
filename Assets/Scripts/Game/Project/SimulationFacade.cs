@@ -5,19 +5,13 @@ using DLS.Simulation;
 
 namespace DLS.Game
 {
-	// Game-side compatibility facade. Existing project/editor code can keep using
-	// Simulator while the runtime step is handled by the deterministic solver.
+	// Game-side facade. All runtime simulation is handled by the Rewired
+	// deterministic engine, including feedback/stateful custom chips.
 	public static class Simulator
 	{
 		static bool topologyRecoveryPending;
-		static SimChip compatibilityModeRoot;
-		static bool compatibilityModeLegacy;
-		static bool forceLegacyCompatibilityAfterEdit;
 
-		public static bool UsingLegacyCompatibilityEngine => compatibilityModeLegacy || forceLegacyCompatibilityAfterEdit;
-		public static string CompatibilityReason { get; private set; } = "not evaluated";
-		public static long LegacyCompatibilitySteps { get; private set; }
-		public static long FastEngineSteps { get; private set; }
+		public static long EngineSteps { get; private set; }
 
 		readonly struct SequentialEdgeSnapshot
 		{
@@ -61,45 +55,23 @@ namespace DLS.Game
 
 		public static void RunSimulationStep(SimChip rootSimChip, DevPinInstance[] inputPins, SimAudio audioState)
 		{
-			if (UseLegacyCompatibilityEngine(rootSimChip))
-			{
-				// Stateful/feedback projects must keep Sebastian's one-pass-per-tick timing
-				// semantics. The deterministic fixed-point solver is faster for acyclic logic,
-				// but changes observable behaviour of NAND-built latches/DFFs and therefore
-				// can break existing computers that are valid in the upstream simulator.
-				topologyRecoveryPending = false;
-				DLS.Simulation.Simulator.RunSimulationStep(rootSimChip, inputPins, audioState);
-				LegacyCompatibilitySteps++;
-				return;
-			}
 			// Debug/main-thread simulation does not call the explicit initialization pass
-			// used by Project.SimThread. Only pay for the extra call when an edit actually
-			// queued a topology recovery check; the steady-state hot path is unchanged.
+			// used by Project.SimThread. Only pay the recovery cost after a structural edit.
 			if (topologyRecoveryPending)
 			{
 				EnsureInitialized(rootSimChip, inputPins, audioState);
 			}
 
 			DeterministicSimulator.RunSimulationStep(rootSimChip, inputPins, audioState);
-			FastEngineSteps++;
+			EngineSteps++;
 		}
 
 		public static void EnsureInitialized(SimChip rootSimChip, DevPinInstance[] inputPins, SimAudio audioState)
 		{
-			if (UseLegacyCompatibilityEngine(rootSimChip))
-			{
-				// Upstream-compatible simulation has no separate fixed-point power-on phase.
-				// In particular, do not advance a paused circuit merely to initialize it.
-				topologyRecoveryPending = false;
-				return;
-			}
-
 			Project project = Project.ActiveProject;
 
-			// The simulation loop calls EnsureInitialized even while paused, before the
-			// normal per-step SetInspectionChip call. Keep the viewed Custom Chip expanded
-			// in that path too; otherwise a ready LUT/JIT block can leave its internal pin
-			// states stale for the entire time the simulation remains paused.
+			// Keep the currently inspected Custom Chip expanded while paused so internal
+			// pins do not become stale behind an accelerated LUT/JIT/feedback region.
 			if (project != null && project.simPaused)
 			{
 				TrySynchronizeInspectionChip(project);
@@ -110,21 +82,15 @@ namespace DLS.Game
 			if (rootSimChip == null || !topologyRecoveryPending) return;
 			topologyRecoveryPending = false;
 
-			// A structural edit normally uses a deterministic resettle so existing latch
-			// and RAM state is preserved. A newly-created feedback network can, however,
-			// start perfectly symmetrically (for example a cross-coupled NAND latch can
-			// alternate 00 -> 11 -> 00 forever under simultaneous delta cycles). Only if
-			// that first deterministic resettle actually failed, retry initialization with
-			// the solver's bounded asynchronous power-on settle. Stable edited circuits
-			// never take this path, so there is no extra work or randomization for them.
+			// Structural edits preserve existing state with the normal deterministic
+			// resettle. A newly-created symmetric feedback network can fail that settle
+			// (e.g. cross-coupled NANDs starting at 00). In that case perform the bounded
+			// asynchronous power-on recovery already implemented by DeterministicSimulator.
 			if (!DeterministicSimulator.LastSettleConverged)
 			{
 				List<SequentialEdgeSnapshot> edgeState = CaptureSequentialEdgeState(rootSimChip);
 				DeterministicSimulator.Reset();
 
-				// Reset intentionally clears the compiled inspection/diagnostic bookkeeping,
-				// but does not alter SimChip pin state or builtin InternalState. Restore the
-				// useful metadata before the recovery settle.
 				if (project != null)
 				{
 					TrySynchronizeInspectionChip(project);
@@ -135,12 +101,6 @@ namespace DLS.Game
 				}
 
 				DeterministicSimulator.EnsureInitialized(rootSimChip, inputPins, audioState);
-
-				// Recovery initialization deliberately synchronizes edge-triggered builtins so
-				// power-on itself cannot manufacture an edge. This recovery, however, happens
-				// between ordinary simulation steps after an edit, so retain the pre-recovery
-				// previous-clock/input state. A real edge that arrived together with the edit
-				// must still be seen by the following normal simulation step.
 				RestoreSequentialEdgeState(edgeState);
 			}
 		}
@@ -205,61 +165,13 @@ namespace DLS.Game
 			catch (InvalidOperationException)
 			{
 				// The main thread can replace the view stack while the simulation thread
-				// is sampling it. Keep the previous inspection target for this pass and
-				// retry on the next loop rather than collapsing the wrong hierarchy.
+				// samples it. Keep the previous target and retry on the next loop.
 			}
 		}
 
-		static bool UseLegacyCompatibilityEngine(SimChip rootSimChip)
-		{
-			if (rootSimChip == null)
-			{
-				CompatibilityReason = "no simulation root";
-				return false;
-			}
+		public static void SetInspectionChip(SimChip chip) => DeterministicSimulator.SetInspectionChip(chip);
 
-			if (!ReferenceEquals(compatibilityModeRoot, rootSimChip))
-			{
-				compatibilityModeRoot = rootSimChip;
-				forceLegacyCompatibilityAfterEdit = false;
-				compatibilityModeLegacy = RequiresUpstreamTiming(rootSimChip);
-			}
-
-			if (forceLegacyCompatibilityAfterEdit)
-			{
-				CompatibilityReason = "live topology edit pending rebuild";
-				return true;
-			}
-
-			return compatibilityModeLegacy;
-		}
-
-		static bool RequiresUpstreamTiming(SimChip rootSimChip)
-		{
-			Project project = Project.ActiveProject;
-			if (rootSimChip?.Description == null || project?.chipLibrary == null)
-			{
-				// Unsaved/incomplete editor graphs cannot be proven acyclic and pure.
-				// Compatibility is the safe default while they are being constructed.
-				CompatibilityReason = "incomplete live graph";
-				return true;
-			}
-
-			ChipCacheAnalysis analysis = CombinationalChipCacheManager.Analyze(rootSimChip.Description, project.chipLibrary);
-			CompatibilityReason = analysis.CanCache ? "pure combinational graph" : analysis.Reason;
-			return !analysis.CanCache;
-		}
-
-		public static void SetInspectionChip(SimChip chip)
-		{
-			if (!UsingLegacyCompatibilityEngine) DeterministicSimulator.SetInspectionChip(chip);
-		}
-
-		public static void UpdateInPausedState()
-		{
-			if (UsingLegacyCompatibilityEngine) DLS.Simulation.Simulator.UpdateInPausedState();
-			else DeterministicSimulator.UpdateInPausedState();
-		}
+		public static void UpdateInPausedState() => DeterministicSimulator.UpdateInPausedState();
 
 		public static void UpdateKeyboardInputFromMainThread() => DLS.Simulation.Simulator.UpdateKeyboardInputFromMainThread();
 
@@ -321,11 +233,6 @@ namespace DLS.Game
 			bool topologyChanged = DLS.Simulation.Simulator.ApplyModifications();
 			if (topologyChanged)
 			{
-				// SimChip.Description represents the saved graph and can temporarily lag live
-				// editor modifications. After any structural edit, prefer upstream timing until
-				// the root is rebuilt; this prevents a newly-created feedback loop from being
-				// misclassified as pure combinational logic.
-				forceLegacyCompatibilityAfterEdit = true;
 				topologyRecoveryPending = true;
 				DeterministicSimulator.InvalidateTopology();
 			}
@@ -334,12 +241,7 @@ namespace DLS.Game
 		public static void Reset()
 		{
 			topologyRecoveryPending = false;
-			compatibilityModeRoot = null;
-			compatibilityModeLegacy = false;
-			forceLegacyCompatibilityAfterEdit = false;
-			CompatibilityReason = "not evaluated";
-			LegacyCompatibilitySteps = 0;
-			FastEngineSteps = 0;
+			EngineSteps = 0;
 			NativeCombinationalBackend.ResetCounters();
 			EngineDiagnostics.Clear();
 			DLS.Simulation.Simulator.Reset();
