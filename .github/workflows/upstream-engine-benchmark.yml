@@ -1,0 +1,27 @@
+name: Upstream SebLague Engine Benchmark
+
+on:
+  push:
+    branches:
+      - 'exp/native-c-fast-engine'
+    paths:
+      - 'Tools/UpstreamEngineBench/**'
+      - '.github/workflows/upstream-engine-benchmark.yml'
+  pull_request:
+    paths:
+      - 'Tools/UpstreamEngineBench/**'
+      - '.github/workflows/upstream-engine-benchmark.yml'
+
+jobs:
+  upstream-benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Run Sebastian upstream-equivalent tests
+        run: dotnet run --project Tools/UpstreamEngineBench/UpstreamEngineBench.csproj -c Release
