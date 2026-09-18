@@ -248,6 +248,42 @@ def test_waveform_ui_supports_scalar_and_bus_traces() -> None:
 
 
 
+def test_probes_keep_their_signal_path_out_of_collapsed_acceleration() -> None:
+    sim = source("Assets/Scripts/Simulation/DeterministicSimulator.cs")
+    recorder = source("Assets/Scripts/Simulation/SimulationWaveformRecorder.cs")
+
+    collect = extract_method(sim, "static void CollectTopologyRecursive(")
+    ensure = extract_method(sim, "static void EnsureTopology(")
+
+    assert "!SimulationWaveformRecorder.ContainsProbeInSubtree(chip)" in collect
+    assert "SimulationWaveformRecorder.PruneToRoot(root);" in ensure
+    assert "DeterministicSimulator.InvalidateTopology();" in recorder
+    assert "internal static bool ContainsProbeInSubtree" in recorder
+    assert "internal static void PruneToRoot" in recorder
+
+
+def test_replay_ui_requests_are_executed_on_simulation_thread() -> None:
+    project = source("Assets/Scripts/Game/Project/Project.cs")
+    menu = source("Assets/Scripts/Graphics/UI/Menus/SimulationDiagnosticsMenu.cs")
+
+    sim_thread = extract_method(project, "void SimThread()")
+    process = extract_method(project, "void ProcessReplayControlCommand(")
+
+    assert "ProcessReplayControlCommand(initChip);" in sim_thread
+    assert "SimulationReplayRecorder.Replay(" in process
+    assert "if (!simPaused)" in process
+    assert "RequestStartReplayRecording" in project
+    assert "RequestStopReplayRecording" in project
+    assert "RequestReplayLatest" in project
+
+    assert '"DETERMINISTIC REPLAY"' in menu
+    assert "project.RequestStartReplayRecording(5000);" in menu
+    assert "project.RequestStopReplayRecording();" in menu
+    assert "project.RequestReplayLatest();" in menu
+    assert "project.simPaused" in menu
+
+
+
 TESTS = (
     test_feedback_jit_is_dormant_until_after_first_normal_tick,
     test_feedback_jit_uses_two_delta_buffers,
@@ -265,6 +301,8 @@ TESTS = (
     test_benchmark_measures_inside_step_without_advancing_extra_steps,
     test_waveform_probe_context_menu_is_wired_to_live_simpin,
     test_waveform_ui_supports_scalar_and_bus_traces,
+    test_probes_keep_their_signal_path_out_of_collapsed_acceleration,
+    test_replay_ui_requests_are_executed_on_simulation_thread,
 )
 
 
