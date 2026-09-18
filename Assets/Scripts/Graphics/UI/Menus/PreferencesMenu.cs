@@ -12,7 +12,7 @@ namespace DLS.Graphics
 	{
 		const float entrySpacing = 0.5f;
 		const float menuWidth = 55;
-		const float verticalOffset = 30;
+		const float verticalOffset = 34;
 
 		public const int DisplayMode_Always = 0;
 		public const int DisplayMode_OnHover = 1;
@@ -78,6 +78,7 @@ namespace DLS.Graphics
 		static readonly UIHandle ID_ClockSpeedInput = new("PREFS_ClockSpeed");
 		static readonly UIHandle ID_ExperimentalNativeC = new("PREFS_ExperimentalNativeC");
 		static readonly UIHandle ID_ExperimentalDiagnostics = new("PREFS_ExperimentalDiagnostics");
+		static readonly UIHandle ID_ExperimentalNativeCValidation = new("PREFS_ExperimentalNativeCValidation");
 
 		static readonly string showGridLabel = "Show grid" + CreateShortcutString("Ctrl+G");
 		static readonly string simStatusLabel = "Sim Status" + CreateShortcutString("Ctrl+Space");
@@ -133,6 +134,7 @@ namespace DLS.Graphics
 				DrawHeader("EXPERIMENTAL:");
 				int nativeCMode = DrawNextWheel("Native C fast engine", NativeCModeOptions, ID_ExperimentalNativeC);
 				bool engineDiagnostics = DrawNextWheel("Engine diagnostics", ExperimentalToggleOptions, ID_ExperimentalDiagnostics) == 1;
+				bool nativeCValidation = DrawNextWheel("C/JIT cross-check", ExperimentalToggleOptions, ID_ExperimentalNativeCValidation) == 1;
 
 				if (engineDiagnostics)
 				{
@@ -176,6 +178,7 @@ namespace DLS.Graphics
 				project.description.Prefs_SimPaused = pauseSim;
 				project.description.Prefs_ExperimentalNativeCMode = nativeCMode;
 				project.description.Prefs_ExperimentalEngineDiagnostics = engineDiagnostics;
+				project.description.Prefs_ExperimentalNativeCValidation = nativeCValidation;
 
 				// Cancel / Confirm
 				if (result == MenuHelper.CancelConfirmResult.Cancel)
