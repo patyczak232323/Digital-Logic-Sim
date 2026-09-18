@@ -752,6 +752,8 @@ namespace DLS.Simulation
 		uint[] current;
 		uint[] next;
 		readonly uint[] outputs;
+		readonly uint[] lastStableInputs;
+		bool hasStableInputSnapshot;
 		bool disabled;
 
 		public bool Ready { get; private set; }
@@ -767,6 +769,7 @@ namespace DLS.Simulation
 			current = new uint[program.ScratchCount];
 			next = new uint[program.ScratchCount];
 			outputs = new uint[program.OutputCount];
+			lastStableInputs = new uint[program.InputCount];
 		}
 
 		public void SynchronizeFromChipTree()
@@ -781,6 +784,7 @@ namespace DLS.Simulation
 				next[slot] = state;
 			}
 
+			hasStableInputSnapshot = false;
 			Ready = true;
 		}
 
@@ -799,6 +803,7 @@ namespace DLS.Simulation
 		{
 			MaterializeState();
 			disabled = true;
+			hasStableInputSnapshot = false;
 			Ready = false;
 		}
 
@@ -811,6 +816,24 @@ namespace DLS.Simulation
 			if (!Ready || disabled) return false;
 
 			int inputCount = Math.Min(program.InputCount, chip.InputPins.Length);
+
+			if (hasStableInputSnapshot && inputCount == lastStableInputs.Length)
+			{
+				bool unchanged = true;
+				for (int i = 0; i < inputCount; i++)
+				{
+					if (chip.InputPins[i].State == lastStableInputs[i]) continue;
+					unchanged = false;
+					break;
+				}
+
+				// Feedback-JIT programs reject clocks, keys, pulse generators, RAM,
+				// displays and every other spontaneous/stateful primitive. Therefore a
+				// previously converged region cannot change while all boundary inputs
+				// remain identical.
+				if (unchanged) return true;
+			}
+
 			for (int i = 0; i < inputCount; i++)
 			{
 				uint state = chip.InputPins[i].State;
@@ -850,6 +873,17 @@ namespace DLS.Simulation
 
 			LastSweepCount = sweepCount;
 			program.WriteOutputs(current, outputs);
+
+			if (converged && inputCount == lastStableInputs.Length)
+			{
+				for (int i = 0; i < inputCount; i++) lastStableInputs[i] = chip.InputPins[i].State;
+				hasStableInputSnapshot = true;
+			}
+			else
+			{
+				hasStableInputSnapshot = false;
+			}
+
 			return converged;
 		}
 	}
