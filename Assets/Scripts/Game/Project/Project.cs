@@ -58,8 +58,23 @@ namespace DLS.Game
 		static readonly bool debug_runSimMainThread = false;
 		public const float SimulationPerformanceTimeWindowSec = 1.5f;
 
+		enum ReplayControlCommand
+		{
+			None,
+			StartRecording,
+			StopRecording,
+			ReplayLatest
+		}
+
 		volatile bool simThreadActive;
 		public volatile bool advanceSingleSimStep;
+
+		readonly object replayControlLock = new();
+		ReplayControlCommand pendingReplayCommand;
+		int pendingReplayFrameLimit = 5000;
+		SimulationReplayRecording latestReplayRecording;
+		SimulationReplayResult latestReplayResult;
+		string replayStatus = "Idle";
 		public int simPausedSingleStepCounter;
 		volatile int mainThreadFrameCount;
 		volatile DevPinInstance[] inputPins = Array.Empty<DevPinInstance>();
@@ -68,6 +83,47 @@ namespace DLS.Game
 		public bool simPaused => description.Prefs_SimPaused;
 		public double simAvgTicksPerSec { get; private set; }
 		public SimChip rootSimChip => editModeChip.SimChip;
+
+		public bool ReplayRecordingActive => SimulationReplayRecorder.Enabled;
+		public bool ReplayCommandPending
+		{
+			get
+			{
+				lock (replayControlLock) return pendingReplayCommand != ReplayControlCommand.None;
+			}
+		}
+		public bool HasReplayRecording
+		{
+			get
+			{
+				lock (replayControlLock) return latestReplayRecording != null && latestReplayRecording.FrameCount > 0;
+			}
+		}
+		public int ReplayRecordedFrames
+		{
+			get
+			{
+				lock (replayControlLock)
+				{
+					if (SimulationReplayRecorder.Enabled) return SimulationReplayRecorder.RecordedFrameCount;
+					return latestReplayRecording?.FrameCount ?? 0;
+				}
+			}
+		}
+		public string ReplayStatus
+		{
+			get
+			{
+				lock (replayControlLock) return replayStatus;
+			}
+		}
+		public SimulationReplayResult LatestReplayResult
+		{
+			get
+			{
+				lock (replayControlLock) return latestReplayResult;
+			}
+		}
 
 		public Project(ProjectDescription description, ChipLibrary chipLibrary)
 		{
@@ -495,6 +551,117 @@ namespace DLS.Game
 		public bool ShouldSnapToGrid => KeyboardShortcuts.SnapModeHeld || (description.Prefs_Snapping == 1 && ShowGrid) || description.Prefs_Snapping == 2;
 		public bool ForceStraightWires => KeyboardShortcuts.StraightLineModeHeld || (description.Prefs_StraightWires == 1 && ShowGrid) || description.Prefs_StraightWires == 2;
 
+		public bool RequestStartReplayRecording(int frameLimit = 5000)
+		{
+			lock (replayControlLock)
+			{
+				if (pendingReplayCommand != ReplayControlCommand.None || SimulationReplayRecorder.Enabled) return false;
+				pendingReplayFrameLimit = Math.Max(1, frameLimit);
+				pendingReplayCommand = ReplayControlCommand.StartRecording;
+				replayStatus = "Starting recording...";
+				return true;
+			}
+		}
+
+		public bool RequestStopReplayRecording()
+		{
+			lock (replayControlLock)
+			{
+				if (pendingReplayCommand != ReplayControlCommand.None || !SimulationReplayRecorder.Enabled) return false;
+				pendingReplayCommand = ReplayControlCommand.StopRecording;
+				replayStatus = "Stopping recording...";
+				return true;
+			}
+		}
+
+		public bool RequestReplayLatest()
+		{
+			lock (replayControlLock)
+			{
+				if (pendingReplayCommand != ReplayControlCommand.None ||
+				    latestReplayRecording == null ||
+				    latestReplayRecording.FrameCount == 0)
+				{
+					return false;
+				}
+
+				pendingReplayCommand = ReplayControlCommand.ReplayLatest;
+				replayStatus = simPaused ? "Replay queued..." : "Replay requires paused simulation";
+				return true;
+			}
+		}
+
+		void ProcessReplayControlCommand(SimChip simChip)
+		{
+			ReplayControlCommand command;
+			int frameLimit;
+			SimulationReplayRecording recording;
+
+			lock (replayControlLock)
+			{
+				command = pendingReplayCommand;
+				if (command == ReplayControlCommand.None) return;
+
+				pendingReplayCommand = ReplayControlCommand.None;
+				frameLimit = pendingReplayFrameLimit;
+				recording = latestReplayRecording;
+			}
+
+			switch (command)
+			{
+				case ReplayControlCommand.StartRecording:
+					SimulationReplayRecorder.StartRecording(frameLimit);
+					lock (replayControlLock)
+					{
+						latestReplayResult = default;
+						replayStatus = $"Recording (limit {frameLimit:N0} frames)...";
+					}
+					break;
+
+				case ReplayControlCommand.StopRecording:
+					{
+						SimulationReplayRecording stopped = SimulationReplayRecorder.StopRecording();
+						lock (replayControlLock)
+						{
+							latestReplayRecording = stopped;
+							string suffix = stopped.Truncated ? " (truncated)" : string.Empty;
+							replayStatus = $"Recorded {stopped.FrameCount:N0} frames{suffix}";
+						}
+						break;
+					}
+
+				case ReplayControlCommand.ReplayLatest:
+					{
+						if (!simPaused)
+						{
+							lock (replayControlLock) replayStatus = "Pause simulation before replay";
+							break;
+						}
+
+						if (recording == null || recording.FrameCount == 0 || simChip == null)
+						{
+							lock (replayControlLock) replayStatus = "No replay recording available";
+							break;
+						}
+
+						SimulationReplayResult result = SimulationReplayRecorder.Replay(
+							recording,
+							simChip,
+							inputPins,
+							audioState.simAudio);
+
+						lock (replayControlLock)
+						{
+							latestReplayResult = result;
+							replayStatus = result.Success
+								? $"Replay OK: {result.FramesReplayed:N0} frames matched"
+								: $"Replay FAILED: {result.Message}";
+						}
+						break;
+					}
+			}
+		}
+
 		public void NotifyExit()
 		{
 			simThreadActive = false;
@@ -522,6 +689,8 @@ namespace DLS.Game
 				{
 					Simulator.EnsureInitialized(initChip, inputPins, audioState.simAudio);
 				}
+
+				ProcessReplayControlCommand(initChip);
 
 				// ---- A new frame has been reached on main thread  ----
 				if (mainThreadFrameCount > simLastMainThreadSyncFrame)
