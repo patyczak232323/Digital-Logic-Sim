@@ -15,6 +15,7 @@ namespace DLS.Simulation
 			Run("feedback state materialization", TestFeedbackMaterialization);
 			Run("waveform transition compression", TestWaveformTransitionCompression);
 			Run("deterministic replay round-trip", TestReplayRoundTrip);
+			Run("8-bit feedback latch bank isolation", TestEightBitLatchBank);
 
 			if (failures != 0)
 			{
@@ -88,6 +89,121 @@ namespace DLS.Simulation
 			executor.MaterializeState();
 			Assert(Bit(nandQ.OutputPins[0].State) == 0, "Q primitive output was not materialized");
 			Assert(Bit(nandNotQ.OutputPins[0].State) == 1, "/Q primitive output was not materialized");
+		}
+
+		static void TestEightBitLatchBank()
+		{
+			const int bitCount = 8;
+			ChipDescription nandDescription = new()
+			{
+				Name = "NAND",
+				ChipType = ChipType.Nand,
+				InputPins = new[] { Pin(0), Pin(1) },
+				OutputPins = new[] { Pin(2) },
+				SubChips = Array.Empty<SubChipDescription>(),
+				Wires = Array.Empty<WireDescription>(),
+				Displays = Array.Empty<DisplayDescription>()
+			};
+
+			SimChip[] cells = new SimChip[bitCount * 2];
+			PinDescription[] rootInputs = new PinDescription[bitCount * 2];
+			PinDescription[] rootOutputs = new PinDescription[bitCount];
+
+			for (int bit = 0; bit < bitCount; bit++)
+			{
+				cells[bit * 2] = new SimChip(nandDescription, 1 + bit * 2, null, Array.Empty<SimChip>());
+				cells[bit * 2 + 1] = new SimChip(nandDescription, 2 + bit * 2, null, Array.Empty<SimChip>());
+				rootInputs[bit * 2] = Pin(1000 + bit * 2);
+				rootInputs[bit * 2 + 1] = Pin(1001 + bit * 2);
+				rootOutputs[bit] = Pin(2000 + bit);
+			}
+
+			ChipDescription rootDescription = new()
+			{
+				Name = "LATCH_BANK_8",
+				ChipType = ChipType.Custom,
+				InputPins = rootInputs,
+				OutputPins = rootOutputs,
+				SubChips = Array.Empty<SubChipDescription>(),
+				Wires = Array.Empty<WireDescription>(),
+				Displays = Array.Empty<DisplayDescription>()
+			};
+
+			SimChip root = new(rootDescription, -1, null, cells);
+
+			for (int bit = 0; bit < bitCount; bit++)
+			{
+				int qId = 1 + bit * 2;
+				int notQId = 2 + bit * 2;
+				int sBarPin = 1000 + bit * 2;
+				int rBarPin = 1001 + bit * 2;
+				int outputPin = 2000 + bit;
+
+				root.AddConnection(new PinAddress(sBarPin, 0), new PinAddress(qId, 0));
+				root.AddConnection(new PinAddress(notQId, 2), new PinAddress(qId, 1));
+				root.AddConnection(new PinAddress(rBarPin, 0), new PinAddress(notQId, 0));
+				root.AddConnection(new PinAddress(qId, 2), new PinAddress(notQId, 1));
+				root.AddConnection(new PinAddress(qId, 2), new PinAddress(outputPin, 0));
+
+				// Seed all bits to Q=0, /Q=1.
+				cells[bit * 2].OutputPins[0].State = PinState.LogicLow;
+				cells[bit * 2 + 1].OutputPins[0].State = PinState.LogicHigh;
+			}
+
+			FeedbackJitCompiler.Attach(root, rootDescription, new ChipLibrary());
+			Assert(root.FeedbackExecutor != null, "feedback JIT did not attach to 8-bit latch bank");
+			root.FeedbackExecutor.SynchronizeFromChipTree();
+
+			SetAllLatchControls(root, 1, 1);
+			Assert(root.FeedbackExecutor.Evaluate(root, out uint[] outputs, out _), "initial latch-bank settle failed");
+			Assert(ReadLatchByte(outputs) == 0x00, "initial latch-bank value was not zero");
+
+			const byte pattern = 0xA5;
+			for (int bit = 0; bit < bitCount; bit++)
+			{
+				bool set = ((pattern >> bit) & 1) != 0;
+				root.InputPins[bit * 2].State = set ? PinState.LogicLow : PinState.LogicHigh;
+				root.InputPins[bit * 2 + 1].State = set ? PinState.LogicHigh : PinState.LogicLow;
+			}
+
+			Assert(root.FeedbackExecutor.Evaluate(root, out outputs, out _), "parallel latch-bank write failed");
+			Assert(ReadLatchByte(outputs) == pattern, $"parallel latch write mismatch: got 0x{ReadLatchByte(outputs):X2}");
+
+			SetAllLatchControls(root, 1, 1);
+			Assert(root.FeedbackExecutor.Evaluate(root, out outputs, out _), "latch-bank release failed");
+			Assert(ReadLatchByte(outputs) == pattern, "latch-bank did not hold written byte");
+
+			// Change only bit 3 from 0 to 1. All other seven bits must remain untouched.
+			root.InputPins[3 * 2].State = PinState.LogicLow;
+			root.InputPins[3 * 2 + 1].State = PinState.LogicHigh;
+			Assert(root.FeedbackExecutor.Evaluate(root, out outputs, out _), "single-bit latch update failed");
+			Assert(ReadLatchByte(outputs) == (pattern | 0x08), "single-bit update leaked into another latch cell");
+
+			SetAllLatchControls(root, 1, 1);
+			Assert(root.FeedbackExecutor.Evaluate(root, out outputs, out _), "single-bit release failed");
+			Assert(ReadLatchByte(outputs) == (pattern | 0x08), "single-bit state was not retained");
+
+			Assert(root.FeedbackExecutor.Evaluate(root, out outputs, out int idleSweeps), "stable latch-bank evaluation failed");
+			Assert(idleSweeps == 0, $"stable latch bank expected 0 sweeps, got {idleSweeps}");
+		}
+
+		static void SetAllLatchControls(SimChip root, uint sBar, uint rBar)
+		{
+			for (int bit = 0; bit < 8; bit++)
+			{
+				root.InputPins[bit * 2].State = sBar;
+				root.InputPins[bit * 2 + 1].State = rBar;
+			}
+		}
+
+		static byte ReadLatchByte(uint[] outputs)
+		{
+			byte value = 0;
+			for (int bit = 0; bit < 8; bit++)
+			{
+				if (Bit(outputs[bit]) != 0) value |= (byte)(1 << bit);
+			}
+			return value;
 		}
 
 		static void TestReplayRoundTrip()
