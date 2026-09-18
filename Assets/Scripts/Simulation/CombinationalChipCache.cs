@@ -335,6 +335,7 @@ namespace DLS.Simulation
 		{
 			Interlocked.Increment(ref descriptionRevision);
 			CombinationalJitCompiler.NotifyDescriptionsChanged();
+			FeedbackJitCompiler.NotifyDescriptionsChanged();
 		}
 
 		// Builds (or loads, if already valid) persistent caches for the saved chip and
