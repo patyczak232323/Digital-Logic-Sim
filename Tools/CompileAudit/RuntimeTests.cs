@@ -13,6 +13,7 @@ namespace DLS.Simulation
 			Run("feedback NAND latch", TestFeedbackNandLatch);
 			Run("feedback unchanged-input zero sweep", TestFeedbackZeroSweep);
 			Run("feedback state materialization", TestFeedbackMaterialization);
+			Run("waveform transition compression", TestWaveformTransitionCompression);
 
 			if (failures != 0)
 			{
@@ -86,6 +87,43 @@ namespace DLS.Simulation
 			executor.MaterializeState();
 			Assert(Bit(nandQ.OutputPins[0].State) == 0, "Q primitive output was not materialized");
 			Assert(Bit(nandNotQ.OutputPins[0].State) == 1, "/Q primitive output was not materialized");
+		}
+
+		static void TestWaveformTransitionCompression()
+		{
+			ChipDescription description = new()
+			{
+				Name = "PROBE_TEST",
+				ChipType = ChipType.Custom,
+				InputPins = new[] { Pin(200) },
+				OutputPins = Array.Empty<PinDescription>(),
+				SubChips = Array.Empty<SubChipDescription>(),
+				Wires = Array.Empty<WireDescription>(),
+				Displays = Array.Empty<DisplayDescription>()
+			};
+
+			SimChip chip = new(description, -1, null, Array.Empty<SimChip>());
+			SimPin pin = chip.InputPins[0];
+
+			SimulationWaveformRecorder.ClearAll();
+			SimulationWaveformRecorder.Enabled = true;
+			SimulationWaveformRecorder.AddProbe("probe", pin);
+
+			pin.State = PinState.LogicLow;
+			for (int frame = 1; frame <= 100; frame++) SimulationWaveformRecorder.Capture(frame);
+
+			pin.State = PinState.LogicHigh;
+			for (int frame = 101; frame <= 200; frame++) SimulationWaveformRecorder.Capture(frame);
+
+			WaveformSample[] samples = SimulationWaveformRecorder.GetSamples(
+				SimulationWaveformRecorder.GetProbes()[0].Id);
+
+			Assert(samples.Length == 2, $"expected 2 waveform transitions, got {samples.Length}");
+			Assert(samples[0].Frame == 1 && Bit(samples[0].State) == 0, "first transition sample mismatch");
+			Assert(samples[1].Frame == 101 && Bit(samples[1].State) == 1, "second transition sample mismatch");
+
+			SimulationWaveformRecorder.Enabled = false;
+			SimulationWaveformRecorder.ClearAll();
 		}
 
 		static (SimChip root, CompiledFeedbackExecutor executor, SimChip nandQ, SimChip nandNotQ) BuildLatch()
