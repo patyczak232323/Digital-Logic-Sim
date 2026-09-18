@@ -740,7 +740,11 @@ namespace DLS.Simulation
 					invalidate.CompiledExecutor = null;
 					if (invalidate.FeedbackExecutor != null)
 					{
-						invalidate.FeedbackExecutor.MaterializeState();
+						if (invalidate.FeedbackExecutor.RuntimeActive)
+						{
+							invalidate.FeedbackExecutor.MaterializeState();
+						}
+						invalidate.FeedbackExecutor.SetRuntimeActive(false);
 						invalidate.FeedbackExecutor = null;
 					}
 				}
