@@ -27,6 +27,7 @@ namespace DLS.Simulation
 		public static int LastFeedbackJitSweeps { get; private set; }
 		public static int LastFeedbackJitFallbacks { get; private set; }
 		public static bool LastSettleConverged { get; private set; } = true;
+		public static string LastNonConvergenceDetails { get; private set; } = string.Empty;
 
 		static readonly Stopwatch stopwatch = Stopwatch.StartNew();
 
@@ -130,6 +131,7 @@ namespace DLS.Simulation
 			LastFeedbackJitSweeps = 0;
 			LastFeedbackJitFallbacks = 0;
 			LastSettleConverged = true;
+			LastNonConvergenceDetails = string.Empty;
 
 			ApplyExternalInputs(inputPins);
 			UpdateFrameSources();
@@ -199,6 +201,7 @@ namespace DLS.Simulation
 			LastFeedbackJitSweeps = 0;
 			LastFeedbackJitFallbacks = 0;
 			LastSettleConverged = true;
+			LastNonConvergenceDetails = string.Empty;
 
 			EnsureInitialized(rootSimChip, inputPins, newAudioState);
 			if (rootSimChip == null)
@@ -316,6 +319,7 @@ namespace DLS.Simulation
 			LastFeedbackJitSweeps = 0;
 			LastFeedbackJitFallbacks = 0;
 			LastSettleConverged = true;
+			LastNonConvergenceDetails = string.Empty;
 			SimulationProfiler.Reset();
 			SimulationWaveformRecorder.ClearAll();
 		}
@@ -1586,6 +1590,10 @@ namespace DLS.Simulation
 
 		static void TraceNonConvergence(int maxDeltaCycles)
 		{
+			string suspects = DescribePendingWork();
+			LastNonConvergenceDetails =
+				$"non-convergent combinational network; deltaLimit={maxDeltaCycles}; suspects={suspects}";
+
 			if (!DiagnosticsEnabled || DiagnosticSink == null) return;
 
 			DiagnosticSink(
@@ -1593,11 +1601,16 @@ namespace DLS.Simulation
 				$"event=non-convergent-combinational-network\n" +
 				$"maxDeltaCycles={maxDeltaCycles}\n" +
 				$"pendingSignals={targetQueue.Count}\n" +
-				$"pendingChips={dirtyChips.Count}");
+				$"pendingChips={dirtyChips.Count}\n" +
+				$"suspects={suspects}");
 		}
 
 		static void TracePowerOnNonConvergence(int evaluationBudget, int evaluations)
 		{
+			string suspects = DescribePendingWork();
+			LastNonConvergenceDetails =
+				$"power-on did not reach fixed point; evaluations={evaluations}/{evaluationBudget}; suspects={suspects}";
+
 			if (!DiagnosticsEnabled || DiagnosticSink == null) return;
 
 			DiagnosticSink(
@@ -1606,7 +1619,8 @@ namespace DLS.Simulation
 				$"evaluationBudget={evaluationBudget}\n" +
 				$"evaluations={evaluations}\n" +
 				$"pendingSignals={targetQueue.Count}\n" +
-				$"pendingChips={dirtyChips.Count}");
+				$"pendingChips={dirtyChips.Count}\n" +
+				$"suspects={suspects}");
 		}
 
 		static void TracePowerOnVerificationAdjustment(ulong serialBefore, ulong serialAfter)
@@ -1621,9 +1635,12 @@ namespace DLS.Simulation
 
 		static void TraceRepeatedEvaluation(int chipIndex)
 		{
+			SimChip chip = combinationalChips[chipIndex].Chip;
+			LastNonConvergenceDetails =
+				$"repeated evaluation limit; chip={GetChipPath(chip)}; evaluations={MaxEvaluationsPerChipPerSettle}";
+
 			if (!DiagnosticsEnabled || DiagnosticSink == null) return;
 
-			SimChip chip = combinationalChips[chipIndex].Chip;
 			DiagnosticSink(
 				$"frame={Simulator.simulationFrame}\n" +
 				$"event=repeated-chip-evaluation-limit\n" +
@@ -1632,8 +1649,36 @@ namespace DLS.Simulation
 				$"evaluations={MaxEvaluationsPerChipPerSettle}");
 		}
 
+		static string DescribePendingWork(int maxItems = 8)
+		{
+			List<string> items = new(maxItems);
+			HashSet<string> seen = new(StringComparer.Ordinal);
+
+			for (int i = 0; i < dirtyChips.Count && items.Count < maxItems; i++)
+			{
+				int chipIndex = dirtyChips[i];
+				if (chipIndex < 0 || chipIndex >= combinationalChips.Count) continue;
+				string path = GetChipPath(combinationalChips[chipIndex].Chip);
+				if (seen.Add(path)) items.Add(path);
+			}
+
+			foreach (int targetIndex in targetQueue)
+			{
+				if (items.Count >= maxItems) break;
+				if (targetIndex < 0 || targetIndex >= allPins.Count) continue;
+				SimPin pin = allPins[targetIndex];
+				string path = $"{GetChipPath(pin.parentChip)}:pin[{pin.ID}]";
+				if (seen.Add(path)) items.Add(path);
+			}
+
+			return items.Count == 0 ? "none" : string.Join(", ", items);
+		}
+
 		static void TraceFeedbackJitFallback(SimChip chip, int sweeps)
 		{
+			LastNonConvergenceDetails =
+				$"feedback JIT did not converge; chip={GetChipPath(chip)}; sweeps={sweeps}; fallback=live";
+
 			if (!DiagnosticsEnabled || DiagnosticSink == null) return;
 
 			DiagnosticSink(
