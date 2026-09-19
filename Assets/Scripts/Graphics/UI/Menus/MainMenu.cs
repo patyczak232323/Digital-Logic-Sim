@@ -143,9 +143,18 @@ namespace DLS.Graphics
 			if (activePopup != PopupKind.None) return;
 
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
-			float buttonWidth = 15;
+			float buttonWidth = TouchUILayout.Enabled ? 42 : 15;
+			float buttonHeight = TouchUILayout.Enabled ? TouchUILayout.TouchButtonHeight : 0;
+			float spacing = TouchUILayout.Enabled ? TouchUILayout.TouchGap * 2 : 1;
 
-			int buttonIndex = UI.VerticalButtonGroup(menuButtonNames, theme.MainMenuButtonTheme, UI.Centre + Vector2.up * 6, new Vector2(buttonWidth, 0), false, true, 1);
+			int buttonIndex = UI.VerticalButtonGroup(
+				menuButtonNames,
+				theme.MainMenuButtonTheme,
+				UI.Centre + Vector2.up * (TouchUILayout.Enabled ? 4 : 6),
+				new Vector2(buttonWidth, buttonHeight),
+				false,
+				true,
+				spacing);
 
 			if (buttonIndex == 0 || KeyboardShortcuts.MainMenu_NewProjectShortcutTriggered) // New project
 			{
