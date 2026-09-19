@@ -164,10 +164,13 @@ def test_nonconvergence_summary_is_available_without_diagnostic_sink() -> None:
     assert "public static string LastNonConvergenceDetails" in sim
 
     nonconv = extract_method(sim, "static void TraceNonConvergence(")
-    summary = nonconv.index("LastNonConvergenceDetails =")
+    remember = nonconv.index("RememberFailure(")
     guard = nonconv.index("if (!DiagnosticsEnabled || DiagnosticSink == null) return;")
-    assert summary < guard
+    assert remember < guard
     assert "DescribePendingWork()" in nonconv
+
+    recorder = extract_method(sim, "static void RememberFailure(")
+    assert "LastNonConvergenceDetails =" in recorder
 
 
 def test_combinational_test_runner_uses_isolated_netlist() -> None:
