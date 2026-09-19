@@ -1,66 +1,85 @@
 # Digital Logic Sim Rewired
 
-**Digital Logic Sim Rewired** is an independently maintained fork of Sebastian Lague's Digital Logic Sim with a rebuilt simulation runtime focused on reliable large-scale digital circuits while keeping the familiar editor and project format.
+**Digital Logic Sim Rewired** is an independently maintained fork of Sebastian Lague's Digital Logic Sim. It keeps the familiar editor and project format while replacing the simulation runtime with the Rewired deterministic engine.
 
-The project is aimed especially at designs that are difficult for traditional gate-level simulators: deeply nested Custom Chips, feedback loops, latches, flip-flops, registers, counters, large fan-out networks and complete CPU-scale circuits.
+## Release status
 
-## Simulation engine
+Source release candidate: **v0.3.0**
 
-Rewired replaces the original runtime propagation model with an event-driven engine built around compiled netlist topology, dirty-gate scheduling and fixed-point settling.
+Latest published binary release: **v0.2.0**
 
-Key goals of the engine are:
+The upstream project/save format remains **DLS 2.1.6**. Rewired's release number is separate from the project-format version.
 
-- correct propagation through deeply nested Custom Chips
-- stable behaviour for feedback-heavy circuits such as latches and flip-flops
-- deterministic normal simulation after circuit initialization
-- isolated state for multiple instances of the same Custom Chip
-- efficient handling of large fan-out and CPU-scale designs
-- explicit convergence limits instead of silently leaving partially propagated state
-- preservation of the original Digital Logic Sim editor workflow and project format wherever possible
+## Simulation architecture
 
-Feedback-based storage elements do not require arbitrary gate outputs to be randomized during normal operation. Circuit initialization is treated separately from normal deterministic simulation so that gate logic itself always remains logically correct.
+Rewired 0.3.0 uses its own simulation engine for **all projects**, including feedback, latches, flip-flops, registers, counters and CPUs.
 
-### Development branch (`main`)
+Core runtime:
 
-Current `main` extends v0.2.0 with:
+- compiled netlist topology
+- event-driven dirty propagation
+- bounded deterministic delta cycles
+- explicit power-on/topology-recovery settling
+- DynamicMethod JIT for pure combinational Custom Chips
+- Feedback JIT for cyclic gate-feedback Custom Chips
+- persistent FULL LUT cache for eligible combinational chips
+- optional experimental native C backend
 
-- native feedback JIT for safe cyclic gate networks such as NAND-built latches, flip-flops and registers
-- deterministic fallback when a compiled feedback region fails to converge
-- state materialization before inspection or structural edits
-- opt-in hot-chip simulation profiler
-- opt-in ring-buffer waveform recorder backend
-- actionable non-convergence summaries with suspect chip/pin paths
-- isolated combinational Custom Chip test-vector runner
-- integrated `MENU -> SIM DIAGNOSTICS` panel with hot-chip profiling, raw benchmark, pin probes/logic analyzer and deterministic replay
-- CI regression checks, native runtime execution tests, whole-repo C# syntax audit and full 8-bit computer stress regressions
+There is no runtime fallback to Sebastian's `StepChip` scheduler.
 
-The released v0.2.0 binaries predate these development changes.
+## Feedback and registers
 
-See `Docs/SIMULATION_DIAGNOSTICS.md` for usage and current engine diagnostics.
+Gate-feedback circuits are handled by the Rewired engine itself. Cyclic Custom Chips can receive a `FeedbackExecutor`, which evaluates a two-buffer native sweep while preserving the deterministic engine's simultaneous-update semantics.
 
-## Downloads
+Runtime tests cover cross-coupled NAND latches, feedback state materialization, an 8-bit feedback latch bank, deoptimization/inspection handoff and ownership of accelerated feedback state.
 
-Prebuilt releases are available for:
+Structural edits use the normal deterministic resettle first. If a newly-created symmetric feedback network fails to converge, the runtime performs a bounded asynchronous recovery settle and preserves sequential edge history.
 
-- **Windows x64:** `DLSRewired-Windows-x64.zip`
-- **Linux x86_64:** `DLSRewired-Linux-x86_64.zip`
+## Experimental preferences
 
-Latest release: **v0.2.0**
+`MENU -> PREFERENCES -> EXPERIMENTAL`
 
-https://github.com/patyczak232323/Digital-Logic-Sim/releases/tag/v0.2.0
+- **Native C fast engine**: Off / NAND only / All supported
+- **Engine diagnostics**: Rewired engine status, Feedback JIT availability, accelerator counters and latest engine event
+- **C/JIT cross-check**: compares eligible Native C and DynamicMethod JIT outputs bit-for-bit and keeps the JIT output authoritative
+
+All experimental options default to **Off**.
+
+## Diagnostics
+
+`MENU -> SIM DIAGNOSTICS` provides hot-chip profiling, raw engine benchmark, LUT/JIT/Feedback-JIT counters, logic-analyzer probes, waveform capture, deterministic replay and convergence summaries.
+
+See `Docs/SIMULATION_DIAGNOSTICS.md`.
+
+## Performance reference
+
+A controlled .NET 8 core benchmark using a 4,096-NAND acyclic graph, 20,000 evaluations per round and a 7-round median measured approximately:
+
+| Engine | Median time |
+| --- | ---: |
+| Sebastian-style StepChip baseline | 1099 ms |
+| compact managed interpreter | 118 ms |
+| experimental native C | 76 ms |
+| DynamicMethod JIT | 62 ms |
+
+The DynamicMethod JIT was about **17.7x faster** than the Sebastian-style core baseline in that microbenchmark. Full feedback/CPU workloads use the deterministic engine and Feedback JIT, so real application speed depends on circuit structure.
 
 ## Compatibility
 
-Existing Digital Logic Sim projects are intended to remain compatible. The editor, Custom Chip workflow and project format are kept as close to the original as practical while the simulation runtime is replaced underneath.
+Existing Digital Logic Sim project files remain intended to load under DLS 2.1.6 project-format semantics. Rewired-specific preference fields are additive.
 
-The project is still under active development, so unusual circuits are worth reporting with a minimal reproducible project.
+Runtime timing semantics are Rewired's own deterministic model; they are not a fallback to Sebastian's original scheduler.
 
-## Repository policy
+## Validation
 
-The canonical project is maintained by **@patyczak232323**. External contributors should use forks and pull requests. Direct write access to the canonical repository is not intended for third parties.
+Release-gate CI covers engine audits, runtime compilation/tests, whole-repo C# syntax parsing, propagation stress tests, NAND latches/DFFs/registers, 8-bit computer tests, generated computer netlist verification, whole-program regressions and Native C differential tests.
+
+See `Docs/RELEASE_0.3.0.md`.
 
 ## Credits and license
 
-Based on [Sebastian Lague's Digital Logic Sim](https://github.com/SebLague/Digital-Logic-Sim).
+Original Digital Logic Sim by **Sebastian Lague**.
+
+Rewired fork maintained by **@patyczak232323**.
 
 Licensed under the MIT License. See `LICENSE`.

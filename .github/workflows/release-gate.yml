@@ -1,0 +1,64 @@
+name: Release 0.3.0 Gate
+
+on:
+  push:
+    branches:
+      - 'release/**'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Verify release version
+        run: test "$(cat VERSION)" = "0.3.0"
+
+      - name: Diff hygiene
+        run: git diff --check
+
+      - name: Engine audit regressions
+        run: python3 Tools/EngineAudit/regression.py
+
+      - name: Compile simulation runtime
+        run: dotnet build Tools/CompileAudit/SimulationCompileAudit.csproj --configuration Release
+
+      - name: Execute simulation runtime tests
+        run: dotnet run --project Tools/CompileAudit/SimulationCompileAudit.csproj --configuration Release --no-build
+
+      - name: Parse all C# sources
+        run: dotnet run --project Tools/SyntaxAudit/SyntaxAudit.csproj --configuration Release -- .
+
+      - name: Deterministic propagation stress suite
+        run: python3 Tools/SimulationRegression/regression.py
+
+      - name: 8-bit computer behavioural suite
+        run: python3 Tools/ComputerRegression/regression.py
+
+      - name: Build and verify generated 8-bit computer
+        run: |
+          python3 Tools/ComputerProjectBuilder/build_project.py
+          python3 Tools/ComputerProjectBuilder/verify_netlist.py
+
+      - name: Whole-program regression suite
+        run: python3 Tools/ProgramRegression/regression.py
+
+      - name: Build and test experimental native C backend
+        run: |
+          chmod +x Tools/NativeFastEngine/build_linux.sh
+          chmod +x Tools/NativeFastEngine/run_benchmark.sh
+          Tools/NativeFastEngine/run_benchmark.sh

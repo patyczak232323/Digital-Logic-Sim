@@ -212,10 +212,19 @@ namespace DLS.Simulation
 			NativeOutputWriter outputWriter = EmitOutputWriter(rootOutputs, chipName);
 			if (outputWriter == null) return null;
 
+			// Optional C backend consumes the exact same verified acyclic program.
+			// The DynamicMethod implementation is always retained as a bit-exact fallback.
+			NativeCombinationalProgram nativeProgram = NativeCombinationalBackend.TryCreate(
+				nodes,
+				topologicalOrder,
+				rootOutputs,
+				nextScratchSlot);
+
 			timer.Stop();
 			return new CompiledCombinationalProgram(
 				blocks.ToArray(),
 				outputWriter,
+				nativeProgram,
 				nextScratchSlot,
 				root.InputPins.Length,
 				root.OutputPins.Length,
@@ -599,7 +608,7 @@ namespace DLS.Simulation
 			}
 		}
 
-		readonly struct SignalRef
+		internal readonly struct SignalRef
 		{
 			public readonly bool IsConstant;
 			public readonly uint Constant;
@@ -618,7 +627,7 @@ namespace DLS.Simulation
 			public static SignalRef FromSlot(int slot, int producerNode = -1) => new(false, 0, slot, producerNode);
 		}
 
-		readonly struct CompiledNode
+		internal readonly struct CompiledNode
 		{
 			public readonly ChipType Type;
 			public readonly SignalRef[] Inputs;
@@ -698,6 +707,8 @@ namespace DLS.Simulation
 	{
 		readonly CombinationalJitCompiler.NativeBlock[] blocks;
 		readonly CombinationalJitCompiler.NativeOutputWriter outputWriter;
+		readonly NativeCombinationalProgram nativeProgram;
+		readonly uint[] validationOutputs;
 
 		public readonly int ScratchCount;
 		public readonly int InputCount;
@@ -708,6 +719,7 @@ namespace DLS.Simulation
 		public CompiledCombinationalProgram(
 			CombinationalJitCompiler.NativeBlock[] blocks,
 			CombinationalJitCompiler.NativeOutputWriter outputWriter,
+			NativeCombinationalProgram nativeProgram,
 			int scratchCount,
 			int inputCount,
 			int outputCount,
@@ -716,6 +728,8 @@ namespace DLS.Simulation
 		{
 			this.blocks = blocks;
 			this.outputWriter = outputWriter;
+			this.nativeProgram = nativeProgram;
+			validationOutputs = new uint[outputCount];
 			ScratchCount = scratchCount;
 			InputCount = inputCount;
 			OutputCount = outputCount;
@@ -723,8 +737,35 @@ namespace DLS.Simulation
 			CompileMilliseconds = compileMilliseconds;
 		}
 
+		public bool UsesNativeC => nativeProgram != null;
+
 		public void Run(uint[] scratch, uint[] outputs)
 		{
+			if (nativeProgram != null &&
+			    NativeCombinationalBackend.ShouldUseNative(nativeProgram.IsNandOnly) &&
+			    nativeProgram.TryRun(scratch, outputs))
+			{
+				NativeCombinationalBackend.RecordNativeEvaluation();
+
+				if (!NativeCombinationalBackend.ValidationEnabled) return;
+
+				Array.Copy(outputs, validationOutputs, Math.Min(outputs.Length, validationOutputs.Length));
+				NativeCombinationalBackend.RecordDynamicJitEvaluation();
+				for (int i = 0; i < blocks.Length; i++) blocks[i](scratch);
+				outputWriter(scratch, outputs);
+
+				int compareCount = Math.Min(outputs.Length, validationOutputs.Length);
+				for (int i = 0; i < compareCount; i++)
+				{
+					if (outputs[i] == validationOutputs[i]) continue;
+					EngineDiagnostics.Record(
+						$"event=native-c-jit-mismatch\noutput={i}\nnative={validationOutputs[i]}\njit={outputs[i]}");
+					break;
+				}
+				return;
+			}
+
+			NativeCombinationalBackend.RecordDynamicJitEvaluation();
 			for (int i = 0; i < blocks.Length; i++) blocks[i](scratch);
 			outputWriter(scratch, outputs);
 		}
@@ -738,6 +779,7 @@ namespace DLS.Simulation
 
 		public int PrimitiveNodeCount => program.PrimitiveNodeCount;
 		public double CompileMilliseconds => program.CompileMilliseconds;
+		public bool UsesNativeC => program.UsesNativeC;
 
 		public CompiledChipExecutor(CompiledCombinationalProgram program)
 		{

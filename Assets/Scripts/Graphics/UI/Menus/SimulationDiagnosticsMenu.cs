@@ -81,6 +81,8 @@ namespace DLS.Graphics
 				UI.DrawText("PERFORMANCE", theme.FontBold, theme.FontSizeRegular, pos, Anchor.TextCentreLeft, textCol);
 				pos.y -= 2.2f;
 
+				DrawInfoRow(ref pos, "Engine: REWIRED FAST | deterministic + feedback JIT", dim);
+
 				int profilerMode = MenuHelper.LabeledOptionsWheel(
 					"Hot-chip profiler",
 					textCol,

@@ -17,6 +17,20 @@ import random
 import time
 
 
+def extract_method(text: str, signature: str) -> str:
+    start = text.index(signature)
+    brace = text.index("{", start)
+    depth = 0
+    for i in range(brace, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start:i + 1]
+    raise AssertionError(f"unterminated method: {signature}")
+
+
 class DeltaNet:
     def __init__(self) -> None:
         self.state: dict[str, int] = {}
@@ -553,7 +567,8 @@ def test_source_integration_static() -> None:
 
     required_solver_tokens = (
         "SettleCombinational",
-        "PrimeInitialCombinationalState",
+        "PowerOnAsynchronousSettle",
+        "FullDeterministicResettle",
         "maxDeltaCycles",
         "ResolveDrivenState",
         "AdvanceSequentialComponents",
@@ -579,14 +594,28 @@ def test_source_integration_static() -> None:
 
     assert "sourceIndices.Length" not in solver, "stale jagged-adjacency reference breaks the CSR build"
 
-    assert "RandomBool()" not in solver
-    assert "rng.Next" not in solver
-    assert "HashSet<SimPin>" not in solver
-    assert "HashSet<SimChip>" not in solver
-    assert "Dictionary<SimPin, SimPin[]>" not in solver
+    # Random scheduling is allowed only in the bounded power-on recovery path.
+    # The ordinary deterministic settle/propagation hot path must remain random-free.
+    settle = extract_method(solver, "static (bool converged, int deltaCycles) SettleCombinational(")
+    queue_fanout = extract_method(solver, "static void QueueFanout(")
+    drain = extract_method(solver, "static void DrainTargetQueue(")
+    hot_path = settle + queue_fanout + drain
+    assert "RandomBool()" not in hot_path
+    assert "rng.Next" not in hot_path
+    assert "HashSet<SimPin>" not in hot_path
+    assert "HashSet<SimChip>" not in hot_path
+    assert "Dictionary<SimPin, SimPin[]>" not in hot_path
+
+    # Final release uses the Rewired deterministic engine for every root,
+    # including feedback/register projects.
     assert "DeterministicSimulator.RunSimulationStep" in facade
+    assert "DLS.Simulation.Simulator.RunSimulationStep" not in facade
+    assert "UseLegacyCompatibilityEngine" not in facade
+    assert "RequiresUpstreamTiming" not in facade
+
     assert "bool topologyChanged = DLS.Simulation.Simulator.ApplyModifications();" in facade
-    assert "if (topologyChanged) DeterministicSimulator.InvalidateTopology();" in facade
+    assert "topologyRecoveryPending = true;" in facade
+    assert "DeterministicSimulator.InvalidateTopology();" in facade
     assert "pendingTopologyModification" not in facade
 
 

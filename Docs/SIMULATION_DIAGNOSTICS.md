@@ -63,6 +63,8 @@ Replay recordings are cleared when switching the active chip.
 
 ## Feedback JIT diagnostics
 
+> **Rewired v0.3.0:** all projects use the deterministic runtime. Cyclic gate-feedback Custom Chips can be accelerated by Feedback JIT after the live network has settled and synchronized. There is no Sebastian-runtime fallback.
+
 Safe cyclic Custom Chips made only from supported logic primitives can use the feedback JIT. This covers gate-built storage structures such as SR latches, D latches, flip-flops and registers.
 
 Important behavior:

@@ -325,6 +325,77 @@ def test_feedback_state_ownership_uses_runtime_active_not_ready() -> None:
 
 
 
+def test_all_projects_use_rewired_deterministic_engine() -> None:
+    facade = source("Assets/Scripts/Game/Project/SimulationFacade.cs")
+    run = extract_method(facade, "public static void RunSimulationStep(")
+    ensure = extract_method(facade, "public static void EnsureInitialized(")
+    apply = extract_method(facade, "public static void ApplyModifications()")
+
+    assert "DeterministicSimulator.RunSimulationStep" in run
+    assert "DLS.Simulation.Simulator.RunSimulationStep" not in run
+    assert "UseLegacyCompatibilityEngine" not in facade
+    assert "RequiresUpstreamTiming" not in facade
+    assert "forceLegacyCompatibilityAfterEdit" not in facade
+    assert "CompatibilityReason" not in facade
+    assert "topologyRecoveryPending" in ensure
+    assert "DeterministicSimulator.InvalidateTopology();" in apply
+
+
+def test_feedback_graphs_use_feedback_jit_instead_of_legacy_routing() -> None:
+    feedback = source("Assets/Scripts/Simulation/FeedbackJitCompiler.cs")
+    simulator = source("Assets/Scripts/Simulation/Simulator.cs")
+    deterministic = source("Assets/Scripts/Simulation/DeterministicSimulator.cs")
+
+    compile_program = extract_method(feedback, "static CompiledFeedbackProgram CompileProgram(")
+    attach = extract_method(feedback, "internal static void Attach(")
+
+    assert "if (!ContainsCycle(indegree, outgoing)) return null;" in compile_program
+    assert "simChip.FeedbackExecutor = executor;" in attach
+    assert "FeedbackJitCompiler.Attach(simChip, chipDesc, library);" in simulator
+    assert "chip.FeedbackExecutor != null" in deterministic
+
+
+def test_native_c_is_experimental_and_downstream_of_safe_combinational_analysis() -> None:
+    project_desc = source("Assets/Scripts/Description/Types/ProjectDescription.cs")
+    prefs = source("Assets/Scripts/Graphics/UI/Menus/PreferencesMenu.cs")
+    native = source("Assets/Scripts/Simulation/NativeCombinationalBackend.cs")
+    jit = source("Assets/Scripts/Simulation/CombinationalJitCompiler.cs")
+
+    for field in (
+        "Prefs_ExperimentalNativeCMode",
+        "Prefs_ExperimentalEngineDiagnostics",
+        "Prefs_ExperimentalNativeCValidation",
+    ):
+        assert field in project_desc
+
+    assert '"EXPERIMENTAL:"' in prefs
+    assert '"Native C fast engine"' in prefs
+    assert '"NAND only"' in prefs
+    assert '"All supported"' in prefs
+    assert '"C/JIT cross-check"' in prefs
+
+    attach = extract_method(jit, "internal static void Attach(")
+    assert "CombinationalChipCacheManager.Analyze(description, library)" in attach
+    assert "if (!analysis.CanCache) return;" in attach
+    assert "NativeCombinationalBackend.TryCreate(" in jit
+    assert "mode == 2 || (mode == 1 && nandOnlyProgram)" in native
+
+
+def test_native_c_crosscheck_keeps_jit_as_authoritative_result() -> None:
+    jit = source("Assets/Scripts/Simulation/CombinationalJitCompiler.cs")
+    run = extract_method(jit, "public void Run(uint[] scratch, uint[] outputs)")
+
+    assert "NativeCombinationalBackend.ValidationEnabled" in run
+    assert "Array.Copy(outputs, validationOutputs" in run
+    assert "outputWriter(scratch, outputs);" in run
+    assert "native-c-jit-mismatch" in run
+
+    native_copy = run.index("Array.Copy(outputs, validationOutputs")
+    jit_writer = run.index("outputWriter(scratch, outputs);")
+    mismatch = run.index("native-c-jit-mismatch")
+    assert native_copy < jit_writer < mismatch
+
+
 TESTS = (
     test_feedback_jit_is_dormant_until_after_first_normal_tick,
     test_feedback_jit_uses_two_delta_buffers,
@@ -346,6 +417,10 @@ TESTS = (
     test_replay_ui_requests_are_executed_on_simulation_thread,
     test_feedback_jit_skips_stable_unchanged_input_ticks,
     test_feedback_state_ownership_uses_runtime_active_not_ready,
+    test_all_projects_use_rewired_deterministic_engine,
+    test_feedback_graphs_use_feedback_jit_instead_of_legacy_routing,
+    test_native_c_is_experimental_and_downstream_of_safe_combinational_analysis,
+    test_native_c_crosscheck_keeps_jit_as_authoritative_result,
 )
 
 

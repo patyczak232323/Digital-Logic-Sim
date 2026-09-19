@@ -156,11 +156,11 @@ namespace DLS.SaveSystem
 
 				if (File.Exists(path))
 				{
-					// Do not overwrite the last backup until the new primary is in place.
-					// This guarantees that an interruption leaves at least one complete copy.
+					// Stage the previous primary first, then atomically replace the primary.
+					// Never delete the primary before the new file is ready: a crash between
+					// Delete and Move would otherwise leave only recovery side-files.
 					File.Copy(path, stagedBackupPath, true);
-					if (File.Exists(path)) File.Delete(path);
-					File.Move(temporaryPath, path);
+					File.Move(temporaryPath, path, true);
 					if (File.Exists(backupPath)) File.Delete(backupPath);
 					File.Move(stagedBackupPath, backupPath);
 				}
