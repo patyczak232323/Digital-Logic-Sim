@@ -75,9 +75,16 @@ namespace DLS.Graphics
 			else if (menuToDraw == MenuType.PulseEdit) PulseEditMenu.DrawMenu();
 			else
 			{
-				bool showSimPausedBanner = project.simPaused;
-				if (showSimPausedBanner) SimPausedUI.DrawPausedBanner();
-				if (project.chipViewStack.Count > 1) ViewedChipsBar.DrawViewedChipsBanner(project, showSimPausedBanner);
+				if (TouchUILayout.Enabled)
+				{
+					TouchProjectHeader.Draw(project);
+				}
+				else
+				{
+					bool showSimPausedBanner = project.simPaused;
+					if (showSimPausedBanner) SimPausedUI.DrawPausedBanner();
+					if (project.chipViewStack.Count > 1) ViewedChipsBar.DrawViewedChipsBanner(project, showSimPausedBanner);
+				}
 			}
 
 			ContextMenu.Update();
@@ -149,6 +156,7 @@ namespace DLS.Graphics
 		public static bool IsPortrait => Screen.height > Screen.width;
 
 		public const float BottomBarHeight = 5.8f;
+		public const float TopBarHeight = 5.4f;
 		public const float TouchButtonHeight = 4.4f;
 		public const float TouchGap = 0.45f;
 		public const float EdgePadding = 0.8f;
@@ -160,5 +168,6 @@ namespace DLS.Graphics
 		public static float SafeBottom => Enabled && Screen.width > 0 ? Screen.safeArea.yMin / Screen.width * UI.Width : 0;
 		public static float SafeTop => Enabled && Screen.width > 0 ? (Screen.height - Screen.safeArea.yMax) / Screen.width * UI.Width : 0;
 		public static float BottomBarTotalHeight => BottomBarHeight + SafeBottom;
+		public static float TopBarTotalHeight => TopBarHeight + SafeTop;
 	}
 }
