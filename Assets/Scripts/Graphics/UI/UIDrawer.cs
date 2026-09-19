@@ -1,5 +1,6 @@
 using DLS.Game;
 using Seb.Vis.UI;
+using UnityEngine;
 
 namespace DLS.Graphics
 {
@@ -32,7 +33,9 @@ namespace DLS.Graphics
 		{
 			NotifyIfActiveMenuChanged();
 
-			using (UI.CreateFixedAspectUIScope(drawLetterbox: true))
+			using (TouchUILayout.Enabled
+				       ? UI.CreateUIScope()
+				       : UI.CreateFixedAspectUIScope(drawLetterbox: true))
 			{
 				if (ActiveMenu is MenuType.MainMenu)
 				{
@@ -133,5 +136,21 @@ namespace DLS.Graphics
 			ChipLibraryMenu.Reset();
 			SearchPopup.Reset();
 		}
+	}
+
+	public static class TouchUILayout
+	{
+		// Android/mobile builds use a dedicated touch layout. This switch also lets
+		// the same layout be exercised in the Unity editor without an APK build.
+		public static bool ForceTouchLayoutForTesting;
+
+		public static bool Enabled => ForceTouchLayoutForTesting || Application.isMobilePlatform;
+		public static bool IsAndroid => Application.platform == RuntimePlatform.Android;
+		public static bool IsPortrait => Screen.height > Screen.width;
+
+		public const float BottomBarHeight = 5.8f;
+		public const float TouchButtonHeight = 4.4f;
+		public const float TouchGap = 0.45f;
+		public const float EdgePadding = 0.8f;
 	}
 }
