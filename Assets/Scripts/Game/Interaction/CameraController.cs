@@ -250,7 +250,7 @@ namespace DLS.Game
 
 			// Move cam down slightly from bounds centre to account for bottom region of screen blocked by chip bar
 			const float uiScreenHeight = UI.Width * 9 / 16f;
-			float bottomBarWorldHeight = BottomBarUI.barHeight / uiScreenHeight * view.OrthoSize * 2;
+			float bottomBarWorldHeight = BottomBarUI.ActiveBarHeight / uiScreenHeight * view.OrthoSize * 2;
 			view.Pos = bounds.Centre + Vector2.down * bottomBarWorldHeight / 2;
 			return view;
 		}
