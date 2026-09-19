@@ -20,6 +20,17 @@ namespace DLS.Graphics
 		const float infoFontScale = 0.82f;
 		const float statsRefreshInterval = 0.75f;
 
+		enum TouchPage
+		{
+			Status,
+			Profiler,
+			Analyzer,
+			Replay
+		}
+
+		static readonly string[] TouchPageNames = { "STATUS", "PROFILER", "ANALYZER", "REPLAY" };
+		static TouchPage touchPage;
+
 		static readonly string[] OffOn = { "OFF", "ON" };
 		static readonly UIHandle ID_Profiler = new("SIM_DIAG_Profiler");
 		static readonly UIHandle ID_Waveform = new("SIM_DIAG_Waveform");
@@ -33,6 +44,7 @@ namespace DLS.Graphics
 			UI.GetWheelSelectorState(ID_Waveform).index = SimulationWaveformRecorder.Enabled ? 1 : 0;
 			RefreshProjectStats();
 			nextStatsRefreshTime = Time.unscaledTime + statsRefreshInterval;
+			if (TouchUILayout.Enabled) touchPage = TouchPage.Status;
 		}
 
 		public static void DrawMenu()
@@ -41,6 +53,12 @@ namespace DLS.Graphics
 			{
 				RefreshProjectStats();
 				nextStatsRefreshTime = Time.unscaledTime + statsRefreshInterval;
+			}
+
+			if (TouchUILayout.Enabled)
+			{
+				DrawTouchMenu();
+				return;
 			}
 
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
@@ -468,6 +486,386 @@ namespace DLS.Graphics
 				UI.OverridePreviousBounds(bounds);
 				pos = bounds.BottomLeft + Vector2.down * spacing;
 			}
+		}
+
+		static void DrawTouchMenu()
+		{
+			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
+			Color background = new(0.055f, 0.055f, 0.065f, 0.98f);
+			Color card = new(0.11f, 0.11f, 0.13f, 1f);
+			Color dim = Color.white * 0.72f;
+			Color textCol = Color.white;
+			float edge = 1.2f;
+			float gap = TouchUILayout.TouchGap;
+
+			UI.DrawFullscreenPanel(background);
+
+			Vector2 titlePos = UI.TopLeft + new Vector2(edge, -1.25f);
+			UI.DrawText(
+				"SIMULATION",
+				theme.FontBold,
+				theme.FontSizeRegular * 1.15f,
+				titlePos,
+				Anchor.TextCentreLeft,
+				textCol);
+			UI.DrawText(
+				$"Rewired {Main.RewiredVersion}",
+				theme.FontRegular,
+				theme.FontSizeRegular * 0.72f,
+				titlePos + Vector2.down * 1.35f,
+				Anchor.TextCentreLeft,
+				dim);
+
+			if (UI.Button(
+				    "CLOSE",
+				    theme.ButtonTheme,
+				    UI.TopRight + new Vector2(-edge, -0.7f),
+				    new Vector2(13, TouchUILayout.TouchButtonHeight),
+				    true,
+				    false,
+				    true,
+				    Anchor.TopRight))
+			{
+				UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
+				return;
+			}
+
+			float tabTop = UI.Height - 6.5f;
+			float tabWidth = (UI.Width - edge * 2 - gap * (TouchPageNames.Length - 1)) / TouchPageNames.Length;
+			Vector2 tabPos = new(edge, tabTop);
+
+			for (int i = 0; i < TouchPageNames.Length; i++)
+			{
+				bool selected = (int)touchPage == i;
+				ButtonTheme tabTheme = selected ? theme.MenuButtonTheme : theme.ButtonTheme;
+				if (UI.Button(
+					    TouchPageNames[i],
+					    tabTheme,
+					    tabPos,
+					    new Vector2(tabWidth, TouchUILayout.TouchButtonHeight),
+					    true,
+					    false,
+					    false,
+					    Anchor.TopLeft))
+				{
+					touchPage = (TouchPage)i;
+				}
+				tabPos.x += tabWidth + gap;
+			}
+
+			float contentTop = tabTop - TouchUILayout.TouchButtonHeight - 1.1f;
+			switch (touchPage)
+			{
+				case TouchPage.Status:
+					DrawTouchStatus(contentTop, edge, card, dim, textCol);
+					break;
+				case TouchPage.Profiler:
+					DrawTouchProfiler(contentTop, edge, card, dim, textCol);
+					break;
+				case TouchPage.Analyzer:
+					DrawTouchAnalyzer(contentTop, edge, card, dim, textCol);
+					break;
+				case TouchPage.Replay:
+					DrawTouchReplay(contentTop, edge, card, dim, textCol);
+					break;
+			}
+
+			if (KeyboardShortcuts.CancelShortcutTriggered)
+			{
+				UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
+			}
+		}
+
+		static void DrawTouchStatus(float top, float edge, Color card, Color dim, Color textCol)
+		{
+			Project project = Project.ActiveProject;
+			float y = top;
+			string live = project == null
+				? "No active project"
+				: $"{project.simAvgTicksPerSec:N0} steps/s   target {project.targetTicksPerSecond:N0}";
+
+			DrawTouchInfoCard(ref y, edge, card, "ENGINE", "REWIRED FAST | deterministic + feedback JIT", dim);
+			DrawTouchInfoCard(ref y, edge, card, "LIVE", live, textCol);
+			DrawTouchInfoCard(ref y, edge, card, "GRAPH", projectStats, dim);
+			DrawTouchInfoCard(ref y, edge, card, "ACCELERATION", acceleratorStats, dim);
+
+			string stability = DeterministicSimulator.LastSettleConverged ? "Convergence OK" : "CONVERGENCE FAILED";
+			Color stabilityCol = DeterministicSimulator.LastSettleConverged ? dim : Color.yellow;
+			DrawTouchInfoCard(ref y, edge, card, "STABILITY", stability, stabilityCol);
+
+			if (DeterministicSimulator.LastFailureFrame >= 0)
+			{
+				string location = !string.IsNullOrWhiteSpace(DeterministicSimulator.LastFailureChipPath)
+					? DeterministicSimulator.LastFailureChipPath
+					: DeterministicSimulator.LastFailureSuspects;
+				string failure = $"frame {DeterministicSimulator.LastFailureFrame:N0} | {DeterministicSimulator.LastFailureKind}";
+				if (!string.IsNullOrWhiteSpace(location)) failure += " | " + CompactPath(location, 70);
+				DrawTouchInfoCard(ref y, edge, card, "LAST FAILURE", failure, Color.yellow);
+			}
+		}
+
+		static void DrawTouchProfiler(float top, float edge, Color card, Color dim, Color textCol)
+		{
+			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
+			float gap = TouchUILayout.TouchGap;
+			float buttonWidth = (UI.Width - edge * 2 - gap * 2) / 3f;
+			Vector2 pos = new(edge, top);
+
+			string profilerLabel = SimulationProfiler.Enabled ? "PROFILER ON" : "PROFILER OFF";
+			if (UI.Button(profilerLabel, theme.ButtonTheme, pos, new Vector2(buttonWidth, TouchUILayout.TouchButtonHeight), true, false, false, Anchor.TopLeft))
+			{
+				SimulationProfiler.Enabled = !SimulationProfiler.Enabled;
+				UI.GetWheelSelectorState(ID_Profiler).index = SimulationProfiler.Enabled ? 1 : 0;
+			}
+			pos.x += buttonWidth + gap;
+
+			if (UI.Button(
+				    SimulationBenchmark.Active ? "CANCEL BENCH" : "START BENCH",
+				    theme.ButtonTheme,
+				    pos,
+				    new Vector2(buttonWidth, TouchUILayout.TouchButtonHeight),
+				    true,
+				    false,
+				    false,
+				    Anchor.TopLeft))
+			{
+				if (SimulationBenchmark.Active) SimulationBenchmark.Cancel();
+				else SimulationBenchmark.Start(5000, 128);
+			}
+			pos.x += buttonWidth + gap;
+
+			if (UI.Button("RESET", theme.ButtonTheme, pos, new Vector2(buttonWidth, TouchUILayout.TouchButtonHeight), true, false, false, Anchor.TopLeft))
+			{
+				SimulationBenchmark.Reset();
+				SimulationProfiler.Reset();
+			}
+
+			float y = top - TouchUILayout.TouchButtonHeight - 0.9f;
+			SimulationBenchmarkResult benchmark = SimulationBenchmark.Latest;
+			string bench = SimulationBenchmark.Active
+				? "Sampling raw engine time..."
+				: benchmark.SampledSteps > 0
+					? $"{benchmark.RawStepsPerSecond:0} steps/s | {benchmark.AverageMicrosecondsPerStep:0.###} us avg | {benchmark.MaxMicrosecondsPerStep:0.###} us max"
+					: "Not run";
+			DrawTouchInfoCard(ref y, edge, card, "BENCHMARK", bench, benchmark.SampledSteps > 0 ? textCol : dim);
+
+			SimulationStepProfile last = SimulationProfiler.LastStep;
+			string lastText = last.Frame > 0
+				? $"{last.StepMilliseconds:0.###} ms | gates {last.GateEvaluations:N0} | signals {last.SignalPropagations:N0} | delta {last.DeltaCycles}"
+				: "No profiler sample";
+			DrawTouchInfoCard(ref y, edge, card, "LAST STEP", lastText, SimulationProfiler.Enabled ? textCol : dim);
+
+			SimulationHotChip[] hot = SimulationProfiler.GetHotChips(4);
+			if (!SimulationProfiler.Enabled)
+			{
+				DrawTouchInfoCard(ref y, edge, card, "HOT CHIPS", "Enable profiler to collect samples", dim);
+			}
+			else if (hot.Length == 0)
+			{
+				DrawTouchInfoCard(ref y, edge, card, "HOT CHIPS", "Waiting for samples...", dim);
+			}
+			else
+			{
+				for (int i = 0; i < hot.Length; i++)
+				{
+					SimulationHotChip chip = hot[i];
+					DrawTouchInfoCard(
+						ref y,
+						edge,
+						card,
+						$"HOT #{i + 1}",
+						$"{CompactPath(chip.Path, 45)} | {chip.ExecutionPath} | {chip.AverageMicroseconds:0.###} us",
+						textCol);
+				}
+			}
+		}
+
+		static void DrawTouchAnalyzer(float top, float edge, Color card, Color dim, Color textCol)
+		{
+			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
+			float gap = TouchUILayout.TouchGap;
+			float buttonWidth = (UI.Width - edge * 2 - gap * 2) / 3f;
+			Vector2 pos = new(edge, top);
+
+			if (UI.Button(
+				    SimulationWaveformRecorder.Enabled ? "CAPTURE ON" : "CAPTURE OFF",
+				    theme.ButtonTheme,
+				    pos,
+				    new Vector2(buttonWidth, TouchUILayout.TouchButtonHeight),
+				    true,
+				    false,
+				    false,
+				    Anchor.TopLeft))
+			{
+				SimulationWaveformRecorder.Enabled = !SimulationWaveformRecorder.Enabled;
+				UI.GetWheelSelectorState(ID_Waveform).index = SimulationWaveformRecorder.Enabled ? 1 : 0;
+			}
+			pos.x += buttonWidth + gap;
+
+			if (UI.Button("CLEAR", theme.ButtonTheme, pos, new Vector2(buttonWidth, TouchUILayout.TouchButtonHeight), true, false, false, Anchor.TopLeft))
+			{
+				SimulationWaveformRecorder.ClearSamples();
+			}
+			pos.x += buttonWidth + gap;
+
+			if (UI.Button("REMOVE ALL", theme.ButtonTheme, pos, new Vector2(buttonWidth, TouchUILayout.TouchButtonHeight), true, false, false, Anchor.TopLeft))
+			{
+				SimulationWaveformRecorder.ClearAll();
+			}
+
+			float y = top - TouchUILayout.TouchButtonHeight - 0.9f;
+			WaveformProbeInfo[] probes = SimulationWaveformRecorder.GetProbes();
+			if (probes.Length == 0)
+			{
+				DrawTouchInfoCard(ref y, edge, card, "PROBES", "Right-click / context action on a pin -> TOGGLE PROBE", dim);
+				return;
+			}
+
+			int count = Math.Min(5, probes.Length);
+			for (int i = 0; i < count; i++)
+			{
+				WaveformProbeInfo probe = probes[i];
+				WaveformSample[] samples = SimulationWaveformRecorder.GetSamples(probe.Id);
+				string latest = samples.Length == 0 ? "--" : FormatState(samples[^1].State, probe.BitCount);
+				string value = $"{probe.BitCount}b | now {latest} | transitions {probe.SampleCount}";
+				DrawTouchProbeRow(ref y, edge, card, CompactPath(probe.Name, 48), value, probe.Id, textCol);
+			}
+
+			if (probes.Length > count)
+			{
+				DrawTouchInfoCard(ref y, edge, card, "MORE", $"+ {probes.Length - count} probes", dim);
+			}
+		}
+
+		static void DrawTouchReplay(float top, float edge, Color card, Color dim, Color textCol)
+		{
+			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
+			Project project = Project.ActiveProject;
+			float gap = TouchUILayout.TouchGap;
+			float buttonWidth = (UI.Width - edge * 2 - gap * 2) / 3f;
+			Vector2 pos = new(edge, top);
+
+			bool replayPending = project != null && project.ReplayCommandPending;
+			bool recording = project != null && project.ReplayRecordingActive;
+			bool canReplay = project != null && project.simPaused && project.HasReplayRecording && !recording && !replayPending;
+
+			if (UI.Button(
+				    recording ? "STOP RECORD" : "START RECORD",
+				    theme.ButtonTheme,
+				    pos,
+				    new Vector2(buttonWidth, TouchUILayout.TouchButtonHeight),
+				    project != null && !replayPending,
+				    false,
+				    false,
+				    Anchor.TopLeft))
+			{
+				if (recording) project.RequestStopReplayRecording();
+				else project.RequestStartReplayRecording(5000);
+			}
+			pos.x += buttonWidth + gap;
+
+			if (UI.Button("REPLAY", theme.ButtonTheme, pos, new Vector2(buttonWidth, TouchUILayout.TouchButtonHeight), canReplay, false, false, Anchor.TopLeft))
+			{
+				project.RequestReplayLatest();
+			}
+			pos.x += buttonWidth + gap;
+
+			if (UI.Button(
+				    project != null && project.simPaused ? "RESUME" : "PAUSE",
+				    theme.ButtonTheme,
+				    pos,
+				    new Vector2(buttonWidth, TouchUILayout.TouchButtonHeight),
+				    project != null,
+				    false,
+				    false,
+				    Anchor.TopLeft))
+			{
+				project.description.Prefs_SimPaused = !project.description.Prefs_SimPaused;
+			}
+
+			float y = top - TouchUILayout.TouchButtonHeight - 0.9f;
+			string status = project == null
+				? "No active project"
+				: recording
+					? $"Recording {project.ReplayRecordedFrames:N0} frames..."
+					: project.ReplayStatus;
+			DrawTouchInfoCard(ref y, edge, card, "STATUS", status, project != null && project.LatestReplayResult.Success ? textCol : dim);
+			DrawTouchInfoCard(ref y, edge, card, "HOW TO USE", "Record a run, pause simulation, then press REPLAY to verify deterministic output.", dim);
+
+			if (project != null && project.HasReplayRecording && !project.simPaused)
+			{
+				DrawTouchInfoCard(ref y, edge, card, "REPLAY LOCKED", "Pause simulation before replay.", Color.yellow);
+			}
+		}
+
+		static void DrawTouchInfoCard(ref float y, float edge, Color card, string label, string value, Color valueCol)
+		{
+			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
+			const float height = 4.7f;
+			float width = UI.Width - edge * 2;
+			Vector2 topLeft = new(edge, y);
+			UI.DrawPanel(topLeft, new Vector2(width, height), card, Anchor.TopLeft);
+			Bounds2D bounds = UI.PrevBounds;
+
+			UI.DrawText(
+				label,
+				theme.FontBold,
+				theme.FontSizeRegular * 0.72f,
+				bounds.CentreLeft + new Vector2(1.0f, 0.85f),
+				Anchor.TextCentreLeft,
+				Color.white * 0.62f);
+
+			string fitted = FitTextToWidth(value, width - 2.0f, theme.FontSizeRegular * 0.88f);
+			UI.DrawText(
+				fitted,
+				theme.FontRegular,
+				theme.FontSizeRegular * 0.88f,
+				bounds.CentreLeft + new Vector2(1.0f, -0.75f),
+				Anchor.TextCentreLeft,
+				valueCol);
+
+			y = bounds.Bottom - TouchUILayout.TouchGap;
+		}
+
+		static void DrawTouchProbeRow(ref float y, float edge, Color card, string name, string value, int probeId, Color textCol)
+		{
+			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
+			const float height = 5.1f;
+			const float removeWidth = 10f;
+			float width = UI.Width - edge * 2;
+			Vector2 topLeft = new(edge, y);
+			UI.DrawPanel(topLeft, new Vector2(width, height), card, Anchor.TopLeft);
+			Bounds2D bounds = UI.PrevBounds;
+
+			UI.DrawText(
+				FitTextToWidth(name, width - removeWidth - 2.2f, theme.FontSizeRegular * 0.82f),
+				theme.FontBold,
+				theme.FontSizeRegular * 0.82f,
+				bounds.CentreLeft + new Vector2(1.0f, 0.75f),
+				Anchor.TextCentreLeft,
+				textCol);
+			UI.DrawText(
+				FitTextToWidth(value, width - removeWidth - 2.2f, theme.FontSizeRegular * 0.78f),
+				theme.FontRegular,
+				theme.FontSizeRegular * 0.78f,
+				bounds.CentreLeft + new Vector2(1.0f, -0.85f),
+				Anchor.TextCentreLeft,
+				Color.white * 0.72f);
+
+			if (UI.Button(
+				    "REMOVE",
+				    theme.ButtonTheme,
+				    bounds.CentreRight + Vector2.left * 0.6f,
+				    new Vector2(removeWidth - 1.0f, height - 0.8f),
+				    true,
+				    false,
+				    false,
+				    Anchor.CentreRight))
+			{
+				SimulationWaveformRecorder.RemoveProbe(probeId);
+			}
+
+			y = bounds.Bottom - TouchUILayout.TouchGap;
 		}
 
 		static string FitTextToWidth(string text, float maxWidth, float fontSize)
