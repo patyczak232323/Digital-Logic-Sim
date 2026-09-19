@@ -20,11 +20,30 @@ namespace Seb.Helpers
 		static int leftMouseDownConsumeFrame = -1;
 		static int rightMouseDownConsumeFrame = -1;
 		static int middleMouseDownConsumeFrame = -1;
+
+		static int touchGestureFrame = -1;
+		static int trackedTouchFingerId = -1;
+		static Vector2 touchStartPosition;
+		static float touchStartTime;
+		static bool touchLongPressFired;
+		static bool touchLongPressThisFrame;
+		const float TouchLongPressSeconds = 0.45f;
+		const float TouchLongPressMaxMovePixels = 36f;
+
 		public static Vector2 MousePos => InputSource.MousePosition; // Screen-space mouse position
 		public static string InputStringThisFrame => InputSource.InputString;
 		public static bool AnyKeyOrMouseDownThisFrame => InputSource.AnyKeyOrMouseDownThisFrame;
 		public static bool AnyKeyOrMouseHeldThisFrame => InputSource.AnyKeyOrMouseHeldThisFrame;
 		public static Vector2 MouseScrollDelta => InputSource.MouseScrollDelta;
+		public static bool TouchLongPressTriggeredThisFrame
+		{
+			get
+			{
+				UpdateTouchGestureState();
+				return touchLongPressThisFrame;
+			}
+		}
+
 
 		public static Camera WorldCam
 		{
@@ -169,6 +188,60 @@ namespace Seb.Helpers
 		public static void CopyToClipboard(string s) => GUIUtility.systemCopyBuffer = s;
 		public static string GetClipboardContents() => GUIUtility.systemCopyBuffer;
 
+		static void UpdateTouchGestureState()
+		{
+			if (touchGestureFrame == Time.frameCount) return;
+			touchGestureFrame = Time.frameCount;
+			touchLongPressThisFrame = false;
+
+			if (!Application.isMobilePlatform || Input.touchCount == 0)
+			{
+				trackedTouchFingerId = -1;
+				touchLongPressFired = false;
+				return;
+			}
+
+			// Multi-touch is reserved for camera gestures; never interpret it as a
+			// context-menu long press.
+			if (Input.touchCount != 1)
+			{
+				trackedTouchFingerId = -1;
+				touchLongPressFired = true;
+				return;
+			}
+
+			Touch touch = Input.GetTouch(0);
+
+			if (touch.phase == TouchPhase.Began || trackedTouchFingerId != touch.fingerId)
+			{
+				trackedTouchFingerId = touch.fingerId;
+				touchStartPosition = touch.position;
+				touchStartTime = Time.unscaledTime;
+				touchLongPressFired = false;
+				return;
+			}
+
+			if (touch.phase is TouchPhase.Ended or TouchPhase.Canceled)
+			{
+				trackedTouchFingerId = -1;
+				touchLongPressFired = false;
+				return;
+			}
+
+			if ((touch.position - touchStartPosition).sqrMagnitude >
+			    TouchLongPressMaxMovePixels * TouchLongPressMaxMovePixels)
+			{
+				touchLongPressFired = true;
+				return;
+			}
+
+			if (!touchLongPressFired && Time.unscaledTime - touchStartTime >= TouchLongPressSeconds)
+			{
+				touchLongPressFired = true;
+				touchLongPressThisFrame = true;
+			}
+		}
+
 		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
 		static void Reset()
 		{
@@ -177,6 +250,12 @@ namespace Seb.Helpers
 			leftMouseDownConsumeFrame = -1;
 			rightMouseDownConsumeFrame = -1;
 			middleMouseDownConsumeFrame = -1;
+			touchGestureFrame = -1;
+			trackedTouchFingerId = -1;
+			touchStartPosition = Vector2.zero;
+			touchStartTime = 0;
+			touchLongPressFired = false;
+			touchLongPressThisFrame = false;
 			InputSource = new UnityInputSource();
 		}
 	}
