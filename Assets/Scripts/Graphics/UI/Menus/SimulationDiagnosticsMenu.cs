@@ -145,6 +145,23 @@ namespace DLS.Graphics
 					: "FAILED: " + DeterministicSimulator.LastNonConvergenceDetails;
 				DrawInfoRow(ref pos, convergence, DeterministicSimulator.LastSettleConverged ? dim : Color.yellow);
 
+				if (DeterministicSimulator.LastFailureFrame >= 0)
+				{
+					DrawInfoRow(
+						ref pos,
+						$"Last failure: frame {DeterministicSimulator.LastFailureFrame:N0} | {DeterministicSimulator.LastFailureKind}",
+						Color.yellow);
+
+					if (!string.IsNullOrWhiteSpace(DeterministicSimulator.LastFailureChipPath))
+					{
+						DrawInfoRow(ref pos, "Location: " + DeterministicSimulator.LastFailureChipPath, Color.yellow);
+					}
+					else if (!string.IsNullOrWhiteSpace(DeterministicSimulator.LastFailureSuspects))
+					{
+						DrawInfoRow(ref pos, "Suspects: " + DeterministicSimulator.LastFailureSuspects, Color.yellow);
+					}
+				}
+
 				pos.y -= 0.5f;
 				UI.DrawText("HOT CHIPS", theme.FontBold, theme.FontSizeRegular, pos, Anchor.TextCentreLeft, textCol);
 				pos.y -= 2.1f;
