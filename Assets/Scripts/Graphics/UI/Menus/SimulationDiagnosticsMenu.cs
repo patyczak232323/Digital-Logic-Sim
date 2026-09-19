@@ -336,7 +336,7 @@ namespace DLS.Graphics
 				float zY = bounds.Bottom + 2.1f;
 
 				int startFrame = samples[start].Frame;
-				int endFrame = Math.Max(samples[^1].Frame, Simulator.simulationFrame);
+				int endFrame = Math.Max(samples[^1].Frame, DLS.Simulation.Simulator.simulationFrame);
 				int frameSpan = Math.Max(1, endFrame - startFrame);
 
 				float XForFrame(int frame) =>
