@@ -355,6 +355,30 @@ def test_feedback_graphs_use_feedback_jit_instead_of_legacy_routing() -> None:
     assert "chip.FeedbackExecutor != null" in deterministic
 
 
+def test_non_convergence_diagnostics_are_sticky_and_structured() -> None:
+    sim = source("Assets/Scripts/Simulation/DeterministicSimulator.cs")
+    menu = source("Assets/Scripts/Graphics/UI/Menus/SimulationDiagnosticsMenu.cs")
+
+    assert "public static int LastFailureFrame" in sim
+    assert "public static string LastFailureKind" in sim
+    assert "public static string LastFailureChipPath" in sim
+    assert "public static string LastFailureSuspects" in sim
+    assert "static void RememberFailure(" in sim
+
+    for trace in (
+        "static void TraceNonConvergence(",
+        "static void TracePowerOnNonConvergence(",
+        "static void TraceRepeatedEvaluation(",
+        "static void TraceFeedbackJitFallback(",
+    ):
+        body = extract_method(sim, trace)
+        assert "RememberFailure(" in body
+
+    assert "Last failure: frame" in menu
+    assert "LastFailureChipPath" in menu
+    assert "LastFailureSuspects" in menu
+
+
 def test_native_c_is_experimental_and_downstream_of_safe_combinational_analysis() -> None:
     project_desc = source("Assets/Scripts/Description/Types/ProjectDescription.cs")
     prefs = source("Assets/Scripts/Graphics/UI/Menus/PreferencesMenu.cs")
@@ -419,6 +443,7 @@ TESTS = (
     test_feedback_state_ownership_uses_runtime_active_not_ready,
     test_all_projects_use_rewired_deterministic_engine,
     test_feedback_graphs_use_feedback_jit_instead_of_legacy_routing,
+    test_non_convergence_diagnostics_are_sticky_and_structured,
     test_native_c_is_experimental_and_downstream_of_safe_combinational_analysis,
     test_native_c_crosscheck_keeps_jit_as_authoritative_result,
 )
