@@ -358,6 +358,39 @@ def test_feedback_graphs_use_feedback_jit_instead_of_legacy_routing() -> None:
     assert "chip.FeedbackExecutor != null" in deterministic
 
 
+def test_android_touch_context_menu_and_safe_area() -> None:
+    input_helper = source("Assets/Scripts/Seb/Helpers/Input/InputHelper.cs")
+    context = source("Assets/Scripts/Graphics/UI/Menus/ContextMenu.cs")
+    ui = source("Assets/Scripts/Graphics/UI/UIDrawer.cs")
+    bar = source("Assets/Scripts/Graphics/UI/Menus/BottomBarUI.cs")
+    diag = source("Assets/Scripts/Graphics/UI/Menus/SimulationDiagnosticsMenu.cs")
+
+    assert "TouchLongPressTriggeredThisFrame" in input_helper
+    assert "TouchLongPressSeconds = 0.45f" in input_helper
+    assert "Input.touchCount != 1" in input_helper
+    assert "TouchLongPressMaxMovePixels" in input_helper
+
+    assert "TouchLongPressTriggeredThisFrame" in context
+    assert "TouchUILayout.Enabled ? 4.0f : 2f" in context
+    assert "Mathf.Max(menuWidth, 28)" in context
+
+    assert "public static float SafeLeft" in ui
+    assert "public static float SafeRight" in ui
+    assert "public static float SafeBottom" in ui
+    assert "public static float SafeTop" in ui
+    assert "Screen.safeArea" in ui
+
+    assert "TouchUILayout.BottomBarTotalHeight" in bar
+    assert "TouchUILayout.SafeLeft" in bar
+    assert "TouchUILayout.SafeRight" in bar
+    assert "TouchUILayout.SafeBottom" in bar
+
+    assert "TouchUILayout.SafeTop" in diag
+    assert "TouchUILayout.SafeLeft" in diag
+    assert "TouchUILayout.SafeRight" in diag
+    assert "Long-press a pin" in diag
+
+
 def test_android_touch_ui_is_separate_from_desktop_layout() -> None:
     ui = source("Assets/Scripts/Graphics/UI/UIDrawer.cs")
     bar = source("Assets/Scripts/Graphics/UI/Menus/BottomBarUI.cs")
@@ -490,6 +523,7 @@ TESTS = (
     test_feedback_state_ownership_uses_runtime_active_not_ready,
     test_all_projects_use_rewired_deterministic_engine,
     test_feedback_graphs_use_feedback_jit_instead_of_legacy_routing,
+    test_android_touch_context_menu_and_safe_area,
     test_android_touch_ui_is_separate_from_desktop_layout,
     test_diagnostics_menu_compacts_dynamic_text_and_balances_sections,
     test_non_convergence_diagnostics_are_sticky_and_structured,
