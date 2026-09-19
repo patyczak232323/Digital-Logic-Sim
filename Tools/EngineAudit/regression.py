@@ -358,6 +358,19 @@ def test_feedback_graphs_use_feedback_jit_instead_of_legacy_routing() -> None:
     assert "chip.FeedbackExecutor != null" in deterministic
 
 
+def test_diagnostics_menu_compacts_dynamic_text_and_balances_sections() -> None:
+    menu = source("Assets/Scripts/Graphics/UI/Menus/SimulationDiagnosticsMenu.cs")
+
+    assert "static string FitTextToWidth(" in menu
+    assert "static string CompactPath(" in menu
+    assert 'DrawSectionHeader(ref pos, "STABILITY"' in menu
+    assert 'DrawSectionHeader(ref pos, "HOT CHIPS"' in menu
+    assert 'DrawReplayControls(ref pos);' in menu
+    assert 'FitTextToWidth($"{CompactPath(probe.Name, 30)}' in menu
+    assert 'CompactPath(chip.Path, 38)' in menu
+    assert "Time.unscaledTime >= nextStatsRefreshTime" in menu
+
+
 def test_non_convergence_diagnostics_are_sticky_and_structured() -> None:
     sim = source("Assets/Scripts/Simulation/DeterministicSimulator.cs")
     menu = source("Assets/Scripts/Graphics/UI/Menus/SimulationDiagnosticsMenu.cs")
@@ -446,6 +459,7 @@ TESTS = (
     test_feedback_state_ownership_uses_runtime_active_not_ready,
     test_all_projects_use_rewired_deterministic_engine,
     test_feedback_graphs_use_feedback_jit_instead_of_legacy_routing,
+    test_diagnostics_menu_compacts_dynamic_text_and_balances_sections,
     test_non_convergence_diagnostics_are_sticky_and_structured,
     test_native_c_is_experimental_and_downstream_of_safe_combinational_analysis,
     test_native_c_crosscheck_keeps_jit_as_authoritative_result,
