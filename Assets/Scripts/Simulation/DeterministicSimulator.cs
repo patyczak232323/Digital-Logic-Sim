@@ -29,6 +29,14 @@ namespace DLS.Simulation
 		public static bool LastSettleConverged { get; private set; } = true;
 		public static string LastNonConvergenceDetails { get; private set; } = string.Empty;
 
+		// Sticky failure information for the UI. LastNonConvergenceDetails describes
+		// only the current step and is cleared every tick; these fields deliberately
+		// survive later successful steps so a one-frame failure is still inspectable.
+		public static int LastFailureFrame { get; private set; } = -1;
+		public static string LastFailureKind { get; private set; } = string.Empty;
+		public static string LastFailureChipPath { get; private set; } = string.Empty;
+		public static string LastFailureSuspects { get; private set; } = string.Empty;
+
 		static readonly Stopwatch stopwatch = Stopwatch.StartNew();
 
 		static readonly List<RuntimeChip> combinationalChips = new();
@@ -323,6 +331,10 @@ namespace DLS.Simulation
 			LastFeedbackJitFallbacks = 0;
 			LastSettleConverged = true;
 			LastNonConvergenceDetails = string.Empty;
+			LastFailureFrame = -1;
+			LastFailureKind = string.Empty;
+			LastFailureChipPath = string.Empty;
+			LastFailureSuspects = string.Empty;
 			SimulationProfiler.Reset();
 			SimulationWaveformRecorder.ClearAll();
 			SimulationReplayRecorder.Reset();
@@ -1690,8 +1702,11 @@ namespace DLS.Simulation
 		static void TraceNonConvergence(int maxDeltaCycles)
 		{
 			string suspects = DescribePendingWork();
-			LastNonConvergenceDetails =
-				$"non-convergent combinational network; deltaLimit={maxDeltaCycles}; suspects={suspects}";
+			RememberFailure(
+				"delta-cycle-limit",
+				$"non-convergent combinational network; deltaLimit={maxDeltaCycles}; suspects={suspects}",
+				string.Empty,
+				suspects);
 
 			if (!DiagnosticsEnabled || DiagnosticSink == null) return;
 
@@ -1707,8 +1722,11 @@ namespace DLS.Simulation
 		static void TracePowerOnNonConvergence(int evaluationBudget, int evaluations)
 		{
 			string suspects = DescribePendingWork();
-			LastNonConvergenceDetails =
-				$"power-on did not reach fixed point; evaluations={evaluations}/{evaluationBudget}; suspects={suspects}";
+			RememberFailure(
+				"power-on-limit",
+				$"power-on did not reach fixed point; evaluations={evaluations}/{evaluationBudget}; suspects={suspects}",
+				string.Empty,
+				suspects);
 
 			if (!DiagnosticsEnabled || DiagnosticSink == null) return;
 
@@ -1735,8 +1753,12 @@ namespace DLS.Simulation
 		static void TraceRepeatedEvaluation(int chipIndex)
 		{
 			SimChip chip = combinationalChips[chipIndex].Chip;
-			LastNonConvergenceDetails =
-				$"repeated evaluation limit; chip={GetChipPath(chip)}; evaluations={MaxEvaluationsPerChipPerSettle}";
+			string chipPath = GetChipPath(chip);
+			RememberFailure(
+				"repeated-chip-evaluation",
+				$"repeated evaluation limit; chip={chipPath}; evaluations={MaxEvaluationsPerChipPerSettle}",
+				chipPath,
+				string.Empty);
 
 			if (!DiagnosticsEnabled || DiagnosticSink == null) return;
 
@@ -1746,6 +1768,15 @@ namespace DLS.Simulation
 				$"chipPath={GetChipPath(chip)}\n" +
 				$"chipID={chip.ID}\n" +
 				$"evaluations={MaxEvaluationsPerChipPerSettle}");
+		}
+
+		static void RememberFailure(string kind, string details, string chipPath, string suspects)
+		{
+			LastNonConvergenceDetails = details ?? string.Empty;
+			LastFailureFrame = Simulator.simulationFrame;
+			LastFailureKind = kind ?? string.Empty;
+			LastFailureChipPath = chipPath ?? string.Empty;
+			LastFailureSuspects = suspects ?? string.Empty;
 		}
 
 		static string DescribePendingWork(int maxItems = 8)
@@ -1775,8 +1806,12 @@ namespace DLS.Simulation
 
 		static void TraceFeedbackJitFallback(SimChip chip, int sweeps)
 		{
-			LastNonConvergenceDetails =
-				$"feedback JIT did not converge; chip={GetChipPath(chip)}; sweeps={sweeps}; fallback=live";
+			string chipPath = GetChipPath(chip);
+			RememberFailure(
+				"feedback-jit-non-convergent",
+				$"feedback JIT did not converge; chip={chipPath}; sweeps={sweeps}; fallback=live",
+				chipPath,
+				string.Empty);
 
 			if (!DiagnosticsEnabled || DiagnosticSink == null) return;
 
