@@ -275,7 +275,7 @@ namespace DLS.Graphics
 					: FormatState(samples[^1].State, probe.BitCount);
 
 				UI.DrawText(
-					FitTextToWidth($"{CompactPath(probe.Name, 30)}  [{probe.BitCount}b]  now={latest}  transitions={probe.SampleCount}", columnWidth - 4.2f, theme.FontSizeRegular * 0.82f),
+					FitTextToWidth($"{CompactPath(probe.Name, 30)}  [{probe.BitCount}b]  now={latest}  transitions={probe.SampleCount}", columnWidth - 4.2f, theme.FontSizeRegular * 0.88f),
 					theme.FontRegular,
 					theme.FontSizeRegular * 0.88f,
 					traceBounds.TopLeft + new Vector2(0.8f, -0.8f),
