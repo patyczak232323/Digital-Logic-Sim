@@ -153,7 +153,7 @@ namespace DLS.Graphics
 				UI.Centre + Vector2.up * (TouchUILayout.Enabled ? 4 : 6),
 				new Vector2(buttonWidth, buttonHeight),
 				false,
-				true,
+				!TouchUILayout.Enabled,
 				spacing);
 
 			if (buttonIndex == 0 || KeyboardShortcuts.MainMenu_NewProjectShortcutTriggered) // New project
