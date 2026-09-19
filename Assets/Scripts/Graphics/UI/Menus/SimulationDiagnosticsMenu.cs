@@ -17,22 +17,32 @@ namespace DLS.Graphics
 		const float rowHeight = 2.8f;
 		const float spacing = 0.3f;
 		const float traceHeight = 7.1f;
+		const float infoFontScale = 0.82f;
+		const float statsRefreshInterval = 0.75f;
 
 		static readonly string[] OffOn = { "OFF", "ON" };
 		static readonly UIHandle ID_Profiler = new("SIM_DIAG_Profiler");
 		static readonly UIHandle ID_Waveform = new("SIM_DIAG_Waveform");
-		static string projectStats = "Project: unavailable";
+		static string projectStats = "Graph: unavailable";
 		static string acceleratorStats = "Accelerators: unavailable";
+		static float nextStatsRefreshTime;
 
 		public static void OnMenuOpened()
 		{
 			UI.GetWheelSelectorState(ID_Profiler).index = SimulationProfiler.Enabled ? 1 : 0;
 			UI.GetWheelSelectorState(ID_Waveform).index = SimulationWaveformRecorder.Enabled ? 1 : 0;
 			RefreshProjectStats();
+			nextStatsRefreshTime = Time.unscaledTime + statsRefreshInterval;
 		}
 
 		public static void DrawMenu()
 		{
+			if (Time.unscaledTime >= nextStatsRefreshTime)
+			{
+				RefreshProjectStats();
+				nextStatsRefreshTime = Time.unscaledTime + statsRefreshInterval;
+			}
+
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
 			MenuHelper.DrawBackgroundOverlay();
 			Draw.ID panelID = UI.ReservePanel();
@@ -52,7 +62,15 @@ namespace DLS.Graphics
 					Anchor.TextCentreLeft,
 					textCol);
 
-				Vector2 leftPos = topLeft + Vector2.down * 3.2f;
+				UI.DrawText(
+					$"Rewired {Main.RewiredVersion}  |  live engine telemetry",
+					theme.FontRegular,
+					theme.FontSizeRegular * 0.78f,
+					topLeft + Vector2.down * 1.45f,
+					Anchor.TextCentreLeft,
+					dim);
+
+				Vector2 leftPos = topLeft + Vector2.down * 3.6f;
 				Vector2 rightPos = leftPos + Vector2.right * (columnWidth + columnGap);
 
 				DrawPerformanceColumn(ref leftPos);
@@ -81,12 +99,16 @@ namespace DLS.Graphics
 
 			void DrawPerformanceColumn(ref Vector2 pos)
 			{
-				UI.DrawText("PERFORMANCE", theme.FontBold, theme.FontSizeRegular, pos, Anchor.TextCentreLeft, textCol);
-				pos.y -= 2.2f;
-
+				DrawSectionHeader(ref pos, "PERFORMANCE");
 				DrawInfoRow(ref pos, "Engine: REWIRED FAST | deterministic + feedback JIT", dim);
 				DrawInfoRow(ref pos, projectStats, dim);
 				DrawInfoRow(ref pos, acceleratorStats, dim);
+
+				Project activeProject = Project.ActiveProject;
+				if (activeProject != null)
+				{
+					DrawInfoRow(ref pos, $"Live: {activeProject.simAvgTicksPerSec:N0} steps/s | target {activeProject.targetTicksPerSecond:N0}", dim);
+				}
 
 				int profilerMode = MenuHelper.LabeledOptionsWheel(
 					"Hot-chip profiler",
@@ -140,9 +162,11 @@ namespace DLS.Graphics
 					: "Accel: no profiler sample";
 				DrawInfoRow(ref pos, accelerationText, SimulationProfiler.Enabled ? textCol : dim);
 
+				DrawSectionHeader(ref pos, "STABILITY", 0.25f);
+
 				string convergence = DeterministicSimulator.LastSettleConverged
 					? "Convergence: OK"
-					: "FAILED: " + DeterministicSimulator.LastNonConvergenceDetails;
+					: "Convergence: FAILED";
 				DrawInfoRow(ref pos, convergence, DeterministicSimulator.LastSettleConverged ? dim : Color.yellow);
 
 				if (DeterministicSimulator.LastFailureFrame >= 0)
@@ -152,19 +176,17 @@ namespace DLS.Graphics
 						$"Last failure: frame {DeterministicSimulator.LastFailureFrame:N0} | {DeterministicSimulator.LastFailureKind}",
 						Color.yellow);
 
-					if (!string.IsNullOrWhiteSpace(DeterministicSimulator.LastFailureChipPath))
+					string failureLocation = !string.IsNullOrWhiteSpace(DeterministicSimulator.LastFailureChipPath)
+						? DeterministicSimulator.LastFailureChipPath
+						: DeterministicSimulator.LastFailureSuspects;
+
+					if (!string.IsNullOrWhiteSpace(failureLocation))
 					{
-						DrawInfoRow(ref pos, "Location: " + DeterministicSimulator.LastFailureChipPath, Color.yellow);
-					}
-					else if (!string.IsNullOrWhiteSpace(DeterministicSimulator.LastFailureSuspects))
-					{
-						DrawInfoRow(ref pos, "Suspects: " + DeterministicSimulator.LastFailureSuspects, Color.yellow);
+						DrawInfoRow(ref pos, "At: " + CompactPath(failureLocation, 64), Color.yellow);
 					}
 				}
 
-				pos.y -= 0.5f;
-				UI.DrawText("HOT CHIPS", theme.FontBold, theme.FontSizeRegular, pos, Anchor.TextCentreLeft, textCol);
-				pos.y -= 2.1f;
+				DrawSectionHeader(ref pos, "HOT CHIPS", 0.25f);
 
 				SimulationHotChip[] hot = SimulationProfiler.GetHotChips(4);
 				if (!SimulationProfiler.Enabled)
@@ -182,66 +204,16 @@ namespace DLS.Graphics
 						SimulationHotChip chip = hot[i];
 						DrawInfoRow(
 							ref pos,
-							$"{i + 1}. {chip.Path} | {chip.ExecutionPath} | {chip.AverageMicroseconds:0.###} us | {chip.Evaluations:N0} eval",
+							$"{i + 1}. {CompactPath(chip.Path, 38)} | {chip.ExecutionPath} | {chip.AverageMicroseconds:0.###} us",
 							textCol);
 					}
 				}
 
-				pos.y -= 0.5f;
-				UI.DrawText("DETERMINISTIC REPLAY", theme.FontBold, theme.FontSizeRegular, pos, Anchor.TextCentreLeft, textCol);
-				pos.y -= 2.1f;
-
-				Project project = Project.ActiveProject;
-				bool replayPending = project != null && project.ReplayCommandPending;
-				bool recording = project != null && project.ReplayRecordingActive;
-				bool canReplay =
-					project != null &&
-					project.simPaused &&
-					project.HasReplayRecording &&
-					!recording &&
-					!replayPending;
-
-				int replayButton = MenuHelper.DrawButtonPair(
-					recording ? "STOP RECORD" : "START RECORD",
-					"REPLAY",
-					pos,
-					columnWidth,
-					false,
-					!replayPending,
-					canReplay);
-
-				if (project != null)
-				{
-					if (replayButton == 0)
-					{
-						if (recording) project.RequestStopReplayRecording();
-						else project.RequestStartReplayRecording(5000);
-					}
-					else if (replayButton == 1)
-					{
-						project.RequestReplayLatest();
-					}
-				}
-
-				pos = UI.PrevBounds.BottomLeft + Vector2.down * spacing;
-
-				string replayStatus = project == null
-					? "Replay: no active project"
-					: recording
-						? $"Replay: recording {project.ReplayRecordedFrames:N0} frames..."
-						: $"Replay: {project.ReplayStatus}";
-				DrawInfoRow(ref pos, replayStatus, project != null && project.LatestReplayResult.Success ? textCol : dim);
-
-				if (project != null && !project.simPaused && project.HasReplayRecording)
-				{
-					DrawInfoRow(ref pos, "Pause simulation to enable REPLAY.", dim);
-				}
 			}
 
 			void DrawWaveformColumn(ref Vector2 pos)
 			{
-				UI.DrawText("LOGIC ANALYZER", theme.FontBold, theme.FontSizeRegular, pos, Anchor.TextCentreLeft, textCol);
-				pos.y -= 2.2f;
+				DrawSectionHeader(ref pos, "LOGIC ANALYZER");
 
 				int waveformMode = MenuHelper.LabeledOptionsWheel(
 					"Waveform capture",
@@ -273,19 +245,22 @@ namespace DLS.Graphics
 				if (probes.Length == 0)
 				{
 					DrawInfoRow(ref pos, "No probes. Right-click a pin -> TOGGLE PROBE.", dim);
-					return;
+				}
+				else
+				{
+					int count = Math.Min(4, probes.Length);
+					for (int i = 0; i < count; i++)
+					{
+						DrawProbe(ref pos, probes[i]);
+					}
+
+					if (probes.Length > count)
+					{
+						DrawInfoRow(ref pos, $"+ {probes.Length - count} more probes", dim);
+					}
 				}
 
-				int count = Math.Min(4, probes.Length);
-				for (int i = 0; i < count; i++)
-				{
-					DrawProbe(ref pos, probes[i]);
-				}
-
-				if (probes.Length > count)
-				{
-					DrawInfoRow(ref pos, $"+ {probes.Length - count} more probes (remove some to display them)", dim);
-				}
+				DrawReplayControls(ref pos);
 			}
 
 			void DrawProbe(ref Vector2 pos, WaveformProbeInfo probe)
@@ -300,7 +275,7 @@ namespace DLS.Graphics
 					: FormatState(samples[^1].State, probe.BitCount);
 
 				UI.DrawText(
-					$"{probe.Name}  [{probe.BitCount}b]  now={latest}  transitions={probe.SampleCount}",
+					FitTextToWidth($"{CompactPath(probe.Name, 30)}  [{probe.BitCount}b]  now={latest}  transitions={probe.SampleCount}", columnWidth - 4.2f, theme.FontSizeRegular * 0.82f),
 					theme.FontRegular,
 					theme.FontSizeRegular * 0.88f,
 					traceBounds.TopLeft + new Vector2(0.8f, -0.8f),
@@ -410,7 +385,7 @@ namespace DLS.Graphics
 				}
 
 				UI.DrawText(
-					history.ToString(),
+					FitTextToWidth(history.ToString(), columnWidth - 1.6f, theme.FontSizeRegular * 0.82f),
 					theme.FontRegular,
 					theme.FontSizeRegular * 0.82f,
 					bounds.CentreLeft + new Vector2(0.8f, -1.0f),
@@ -418,19 +393,110 @@ namespace DLS.Graphics
 					textCol);
 			}
 
+			void DrawReplayControls(ref Vector2 pos)
+			{
+				DrawSectionHeader(ref pos, "DETERMINISTIC REPLAY", 0.45f);
+
+				Project project = Project.ActiveProject;
+				bool replayPending = project != null && project.ReplayCommandPending;
+				bool recording = project != null && project.ReplayRecordingActive;
+				bool canReplay =
+					project != null &&
+					project.simPaused &&
+					project.HasReplayRecording &&
+					!recording &&
+					!replayPending;
+
+				int replayButton = MenuHelper.DrawButtonPair(
+					recording ? "STOP RECORD" : "START RECORD",
+					"REPLAY",
+					pos,
+					columnWidth,
+					false,
+					!replayPending,
+					canReplay);
+
+				if (project != null)
+				{
+					if (replayButton == 0)
+					{
+						if (recording) project.RequestStopReplayRecording();
+						else project.RequestStartReplayRecording(5000);
+					}
+					else if (replayButton == 1)
+					{
+						project.RequestReplayLatest();
+					}
+				}
+
+				pos = UI.PrevBounds.BottomLeft + Vector2.down * spacing;
+
+				string replayStatus = project == null
+					? "Replay: no active project"
+					: recording
+						? $"Replay: recording {project.ReplayRecordedFrames:N0} frames..."
+						: $"Replay: {project.ReplayStatus}";
+				DrawInfoRow(ref pos, replayStatus, project != null && project.LatestReplayResult.Success ? textCol : dim);
+
+				if (project != null && !project.simPaused && project.HasReplayRecording)
+				{
+					DrawInfoRow(ref pos, "Pause simulation to enable replay.", dim);
+				}
+			}
+
+			void DrawSectionHeader(ref Vector2 pos, string title, float topGap = 0f)
+			{
+				pos.y -= topGap;
+				UI.DrawText(title, theme.FontBold, theme.FontSizeRegular * 0.92f, pos, Anchor.TextCentreLeft, textCol);
+				Vector2 lineStart = pos + new Vector2(0, -1.1f);
+				UI.DrawLine(lineStart, lineStart + Vector2.right * columnWidth, 0.04f, dim * 0.45f);
+				pos.y -= 1.65f;
+			}
+
 			void DrawInfoRow(ref Vector2 pos, string text, Color col)
 			{
-				MenuHelper.DrawLeftAlignTextWithBackground(
-					text,
-					pos,
-					new Vector2(columnWidth, rowHeight),
-					Anchor.TopLeft,
-					col,
-					rowCol,
-					false,
-					0.8f);
-				pos = UI.PrevBounds.BottomLeft + Vector2.down * spacing;
+				UI.DrawPanel(pos, new Vector2(columnWidth, rowHeight), rowCol, Anchor.TopLeft);
+				Bounds2D bounds = UI.PrevBounds;
+				string fitted = FitTextToWidth(text, columnWidth - 1.6f, theme.FontSizeRegular * infoFontScale);
+				UI.DrawText(
+					fitted,
+					theme.FontRegular,
+					theme.FontSizeRegular * infoFontScale,
+					bounds.CentreLeft + Vector2.right * 0.8f,
+					Anchor.TextCentreLeft,
+					col);
+				UI.OverridePreviousBounds(bounds);
+				pos = bounds.BottomLeft + Vector2.down * spacing;
 			}
+		}
+
+		static string FitTextToWidth(string text, float maxWidth, float fontSize)
+		{
+			if (string.IsNullOrEmpty(text)) return string.Empty;
+			if (Draw.CalculateTextBoundsSize(text, fontSize, DrawSettings.ActiveUITheme.FontRegular).x <= maxWidth) return text;
+
+			const string ellipsis = "...";
+			int low = 0;
+			int high = text.Length;
+			while (low < high)
+			{
+				int mid = (low + high + 1) / 2;
+				string candidate = text.Substring(0, mid) + ellipsis;
+				if (Draw.CalculateTextBoundsSize(candidate, fontSize, DrawSettings.ActiveUITheme.FontRegular).x <= maxWidth) low = mid;
+				else high = mid - 1;
+			}
+
+			return text.Substring(0, low) + ellipsis;
+		}
+
+		static string CompactPath(string path, int maxChars)
+		{
+			if (string.IsNullOrWhiteSpace(path) || path.Length <= maxChars) return path ?? string.Empty;
+			if (maxChars < 12) return path.Substring(0, Math.Min(path.Length, maxChars));
+
+			int tailLength = (maxChars - 3) * 2 / 3;
+			int headLength = maxChars - 3 - tailLength;
+			return path.Substring(0, headLength) + "..." + path.Substring(path.Length - tailLength);
 		}
 
 		static void RefreshProjectStats()
@@ -439,7 +505,7 @@ namespace DLS.Graphics
 			SimChip root = project?.rootSimChip;
 			if (project == null || root == null)
 			{
-				projectStats = "Project: unavailable";
+				projectStats = "Graph: unavailable";
 				acceleratorStats = "Accelerators: unavailable";
 				return;
 			}
@@ -455,8 +521,8 @@ namespace DLS.Graphics
 			Count(root);
 
 			int visibleWires = project.ViewedChip?.Wires?.Count ?? 0;
-			projectStats = $"Tree: {total:N0} chips | {primitive:N0} primitives | {custom:N0} custom | visible wires {visibleWires:N0}";
-			acceleratorStats = $"Attached: LUT {lut:N0} | JIT {jit:N0} | FB JIT {feedbackJit:N0} ({feedbackActive:N0} active)";
+			projectStats = $"Graph: {total:N0} chips | {primitive:N0} primitive | {custom:N0} custom | {visibleWires:N0} visible wires";
+			acceleratorStats = $"Accel: LUT {lut:N0} | JIT {jit:N0} | FB {feedbackJit:N0} ({feedbackActive:N0} active)";
 
 			void Count(SimChip chip)
 			{
