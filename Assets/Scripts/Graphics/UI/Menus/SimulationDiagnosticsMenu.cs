@@ -21,11 +21,14 @@ namespace DLS.Graphics
 		static readonly string[] OffOn = { "OFF", "ON" };
 		static readonly UIHandle ID_Profiler = new("SIM_DIAG_Profiler");
 		static readonly UIHandle ID_Waveform = new("SIM_DIAG_Waveform");
+		static string projectStats = "Project: unavailable";
+		static string acceleratorStats = "Accelerators: unavailable";
 
 		public static void OnMenuOpened()
 		{
 			UI.GetWheelSelectorState(ID_Profiler).index = SimulationProfiler.Enabled ? 1 : 0;
 			UI.GetWheelSelectorState(ID_Waveform).index = SimulationWaveformRecorder.Enabled ? 1 : 0;
+			RefreshProjectStats();
 		}
 
 		public static void DrawMenu()
@@ -82,6 +85,8 @@ namespace DLS.Graphics
 				pos.y -= 2.2f;
 
 				DrawInfoRow(ref pos, "Engine: REWIRED FAST | deterministic + feedback JIT", dim);
+				DrawInfoRow(ref pos, projectStats, dim);
+				DrawInfoRow(ref pos, acceleratorStats, dim);
 
 				int profilerMode = MenuHelper.LabeledOptionsWheel(
 					"Hot-chip profiler",
@@ -408,6 +413,51 @@ namespace DLS.Graphics
 					false,
 					0.8f);
 				pos = UI.PrevBounds.BottomLeft + Vector2.down * spacing;
+			}
+		}
+
+		static void RefreshProjectStats()
+		{
+			Project project = Project.ActiveProject;
+			SimChip root = project?.rootSimChip;
+			if (project == null || root == null)
+			{
+				projectStats = "Project: unavailable";
+				acceleratorStats = "Accelerators: unavailable";
+				return;
+			}
+
+			int total = 0;
+			int custom = 0;
+			int primitive = 0;
+			int lut = 0;
+			int jit = 0;
+			int feedbackJit = 0;
+			int feedbackActive = 0;
+
+			Count(root);
+
+			int visibleWires = project.ViewedChip?.Wires?.Count ?? 0;
+			projectStats = $"Tree: {total:N0} chips | {primitive:N0} primitives | {custom:N0} custom | visible wires {visibleWires:N0}";
+			acceleratorStats = $"Attached: LUT {lut:N0} | JIT {jit:N0} | FB JIT {feedbackJit:N0} ({feedbackActive:N0} active)";
+
+			void Count(SimChip chip)
+			{
+				if (chip == null) return;
+
+				total++;
+				if (chip.ChipType == DLS.Description.ChipType.Custom) custom++;
+				else primitive++;
+
+				if (chip.MemoCache != null && chip.MemoCache.Ready) lut++;
+				if (chip.CompiledExecutor != null) jit++;
+				if (chip.FeedbackExecutor != null)
+				{
+					feedbackJit++;
+					if (chip.FeedbackExecutor.RuntimeActive) feedbackActive++;
+				}
+
+				for (int i = 0; i < chip.SubChips.Length; i++) Count(chip.SubChips[i]);
 			}
 		}
 
