@@ -21,6 +21,7 @@ namespace DLS.Graphics
 		static string[] allChipNames;
 		static string[] filteredChipNames;
 		static readonly UI.ScrollViewDrawElementFunc drawChipSearchEntry = DrawChipSearchEntry;
+		static readonly UI.ScrollViewDrawElementFunc drawTouchChipSearchEntry = DrawTouchChipSearchEntry;
 		static int menuOpenedFrame;
 		static bool isDraggingScrollbar;
 
@@ -28,6 +29,13 @@ namespace DLS.Graphics
 
 		public static void DrawMenu()
 		{
+			if (TouchUILayout.Enabled)
+			{
+				DrawTouchMenu();
+				HandleKeyboardShortcuts();
+				return;
+			}
+
 			MenuHelper.DrawBackgroundOverlay();
 			Draw.ID panelID = UI.ReservePanel();
 
@@ -53,18 +61,143 @@ namespace DLS.Graphics
 				MenuHelper.DrawReservedMenuPanel(panelID, UI.GetCurrentBoundsScope());
 			}
 
-			// ---- keyboard shortcuts ----
+			HandleKeyboardShortcuts();
+		}
+
+		static void DrawTouchMenu()
+		{
+			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
+			float left = TouchUILayout.SafeLeft + 1.2f;
+			float right = TouchUILayout.SafeRight + 1.2f;
+			float top = UI.Height - TouchUILayout.SafeTop - 1.0f;
+			float bottom = TouchUILayout.BottomBarTotalHeight + 0.8f;
+			float width = UI.Width - left - right;
+			Color bg = new(0.055f, 0.055f, 0.065f, 0.99f);
+
+			UI.DrawFullscreenPanel(bg);
+
+			UI.DrawText(
+				"ADD COMPONENT",
+				theme.FontBold,
+				theme.FontSizeRegular * 1.12f,
+				new Vector2(left, top - 1.0f),
+				Anchor.TextCentreLeft,
+				Color.white);
+
+			UI.DrawText(
+				filteredChipNames == null ? "0 results" : $"{filteredChipNames.Length:N0} results",
+				theme.FontRegular,
+				theme.FontSizeRegular * 0.72f,
+				new Vector2(left, top - 2.45f),
+				Anchor.TextCentreLeft,
+				Color.white * 0.58f);
+
+			if (UI.Button(
+				    "CLOSE",
+				    theme.ButtonTheme,
+				    new Vector2(UI.Width - right, top - 0.4f),
+				    new Vector2(13f, TouchUILayout.TouchButtonHeight),
+				    true,
+				    false,
+				    false,
+				    Anchor.TopRight))
+			{
+				UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
+				return;
+			}
+
+			InputFieldTheme inputTheme = MenuHelper.Theme.ChipNameInputField;
+			inputTheme.fontSize = theme.FontSizeRegular * 1.0f;
+			float inputHeight = TouchUILayout.TouchButtonHeight;
+			Vector2 inputTopLeft = new(left, top - 4.5f);
+			UI.InputField(
+				ID_SearchInput,
+				inputTheme,
+				inputTopLeft,
+				new Vector2(width, inputHeight),
+				"Search components...",
+				Anchor.TopLeft,
+				1.1f,
+				searchStringValidator,
+				true);
+
+			float listTop = UI.PrevBounds.Bottom - 0.8f;
+			float listHeight = Mathf.Max(8f, listTop - bottom);
+			ScrollBarState scrollState = UI.DrawScrollView(
+				ID_Scrollbar,
+				new Vector2(left, listTop),
+				new Vector2(width, listHeight),
+				TouchUILayout.TouchGap,
+				Anchor.TopLeft,
+				theme.ScrollTheme,
+				drawTouchChipSearchEntry,
+				filteredChipNames.Length);
+			isDraggingScrollbar = scrollState.isDragging;
+		}
+
+		static void DrawTouchChipSearchEntry(Vector2 topLeft, float width, int index, bool isLayoutPass)
+		{
+			float rowHeight = TouchUILayout.TouchButtonHeight + 0.7f;
+			Bounds2D entryBounds = Bounds2D.CreateFromTopLeftAndSize(topLeft, new Vector2(width, rowHeight));
+			bool offscreen = entryBounds.Top < 0 || entryBounds.Bottom > UI.Height;
+
+			if (!isLayoutPass && !offscreen)
+			{
+				string chipName = filteredChipNames[index];
+				float gap = TouchUILayout.TouchGap;
+				float actionWidth = Mathf.Min(15f, width * 0.16f);
+				float nameWidth = width - actionWidth * 3 - gap * 3;
+				bool canPlaceChip = Project.ActiveProject.ViewedChip.CanAddSubchip(chipName);
+				bool canOpenChip = !Project.ActiveProject.chipLibrary.IsBuiltinChip(chipName);
+				bool isStarred = Project.ActiveProject.description.IsStarred(chipName, false);
+
+				ButtonTheme nameTheme = ActiveUITheme.ChipLibraryChipToggleOn;
+				UI.Button(
+					chipName,
+					nameTheme,
+					topLeft,
+					new Vector2(nameWidth, rowHeight),
+					true,
+					false,
+					false,
+					Anchor.TopLeft,
+					true,
+					1f,
+					true);
+
+				Vector2 actionPos = topLeft + Vector2.right * (nameWidth + gap);
+				if (UI.Button("USE", ActiveUITheme.ButtonTheme, actionPos, new Vector2(actionWidth, rowHeight), canPlaceChip, false, false, Anchor.TopLeft))
+				{
+					UseChip(chipName);
+				}
+				actionPos.x += actionWidth + gap;
+
+				if (UI.Button("OPEN", ActiveUITheme.ButtonTheme, actionPos, new Vector2(actionWidth, rowHeight), canOpenChip, false, false, Anchor.TopLeft))
+				{
+					OpenChip(chipName);
+				}
+				actionPos.x += actionWidth + gap;
+
+				if (UI.Button(isStarred ? "UNSTAR" : "STAR", ActiveUITheme.ButtonTheme, actionPos, new Vector2(actionWidth, rowHeight), true, false, false, Anchor.TopLeft))
+				{
+					Project.ActiveProject.SetStarred(chipName, !isStarred, false);
+				}
+			}
+
+			UI.OverridePreviousBounds(entryBounds);
+		}
+
+		static void HandleKeyboardShortcuts()
+		{
 			if (KeyboardShortcuts.ConfirmShortcutTriggered)
 			{
 				foreach (string chipName in filteredChipNames)
 				{
-					// Open first openable chip on shift/control+enter
 					if ((InputHelper.ShiftIsHeld || InputHelper.CtrlIsHeld) && !Project.ActiveProject.chipLibrary.IsBuiltinChip(chipName))
 					{
 						OpenChip(chipName);
 						return;
 					}
-					// Use first usable chip on enter
 
 					if (Project.ActiveProject.ViewedChip.CanAddSubchip(chipName))
 					{
