@@ -152,5 +152,13 @@ namespace DLS.Graphics
 		public const float TouchButtonHeight = 4.4f;
 		public const float TouchGap = 0.45f;
 		public const float EdgePadding = 0.8f;
+
+		// UI units are scaled from screen width, so safe-area pixel offsets use the
+		// same conversion. This keeps controls clear of camera cut-outs and gesture bars.
+		public static float SafeLeft => Enabled && Screen.width > 0 ? Screen.safeArea.xMin / Screen.width * UI.Width : 0;
+		public static float SafeRight => Enabled && Screen.width > 0 ? (Screen.width - Screen.safeArea.xMax) / Screen.width * UI.Width : 0;
+		public static float SafeBottom => Enabled && Screen.width > 0 ? Screen.safeArea.yMin / Screen.width * UI.Width : 0;
+		public static float SafeTop => Enabled && Screen.width > 0 ? (Screen.height - Screen.safeArea.yMax) / Screen.width * UI.Width : 0;
+		public static float BottomBarTotalHeight => BottomBarHeight + SafeBottom;
 	}
 }
