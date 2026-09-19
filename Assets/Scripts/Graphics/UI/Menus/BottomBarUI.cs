@@ -12,7 +12,7 @@ namespace DLS.Graphics
 	public static class BottomBarUI
 	{
 		public const float barHeight = 3;
-		public static float ActiveBarHeight => TouchUILayout.Enabled ? TouchUILayout.BottomBarHeight : barHeight;
+		public static float ActiveBarHeight => TouchUILayout.Enabled ? TouchUILayout.BottomBarTotalHeight : barHeight;
 		const float padY = 0.3f;
 		const float buttonSpacing = 0.25f;
 		const float buttonHeight = barHeight - padY * 2;
@@ -133,8 +133,9 @@ namespace DLS.Graphics
 
 		static void DrawTouchBottomBar(Project project)
 		{
-			float height = TouchUILayout.BottomBarHeight;
-			float edge = TouchUILayout.EdgePadding;
+			float height = TouchUILayout.BottomBarTotalHeight;
+			float leftEdge = TouchUILayout.SafeLeft + TouchUILayout.EdgePadding;
+			float rightEdge = TouchUILayout.SafeRight + TouchUILayout.EdgePadding;
 			float gap = TouchUILayout.TouchGap;
 			Bounds2D bounds = new(Vector2.zero, new Vector2(UI.Width, height));
 			barBounds_ScreenSpace = UI.UIToScreenSpace(bounds);
@@ -145,8 +146,8 @@ namespace DLS.Graphics
 			bool inOtherMenu = !(UIDrawer.ActiveMenu is UIDrawer.MenuType.BottomBarMenuPopup or UIDrawer.MenuType.None);
 			bool ignoreInputs = ContextMenu.HasFocus();
 			const int buttonCount = 5;
-			float buttonWidth = (UI.Width - edge * 2 - gap * (buttonCount - 1)) / buttonCount;
-			Vector2 pos = new(edge, (height - TouchUILayout.TouchButtonHeight) / 2);
+			float buttonWidth = (UI.Width - leftEdge - rightEdge - gap * (buttonCount - 1)) / buttonCount;
+			Vector2 pos = new(leftEdge, TouchUILayout.SafeBottom + (TouchUILayout.BottomBarHeight - TouchUILayout.TouchButtonHeight) / 2);
 
 			for (int i = 0; i < buttonCount; i++)
 			{
@@ -200,10 +201,11 @@ namespace DLS.Graphics
 		{
 			DrawSettings.UIThemeDLS uiTheme = DrawSettings.ActiveUITheme;
 			ButtonTheme theme = uiTheme.MenuPopupButtonTheme;
-			float edge = TouchUILayout.EdgePadding;
+			float leftEdge = TouchUILayout.SafeLeft + TouchUILayout.EdgePadding;
+			float rightEdge = TouchUILayout.SafeRight + TouchUILayout.EdgePadding;
 			float gap = TouchUILayout.TouchGap;
-			float bottom = TouchUILayout.BottomBarHeight + gap;
-			float width = Mathf.Min(64, UI.Width - edge * 2);
+			float bottom = TouchUILayout.BottomBarTotalHeight + gap;
+			float width = Mathf.Min(64, UI.Width - leftEdge - rightEdge);
 			float buttonHeightTouch = TouchUILayout.TouchButtonHeight;
 			float buttonWidth = (width - gap) / 2f;
 			string[] labels =
@@ -215,7 +217,7 @@ namespace DLS.Graphics
 			};
 
 			Draw.ID panelID = UI.ReservePanel();
-			Vector2 origin = new(edge, bottom);
+			Vector2 origin = new(leftEdge, bottom);
 
 			using (UI.BeginBoundsScope(true))
 			{
