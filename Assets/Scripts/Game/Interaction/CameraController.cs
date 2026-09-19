@@ -24,6 +24,11 @@ namespace DLS.Game
 		static Vector2 dragZoomMousePrev;
 
 		static Vector2 mouseDragScreenPosOld;
+		static bool touchCameraGestureActive;
+		static Vector2 touchGestureCentrePrev;
+		static float touchGestureDistancePrev;
+
+		public static bool TouchGestureActive => TouchUILayout.Enabled && Input.touchCount >= 2;
 
 		static ViewState customizeView = new();
 		static ViewState mainMenuView = new();
@@ -42,6 +47,9 @@ namespace DLS.Game
 			customizeView = new ViewState();
 			mainMenuView = new ViewState();
 			activeView = new ViewState();
+			touchCameraGestureActive = false;
+			touchGestureCentrePrev = Vector2.zero;
+			touchGestureDistancePrev = 0;
 
 			camera = Object.FindAnyObjectByType<Camera>();
 			camT = camera.transform;
@@ -64,14 +72,67 @@ namespace DLS.Game
 					chipViewStateLookup.Remove(Project.ActiveProject.ViewedChip.ChipName);
 				}
 
-				Vector2 mouseScreenPos = InputHelper.MousePos;
-				Vector2 mouseWorldPos = camera.ScreenToWorldPoint(mouseScreenPos);
+				if (!HandleTouchCameraGesture())
+				{
+					Vector2 mouseScreenPos = InputHelper.MousePos;
+					Vector2 mouseWorldPos = camera.ScreenToWorldPoint(mouseScreenPos);
 
-				HandlePanInput(mouseScreenPos, mouseWorldPos);
-				HandleZoomInput(mouseScreenPos);
+					HandlePanInput(mouseScreenPos, mouseWorldPos);
+					HandleZoomInput(mouseScreenPos);
+				}
 			}
 
 			UpdateCameraState();
+		}
+
+		static bool HandleTouchCameraGesture()
+		{
+			if (!TouchUILayout.Enabled || !CanMove || !CanZoom || InteractionState.MouseIsOverUI || Input.touchCount < 2)
+			{
+				touchCameraGestureActive = false;
+				touchGestureDistancePrev = 0;
+				return false;
+			}
+
+			Touch a = Input.GetTouch(0);
+			Touch b = Input.GetTouch(1);
+			Vector2 centre = (a.position + b.position) * 0.5f;
+			float distance = Vector2.Distance(a.position, b.position);
+
+			if (!touchCameraGestureActive || touchGestureDistancePrev <= 0.001f)
+			{
+				touchCameraGestureActive = true;
+				touchGestureCentrePrev = centre;
+				touchGestureDistancePrev = Mathf.Max(1f, distance);
+				isMovingCamera = false;
+				isDragZoomingCamera = false;
+				ContextMenu.CloseContextMenu();
+				return true;
+			}
+
+			// Two-finger drag pans the camera. Screen Y grows upward just like world Y,
+			// so subtracting the screen delta gives the expected "grab the canvas" feel.
+			float worldUnitsPerPixel = activeView.OrthoSize * 2f / Mathf.Max(1, Screen.height);
+			Vector2 panDeltaPixels = centre - touchGestureCentrePrev;
+			if (panDeltaPixels.sqrMagnitude > 0.01f)
+			{
+				MovePosition(-panDeltaPixels * worldUnitsPerPixel);
+			}
+
+			// Pinch around the gesture centre so the point under the fingers remains
+			// visually anchored while zooming.
+			float safeDistance = Mathf.Max(1f, distance);
+			float zoomScale = touchGestureDistancePrev / safeDistance;
+			float targetZoom = activeView.OrthoSize * zoomScale;
+			Vector2 worldBeforeZoom = camera.ScreenToWorldPoint(centre);
+			SetZoom(targetZoom);
+			Vector2 worldAfterZoom = camera.ScreenToWorldPoint(centre);
+			MovePosition(worldBeforeZoom - worldAfterZoom);
+
+			touchGestureCentrePrev = centre;
+			touchGestureDistancePrev = safeDistance;
+			ContextMenu.CloseContextMenu();
+			return true;
 		}
 
 		// Pan with middle-mouse drag or alt+left-mouse drag
@@ -243,15 +304,41 @@ namespace DLS.Game
 			ViewState view = new();
 			if (Mathf.Max(bounds.Size.x, bounds.Size.y) < DrawSettings.GridSize) return view;
 
-			// Set cam orthoSize to fit contents of chip on screen
-			view.OrthoSize = Mathf.Max(bounds.Height, bounds.Width * 9 / 16f) * 0.5f;
-			view.OrthoSize += view.OrthoSize * 0.1f; // Padding
-			view.OrthoSize = Mathf.Clamp(view.OrthoSize, zoomRange.x, zoomRange.y);
+			// Set cam orthoSize to fit contents inside the *usable* canvas. Touch UI
+			// occupies both top and bottom regions and may run at any phone aspect ratio.
+			if (TouchUILayout.Enabled)
+			{
+				float usableHeight = Mathf.Max(
+					8f,
+					UI.Height - TouchUILayout.TopBarTotalHeight - TouchUILayout.BottomBarTotalHeight);
+				float usableWidth = Mathf.Max(
+					20f,
+					UI.Width - TouchUILayout.SafeLeft - TouchUILayout.SafeRight);
 
-			// Move cam down slightly from bounds centre to account for bottom region of screen blocked by chip bar
-			const float uiScreenHeight = UI.Width * 9 / 16f;
-			float bottomBarWorldHeight = BottomBarUI.ActiveBarHeight / uiScreenHeight * view.OrthoSize * 2;
-			view.Pos = bounds.Centre + Vector2.down * bottomBarWorldHeight / 2;
+				float orthoForHeight = bounds.Height * UI.Height / (2f * usableHeight);
+				float orthoForWidth = bounds.Width * UI.Height / (2f * usableWidth);
+				view.OrthoSize = Mathf.Max(orthoForHeight, orthoForWidth);
+				view.OrthoSize += view.OrthoSize * 0.1f;
+				view.OrthoSize = Mathf.Clamp(view.OrthoSize, zoomRange.x, zoomRange.y);
+
+				float usableBottom = TouchUILayout.BottomBarTotalHeight;
+				float usableTop = UI.Height - TouchUILayout.TopBarTotalHeight;
+				float usableCentreY = (usableBottom + usableTop) * 0.5f;
+				float centreOffsetUI = usableCentreY - UI.HalfHeight;
+				float centreOffsetWorld = centreOffsetUI / UI.Height * view.OrthoSize * 2f;
+				view.Pos = bounds.Centre - Vector2.up * centreOffsetWorld;
+			}
+			else
+			{
+				view.OrthoSize = Mathf.Max(bounds.Height, bounds.Width * 9 / 16f) * 0.5f;
+				view.OrthoSize += view.OrthoSize * 0.1f; // Padding
+				view.OrthoSize = Mathf.Clamp(view.OrthoSize, zoomRange.x, zoomRange.y);
+
+				// Move cam down slightly from bounds centre to account for bottom region of screen blocked by chip bar
+				const float uiScreenHeight = UI.Width * 9 / 16f;
+				float bottomBarWorldHeight = BottomBarUI.ActiveBarHeight / uiScreenHeight * view.OrthoSize * 2;
+				view.Pos = bounds.Centre + Vector2.down * bottomBarWorldHeight / 2;
+			}
 			return view;
 		}
 
