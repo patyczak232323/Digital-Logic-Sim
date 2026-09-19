@@ -140,7 +140,13 @@ namespace DLS.Game
 
 			if (UIDrawer.ActiveMenu is UIDrawer.MenuType.None or UIDrawer.MenuType.BottomBarMenuPopup)
 			{
-				controller.Update();
+				// Multi-touch is reserved for the mobile camera gesture. Do not let
+				// the editor interpret the primary touch as a selection/move at the
+				// same time as a two-finger pan or pinch.
+				if (!CameraController.TouchGestureActive)
+				{
+					controller.Update();
+				}
 			}
 
 			if (UIDrawer.ActiveMenu == UIDrawer.MenuType.None)
