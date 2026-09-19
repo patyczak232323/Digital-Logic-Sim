@@ -266,7 +266,7 @@ namespace DLS.Graphics
 			rowLeft.y -= buttonHeightTouch + gap;
 			DrawPair("FIND / ADD", FindChipButtonIndex, "LIBRARY", LibraryButtonIndex, rowLeft, true, true);
 			rowLeft.y -= buttonHeightTouch + gap;
-			DrawPair("PREFERENCES", OptionsButtonIndex, "DIAGNOSTICS", DiagnosticsButtonIndex, rowLeft, true, true);
+			DrawPair("PREFERENCES", OptionsButtonIndex, "DIAGNOSTICS", DiagnosticsButtonIndex, rowLeft, false, false);
 			rowLeft.y -= buttonHeightTouch + gap;
 
 			bool mainMenu = UI.Button(
