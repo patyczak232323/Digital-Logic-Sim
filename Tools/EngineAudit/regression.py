@@ -358,6 +358,46 @@ def test_feedback_graphs_use_feedback_jit_instead_of_legacy_routing() -> None:
     assert "chip.FeedbackExecutor != null" in deterministic
 
 
+def test_android_touch_shell_has_header_gestures_and_component_picker() -> None:
+    ui = source("Assets/Scripts/Graphics/UI/UIDrawer.cs")
+    header = source("Assets/Scripts/Graphics/UI/Menus/TouchProjectHeader.cs")
+    camera = source("Assets/Scripts/Game/Interaction/CameraController.cs")
+    project = source("Assets/Scripts/Game/Project/Project.cs")
+    bar = source("Assets/Scripts/Graphics/UI/Menus/BottomBarUI.cs")
+    search = source("Assets/Scripts/Graphics/UI/Menus/SearchPopup.cs")
+    main_menu = source("Assets/Scripts/Graphics/UI/Menus/MainMenu.cs")
+
+    assert "TouchProjectHeader.Draw(project);" in ui
+    assert "public const float TopBarHeight" in ui
+    assert "public static float TopBarTotalHeight" in ui
+
+    assert '"STEP"' in header
+    assert "project.advanceSingleSimStep = true;" in header
+    assert '"PAUSED  #' in header
+    assert '"RUN  {FormatRate(project.simAvgTicksPerSec)}"' in header
+    assert "project.ReturnToPreviousViewedChip();" in header
+
+    assert "static bool HandleTouchCameraGesture()" in camera
+    assert "Input.touchCount < 2" in camera
+    assert "touchGestureDistancePrev / safeDistance" in camera
+    assert "TouchUILayout.TopBarTotalHeight" in camera
+    assert "TouchUILayout.BottomBarTotalHeight" in camera
+    assert "CameraController.TouchGestureActive" in project
+
+    assert '"PROJECT & TOOLS"' in bar
+    assert '"MAIN MENU"' in bar
+    assert "ConsumeMouseButtonDownEvent(MouseButton.Left)" in bar
+    assert "TouchUILayout.IsPortrait ? usableWidth" in bar
+
+    assert "static void DrawTouchMenu()" in search
+    assert '"ADD COMPONENT"' in search
+    assert "drawTouchChipSearchEntry" in search
+    assert '"USE"' in search and '"OPEN"' in search and '"UNSTAR"' in search
+
+    assert "Mathf.Min(14f, UI.Height * 0.27f)" in main_menu
+    assert "theme.FontSizeRegular * 0.82f" in main_menu
+
+
 def test_android_touch_context_menu_and_safe_area() -> None:
     input_helper = source("Assets/Scripts/Seb/Helpers/Input/InputHelper.cs")
     context = source("Assets/Scripts/Graphics/UI/Menus/ContextMenu.cs")
@@ -523,6 +563,7 @@ TESTS = (
     test_feedback_state_ownership_uses_runtime_active_not_ready,
     test_all_projects_use_rewired_deterministic_engine,
     test_feedback_graphs_use_feedback_jit_instead_of_legacy_routing,
+    test_android_touch_shell_has_header_gestures_and_component_picker,
     test_android_touch_context_menu_and_safe_area,
     test_android_touch_ui_is_separate_from_desktop_layout,
     test_diagnostics_menu_compacts_dynamic_text_and_balances_sections,
