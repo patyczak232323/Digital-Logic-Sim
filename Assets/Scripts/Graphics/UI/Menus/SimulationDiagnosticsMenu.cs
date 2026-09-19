@@ -717,7 +717,7 @@ namespace DLS.Graphics
 			WaveformProbeInfo[] probes = SimulationWaveformRecorder.GetProbes();
 			if (probes.Length == 0)
 			{
-				DrawTouchInfoCard(ref y, edge, card, "PROBES", "Right-click / context action on a pin -> TOGGLE PROBE", dim);
+				DrawTouchInfoCard(ref y, edge, card, "PROBES", "Long-press a pin, then choose TOGGLE PROBE", dim);
 				return;
 			}
 
