@@ -12,6 +12,7 @@ namespace DLS.Graphics
 	public static class BottomBarUI
 	{
 		public const float barHeight = 3;
+		public static float ActiveBarHeight => TouchUILayout.Enabled ? TouchUILayout.BottomBarHeight : barHeight;
 		const float padY = 0.3f;
 		const float buttonSpacing = 0.25f;
 		const float buttonHeight = barHeight - padY * 2;
@@ -54,6 +55,12 @@ namespace DLS.Graphics
 
 		public static void DrawUI(Project project)
 		{
+			if (TouchUILayout.Enabled)
+			{
+				DrawTouchUI(project);
+				return;
+			}
+
 			DrawBottomBar(project);
 
 			if (UIDrawer.ActiveMenu == UIDrawer.MenuType.BottomBarMenuPopup)
@@ -83,7 +90,7 @@ namespace DLS.Graphics
 					string text = menuButtonNames[i];
 					if (UI.Button(text, theme, pos, size, buttonEnabled, false, false, Anchor.BottomLeft))
 					{
-						ButtonPressed(i);
+						HandleMenuAction(i);
 					}
 
 					pos = UI.PrevBounds.TopLeft;
@@ -107,16 +114,149 @@ namespace DLS.Graphics
 				}
 			}
 
-			void ButtonPressed(int i)
+		}
+
+		static void DrawTouchUI(Project project)
+		{
+			DrawTouchBottomBar(project);
+
+			if (UIDrawer.ActiveMenu == UIDrawer.MenuType.BottomBarMenuPopup)
 			{
-				if (i == NewChipButtonIndex) CreateNewChip();
-				else if (i == SaveChipButtonIndex) OpenSaveMenu();
-				else if (i == FindChipButtonIndex) OpenSearchMenu();
-				else if (i == LibraryButtonIndex) OpenLibraryMenu();
-				else if (i == OptionsButtonIndex) OpenPreferencesMenu();
-				else if (i == DiagnosticsButtonIndex) OpenDiagnosticsMenu();
-				else if (i == QuitButtonIndex) ExitToMainMenu();
+				DrawTouchPopupMenu();
 			}
+
+			if (UIDrawer.ActiveMenu is UIDrawer.MenuType.BottomBarMenuPopup or UIDrawer.MenuType.None)
+			{
+				HandleKeyboardShortcuts();
+			}
+		}
+
+		static void DrawTouchBottomBar(Project project)
+		{
+			float height = TouchUILayout.BottomBarHeight;
+			float edge = TouchUILayout.EdgePadding;
+			float gap = TouchUILayout.TouchGap;
+			Bounds2D bounds = new(Vector2.zero, new Vector2(UI.Width, height));
+			barBounds_ScreenSpace = UI.UIToScreenSpace(bounds);
+
+			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
+			UI.DrawPanel(bounds, theme.StarredBarCol);
+
+			bool inOtherMenu = !(UIDrawer.ActiveMenu is UIDrawer.MenuType.BottomBarMenuPopup or UIDrawer.MenuType.None);
+			bool ignoreInputs = ContextMenu.HasFocus();
+			const int buttonCount = 5;
+			float buttonWidth = (UI.Width - edge * 2 - gap * (buttonCount - 1)) / buttonCount;
+			Vector2 pos = new(edge, (height - TouchUILayout.TouchButtonHeight) / 2);
+
+			for (int i = 0; i < buttonCount; i++)
+			{
+				string label = i switch
+				{
+					0 => "MENU",
+					1 => "ADD",
+					2 => "LIBRARY",
+					3 => project.simPaused ? "RESUME" : "PAUSE",
+					_ => "DIAG"
+				};
+
+				bool enabled = !inOtherMenu;
+				if (UI.Button(
+					    label,
+					    i == 0 ? theme.MenuButtonTheme : theme.ButtonTheme,
+					    pos,
+					    new Vector2(buttonWidth, TouchUILayout.TouchButtonHeight),
+					    enabled,
+					    false,
+					    false,
+					    Anchor.BottomLeft,
+					    ignoreInputs: ignoreInputs))
+				{
+					switch (i)
+					{
+						case 0:
+							UIDrawer.ToggleBottomPopupMenu();
+							toggleMenuFrame = Time.frameCount;
+							break;
+						case 1:
+							OpenSearchMenu();
+							break;
+						case 2:
+							OpenLibraryMenu();
+							break;
+						case 3:
+							project.description.Prefs_SimPaused = !project.description.Prefs_SimPaused;
+							break;
+						case 4:
+							OpenDiagnosticsMenu();
+							break;
+					}
+				}
+
+				pos.x += buttonWidth + gap;
+			}
+		}
+
+		static void DrawTouchPopupMenu()
+		{
+			DrawSettings.UIThemeDLS uiTheme = DrawSettings.ActiveUITheme;
+			ButtonTheme theme = uiTheme.MenuPopupButtonTheme;
+			float edge = TouchUILayout.EdgePadding;
+			float gap = TouchUILayout.TouchGap;
+			float bottom = TouchUILayout.BottomBarHeight + gap;
+			float width = Mathf.Min(64, UI.Width - edge * 2);
+			float buttonHeightTouch = TouchUILayout.TouchButtonHeight;
+			float buttonWidth = (width - gap) / 2f;
+			string[] labels =
+			{
+				"NEW CHIP", "SAVE CHIP",
+				"FIND CHIP", "LIBRARY",
+				"PREFERENCES", "DIAGNOSTICS",
+				"MAIN MENU", "CLOSE"
+			};
+
+			Draw.ID panelID = UI.ReservePanel();
+			Vector2 origin = new(edge, bottom);
+
+			using (UI.BeginBoundsScope(true))
+			{
+				for (int row = 0; row < 4; row++)
+				{
+					for (int col = 0; col < 2; col++)
+					{
+						int index = row * 2 + col;
+						Vector2 pos = origin + new Vector2(col * (buttonWidth + gap), row * (buttonHeightTouch + gap));
+						bool enabled = MenuButtonsAndShortcutsEnabled || index is 4 or 5 or 6 or 7;
+						if (UI.Button(labels[index], theme, pos, new Vector2(buttonWidth, buttonHeightTouch), enabled, false, false, Anchor.BottomLeft))
+						{
+							switch (index)
+							{
+								case 0: HandleMenuAction(NewChipButtonIndex); break;
+								case 1: HandleMenuAction(SaveChipButtonIndex); break;
+								case 2: HandleMenuAction(FindChipButtonIndex); break;
+								case 3: HandleMenuAction(LibraryButtonIndex); break;
+								case 4: HandleMenuAction(OptionsButtonIndex); break;
+								case 5: HandleMenuAction(DiagnosticsButtonIndex); break;
+								case 6: HandleMenuAction(QuitButtonIndex); break;
+								case 7: UIDrawer.SetActiveMenu(UIDrawer.MenuType.None); break;
+							}
+						}
+					}
+				}
+
+				Bounds2D popupBounds = UI.GetCurrentBoundsScope();
+				UI.ModifyPanel(panelID, popupBounds.Centre, popupBounds.Size + Vector2.one * gap * 2, uiTheme.StarredBarCol);
+			}
+		}
+
+		static void HandleMenuAction(int i)
+		{
+			if (i == NewChipButtonIndex) CreateNewChip();
+			else if (i == SaveChipButtonIndex) OpenSaveMenu();
+			else if (i == FindChipButtonIndex) OpenSearchMenu();
+			else if (i == LibraryButtonIndex) OpenLibraryMenu();
+			else if (i == OptionsButtonIndex) OpenPreferencesMenu();
+			else if (i == DiagnosticsButtonIndex) OpenDiagnosticsMenu();
+			else if (i == QuitButtonIndex) ExitToMainMenu();
 		}
 
 		static void DrawBottomBar(Project project)
