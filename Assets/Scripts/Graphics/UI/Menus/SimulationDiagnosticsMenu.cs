@@ -495,12 +495,14 @@ namespace DLS.Graphics
 			Color card = new(0.11f, 0.11f, 0.13f, 1f);
 			Color dim = Color.white * 0.72f;
 			Color textCol = Color.white;
-			float edge = 1.2f;
+			float leftEdge = TouchUILayout.SafeLeft + 1.2f;
+			float rightEdge = TouchUILayout.SafeRight + 1.2f;
+			float topInset = TouchUILayout.SafeTop;
 			float gap = TouchUILayout.TouchGap;
 
 			UI.DrawFullscreenPanel(background);
 
-			Vector2 titlePos = UI.TopLeft + new Vector2(edge, -1.25f);
+			Vector2 titlePos = UI.TopLeft + new Vector2(leftEdge, -(topInset + 1.25f));
 			UI.DrawText(
 				"SIMULATION",
 				theme.FontBold,
@@ -519,7 +521,7 @@ namespace DLS.Graphics
 			if (UI.Button(
 				    "CLOSE",
 				    theme.ButtonTheme,
-				    UI.TopRight + new Vector2(-edge, -0.7f),
+				    UI.TopRight + new Vector2(-rightEdge, -(topInset + 0.7f)),
 				    new Vector2(13, TouchUILayout.TouchButtonHeight),
 				    true,
 				    false,
@@ -530,9 +532,9 @@ namespace DLS.Graphics
 				return;
 			}
 
-			float tabTop = UI.Height - 6.5f;
-			float tabWidth = (UI.Width - edge * 2 - gap * (TouchPageNames.Length - 1)) / TouchPageNames.Length;
-			Vector2 tabPos = new(edge, tabTop);
+			float tabTop = UI.Height - topInset - 6.5f;
+			float tabWidth = (UI.Width - leftEdge - rightEdge - gap * (TouchPageNames.Length - 1)) / TouchPageNames.Length;
+			Vector2 tabPos = new(leftEdge, tabTop);
 
 			for (int i = 0; i < TouchPageNames.Length; i++)
 			{
@@ -557,16 +559,16 @@ namespace DLS.Graphics
 			switch (touchPage)
 			{
 				case TouchPage.Status:
-					DrawTouchStatus(contentTop, edge, card, dim, textCol);
+					DrawTouchStatus(contentTop, leftEdge, rightEdge, card, dim, textCol);
 					break;
 				case TouchPage.Profiler:
-					DrawTouchProfiler(contentTop, edge, card, dim, textCol);
+					DrawTouchProfiler(contentTop, leftEdge, rightEdge, card, dim, textCol);
 					break;
 				case TouchPage.Analyzer:
-					DrawTouchAnalyzer(contentTop, edge, card, dim, textCol);
+					DrawTouchAnalyzer(contentTop, leftEdge, rightEdge, card, dim, textCol);
 					break;
 				case TouchPage.Replay:
-					DrawTouchReplay(contentTop, edge, card, dim, textCol);
+					DrawTouchReplay(contentTop, leftEdge, rightEdge, card, dim, textCol);
 					break;
 			}
 
@@ -576,7 +578,7 @@ namespace DLS.Graphics
 			}
 		}
 
-		static void DrawTouchStatus(float top, float edge, Color card, Color dim, Color textCol)
+		static void DrawTouchStatus(float top, float leftEdge, float rightEdge, Color card, Color dim, Color textCol)
 		{
 			Project project = Project.ActiveProject;
 			float y = top;
@@ -584,14 +586,14 @@ namespace DLS.Graphics
 				? "No active project"
 				: $"{project.simAvgTicksPerSec:N0} steps/s   target {project.targetTicksPerSecond:N0}";
 
-			DrawTouchInfoCard(ref y, edge, card, "ENGINE", "REWIRED FAST | deterministic + feedback JIT", dim);
-			DrawTouchInfoCard(ref y, edge, card, "LIVE", live, textCol);
-			DrawTouchInfoCard(ref y, edge, card, "GRAPH", projectStats, dim);
-			DrawTouchInfoCard(ref y, edge, card, "ACCELERATION", acceleratorStats, dim);
+			DrawTouchInfoCard(ref y, leftEdge, rightEdge, card, "ENGINE", "REWIRED FAST | deterministic + feedback JIT", dim);
+			DrawTouchInfoCard(ref y, leftEdge, rightEdge, card, "LIVE", live, textCol);
+			DrawTouchInfoCard(ref y, leftEdge, rightEdge, card, "GRAPH", projectStats, dim);
+			DrawTouchInfoCard(ref y, leftEdge, rightEdge, card, "ACCELERATION", acceleratorStats, dim);
 
 			string stability = DeterministicSimulator.LastSettleConverged ? "Convergence OK" : "CONVERGENCE FAILED";
 			Color stabilityCol = DeterministicSimulator.LastSettleConverged ? dim : Color.yellow;
-			DrawTouchInfoCard(ref y, edge, card, "STABILITY", stability, stabilityCol);
+			DrawTouchInfoCard(ref y, leftEdge, rightEdge, card, "STABILITY", stability, stabilityCol);
 
 			if (DeterministicSimulator.LastFailureFrame >= 0)
 			{
@@ -600,16 +602,16 @@ namespace DLS.Graphics
 					: DeterministicSimulator.LastFailureSuspects;
 				string failure = $"frame {DeterministicSimulator.LastFailureFrame:N0} | {DeterministicSimulator.LastFailureKind}";
 				if (!string.IsNullOrWhiteSpace(location)) failure += " | " + CompactPath(location, 70);
-				DrawTouchInfoCard(ref y, edge, card, "LAST FAILURE", failure, Color.yellow);
+				DrawTouchInfoCard(ref y, leftEdge, rightEdge, card, "LAST FAILURE", failure, Color.yellow);
 			}
 		}
 
-		static void DrawTouchProfiler(float top, float edge, Color card, Color dim, Color textCol)
+		static void DrawTouchProfiler(float top, float leftEdge, float rightEdge, Color card, Color dim, Color textCol)
 		{
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
 			float gap = TouchUILayout.TouchGap;
-			float buttonWidth = (UI.Width - edge * 2 - gap * 2) / 3f;
-			Vector2 pos = new(edge, top);
+			float buttonWidth = (UI.Width - leftEdge - rightEdge - gap * 2) / 3f;
+			Vector2 pos = new(leftEdge, top);
 
 			string profilerLabel = SimulationProfiler.Enabled ? "PROFILER ON" : "PROFILER OFF";
 			if (UI.Button(profilerLabel, theme.ButtonTheme, pos, new Vector2(buttonWidth, TouchUILayout.TouchButtonHeight), true, false, false, Anchor.TopLeft))
@@ -647,22 +649,22 @@ namespace DLS.Graphics
 				: benchmark.SampledSteps > 0
 					? $"{benchmark.RawStepsPerSecond:0} steps/s | {benchmark.AverageMicrosecondsPerStep:0.###} us avg | {benchmark.MaxMicrosecondsPerStep:0.###} us max"
 					: "Not run";
-			DrawTouchInfoCard(ref y, edge, card, "BENCHMARK", bench, benchmark.SampledSteps > 0 ? textCol : dim);
+			DrawTouchInfoCard(ref y, leftEdge, rightEdge, card, "BENCHMARK", bench, benchmark.SampledSteps > 0 ? textCol : dim);
 
 			SimulationStepProfile last = SimulationProfiler.LastStep;
 			string lastText = last.Frame > 0
 				? $"{last.StepMilliseconds:0.###} ms | gates {last.GateEvaluations:N0} | signals {last.SignalPropagations:N0} | delta {last.DeltaCycles}"
 				: "No profiler sample";
-			DrawTouchInfoCard(ref y, edge, card, "LAST STEP", lastText, SimulationProfiler.Enabled ? textCol : dim);
+			DrawTouchInfoCard(ref y, leftEdge, rightEdge, card, "LAST STEP", lastText, SimulationProfiler.Enabled ? textCol : dim);
 
 			SimulationHotChip[] hot = SimulationProfiler.GetHotChips(4);
 			if (!SimulationProfiler.Enabled)
 			{
-				DrawTouchInfoCard(ref y, edge, card, "HOT CHIPS", "Enable profiler to collect samples", dim);
+				DrawTouchInfoCard(ref y, leftEdge, rightEdge, card, "HOT CHIPS", "Enable profiler to collect samples", dim);
 			}
 			else if (hot.Length == 0)
 			{
-				DrawTouchInfoCard(ref y, edge, card, "HOT CHIPS", "Waiting for samples...", dim);
+				DrawTouchInfoCard(ref y, leftEdge, rightEdge, card, "HOT CHIPS", "Waiting for samples...", dim);
 			}
 			else
 			{
@@ -680,12 +682,12 @@ namespace DLS.Graphics
 			}
 		}
 
-		static void DrawTouchAnalyzer(float top, float edge, Color card, Color dim, Color textCol)
+		static void DrawTouchAnalyzer(float top, float leftEdge, float rightEdge, Color card, Color dim, Color textCol)
 		{
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
 			float gap = TouchUILayout.TouchGap;
-			float buttonWidth = (UI.Width - edge * 2 - gap * 2) / 3f;
-			Vector2 pos = new(edge, top);
+			float buttonWidth = (UI.Width - leftEdge - rightEdge - gap * 2) / 3f;
+			Vector2 pos = new(leftEdge, top);
 
 			if (UI.Button(
 				    SimulationWaveformRecorder.Enabled ? "CAPTURE ON" : "CAPTURE OFF",
@@ -717,7 +719,7 @@ namespace DLS.Graphics
 			WaveformProbeInfo[] probes = SimulationWaveformRecorder.GetProbes();
 			if (probes.Length == 0)
 			{
-				DrawTouchInfoCard(ref y, edge, card, "PROBES", "Long-press a pin, then choose TOGGLE PROBE", dim);
+				DrawTouchInfoCard(ref y, leftEdge, rightEdge, card, "PROBES", "Long-press a pin, then choose TOGGLE PROBE", dim);
 				return;
 			}
 
@@ -728,22 +730,22 @@ namespace DLS.Graphics
 				WaveformSample[] samples = SimulationWaveformRecorder.GetSamples(probe.Id);
 				string latest = samples.Length == 0 ? "--" : FormatState(samples[^1].State, probe.BitCount);
 				string value = $"{probe.BitCount}b | now {latest} | transitions {probe.SampleCount}";
-				DrawTouchProbeRow(ref y, edge, card, CompactPath(probe.Name, 48), value, probe.Id, textCol);
+				DrawTouchProbeRow(ref y, leftEdge, rightEdge, card, CompactPath(probe.Name, 48), value, probe.Id, textCol);
 			}
 
 			if (probes.Length > count)
 			{
-				DrawTouchInfoCard(ref y, edge, card, "MORE", $"+ {probes.Length - count} probes", dim);
+				DrawTouchInfoCard(ref y, leftEdge, rightEdge, card, "MORE", $"+ {probes.Length - count} probes", dim);
 			}
 		}
 
-		static void DrawTouchReplay(float top, float edge, Color card, Color dim, Color textCol)
+		static void DrawTouchReplay(float top, float leftEdge, float rightEdge, Color card, Color dim, Color textCol)
 		{
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
 			Project project = Project.ActiveProject;
 			float gap = TouchUILayout.TouchGap;
-			float buttonWidth = (UI.Width - edge * 2 - gap * 2) / 3f;
-			Vector2 pos = new(edge, top);
+			float buttonWidth = (UI.Width - leftEdge - rightEdge - gap * 2) / 3f;
+			Vector2 pos = new(leftEdge, top);
 
 			bool replayPending = project != null && project.ReplayCommandPending;
 			bool recording = project != null && project.ReplayRecordingActive;
@@ -789,21 +791,21 @@ namespace DLS.Graphics
 				: recording
 					? $"Recording {project.ReplayRecordedFrames:N0} frames..."
 					: project.ReplayStatus;
-			DrawTouchInfoCard(ref y, edge, card, "STATUS", status, project != null && project.LatestReplayResult.Success ? textCol : dim);
-			DrawTouchInfoCard(ref y, edge, card, "HOW TO USE", "Record a run, pause simulation, then press REPLAY to verify deterministic output.", dim);
+			DrawTouchInfoCard(ref y, leftEdge, rightEdge, card, "STATUS", status, project != null && project.LatestReplayResult.Success ? textCol : dim);
+			DrawTouchInfoCard(ref y, leftEdge, rightEdge, card, "HOW TO USE", "Record a run, pause simulation, then press REPLAY to verify deterministic output.", dim);
 
 			if (project != null && project.HasReplayRecording && !project.simPaused)
 			{
-				DrawTouchInfoCard(ref y, edge, card, "REPLAY LOCKED", "Pause simulation before replay.", Color.yellow);
+				DrawTouchInfoCard(ref y, leftEdge, rightEdge, card, "REPLAY LOCKED", "Pause simulation before replay.", Color.yellow);
 			}
 		}
 
-		static void DrawTouchInfoCard(ref float y, float edge, Color card, string label, string value, Color valueCol)
+		static void DrawTouchInfoCard(ref float y, float leftEdge, float rightEdge, Color card, string label, string value, Color valueCol)
 		{
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
 			const float height = 4.7f;
-			float width = UI.Width - edge * 2;
-			Vector2 topLeft = new(edge, y);
+			float width = UI.Width - leftEdge - rightEdge;
+			Vector2 topLeft = new(leftEdge, y);
 			UI.DrawPanel(topLeft, new Vector2(width, height), card, Anchor.TopLeft);
 			Bounds2D bounds = UI.PrevBounds;
 
@@ -827,13 +829,13 @@ namespace DLS.Graphics
 			y = bounds.Bottom - TouchUILayout.TouchGap;
 		}
 
-		static void DrawTouchProbeRow(ref float y, float edge, Color card, string name, string value, int probeId, Color textCol)
+		static void DrawTouchProbeRow(ref float y, float leftEdge, float rightEdge, Color card, string name, string value, int probeId, Color textCol)
 		{
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
 			const float height = 5.1f;
 			const float removeWidth = 10f;
-			float width = UI.Width - edge * 2;
-			Vector2 topLeft = new(edge, y);
+			float width = UI.Width - leftEdge - rightEdge;
+			Vector2 topLeft = new(leftEdge, y);
 			UI.DrawPanel(topLeft, new Vector2(width, height), card, Anchor.TopLeft);
 			Bounds2D bounds = UI.PrevBounds;
 
