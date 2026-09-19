@@ -163,7 +163,7 @@ namespace DLS.Graphics
 				bool enabled = !inOtherMenu;
 				if (UI.Button(
 					    label,
-					    i == 0 ? theme.MenuButtonTheme : theme.ButtonTheme,
+					    i == 0 || (i == 3 && project.simPaused) ? theme.MenuButtonTheme : theme.ButtonTheme,
 					    pos,
 					    new Vector2(buttonWidth, TouchUILayout.TouchButtonHeight),
 					    enabled,
@@ -201,52 +201,126 @@ namespace DLS.Graphics
 		{
 			DrawSettings.UIThemeDLS uiTheme = DrawSettings.ActiveUITheme;
 			ButtonTheme theme = uiTheme.MenuPopupButtonTheme;
-			float leftEdge = TouchUILayout.SafeLeft + TouchUILayout.EdgePadding;
-			float rightEdge = TouchUILayout.SafeRight + TouchUILayout.EdgePadding;
+			float leftSafe = TouchUILayout.SafeLeft + TouchUILayout.EdgePadding;
+			float rightSafe = TouchUILayout.SafeRight + TouchUILayout.EdgePadding;
 			float gap = TouchUILayout.TouchGap;
 			float bottom = TouchUILayout.BottomBarTotalHeight + gap;
-			float width = Mathf.Min(64, UI.Width - leftEdge - rightEdge);
+			float usableWidth = UI.Width - leftSafe - rightSafe;
+			float width = TouchUILayout.IsPortrait ? usableWidth : Mathf.Min(76f, usableWidth);
+			float left = leftSafe + (usableWidth - width) * 0.5f;
 			float buttonHeightTouch = TouchUILayout.TouchButtonHeight;
-			float buttonWidth = (width - gap) / 2f;
-			string[] labels =
-			{
-				"NEW CHIP", "SAVE CHIP",
-				"FIND CHIP", "LIBRARY",
-				"PREFERENCES", "DIAGNOSTICS",
-				"MAIN MENU", "CLOSE"
-			};
+			float buttonWidth = (width - gap * 3) / 2f;
+			float headerHeight = 5.2f;
+			float panelHeight = headerHeight + buttonHeightTouch * 4 + gap * 5;
+			Color sheetCol = new(0.085f, 0.085f, 0.10f, 0.985f);
 
-			Draw.ID panelID = UI.ReservePanel();
-			Vector2 origin = new(leftEdge, bottom);
+			// Dim only the workspace above the navigation bar. The nav remains visible
+			// and can still switch directly to ADD/LIBRARY/DIAG.
+			UI.DrawPanel(
+				new Vector2(0, TouchUILayout.BottomBarTotalHeight),
+				new Vector2(UI.Width, Mathf.Max(0, UI.Height - TouchUILayout.BottomBarTotalHeight)),
+				new Color(0, 0, 0, 0.48f),
+				Anchor.BottomLeft);
 
-			using (UI.BeginBoundsScope(true))
+			Bounds2D sheetBounds = new(
+				new Vector2(left, bottom),
+				new Vector2(left + width, bottom + panelHeight));
+			UI.DrawPanel(sheetBounds, sheetCol);
+
+			Vector2 headerLeft = sheetBounds.TopLeft + new Vector2(1.2f, -1.35f);
+			UI.DrawText(
+				"PROJECT & TOOLS",
+				uiTheme.FontBold,
+				uiTheme.FontSizeRegular * 0.9f,
+				headerLeft,
+				Anchor.TextCentreLeft,
+				Color.white);
+
+			string projectName = Project.ActiveProject?.description?.ProjectName ?? "Project";
+			UI.DrawText(
+				projectName,
+				uiTheme.FontRegular,
+				uiTheme.FontSizeRegular * 0.68f,
+				headerLeft + Vector2.down * 1.45f,
+				Anchor.TextCentreLeft,
+				Color.white * 0.58f);
+
+			if (UI.Button(
+				    "X",
+				    uiTheme.ButtonTheme,
+				    sheetBounds.TopRight + new Vector2(-0.7f, -0.65f),
+				    new Vector2(4.3f, 3.5f),
+				    true,
+				    false,
+				    false,
+				    Anchor.TopRight))
 			{
-				for (int row = 0; row < 4; row++)
+				UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
+				return;
+			}
+
+			float gridTop = sheetBounds.Top - headerHeight;
+			Vector2 rowLeft = new(left + gap, gridTop - gap);
+
+			DrawPair("NEW CHIP", NewChipButtonIndex, "SAVE CHIP", SaveChipButtonIndex, rowLeft, true, true);
+			rowLeft.y -= buttonHeightTouch + gap;
+			DrawPair("FIND / ADD", FindChipButtonIndex, "LIBRARY", LibraryButtonIndex, rowLeft, true, true);
+			rowLeft.y -= buttonHeightTouch + gap;
+			DrawPair("PREFERENCES", OptionsButtonIndex, "DIAGNOSTICS", DiagnosticsButtonIndex, rowLeft, true, true);
+			rowLeft.y -= buttonHeightTouch + gap;
+
+			bool mainMenu = UI.Button(
+				"MAIN MENU",
+				theme,
+				rowLeft,
+				new Vector2(width - gap * 2, buttonHeightTouch),
+				true,
+				false,
+				false,
+				Anchor.TopLeft);
+			if (mainMenu) HandleMenuAction(QuitButtonIndex);
+
+			// Touching the dimmed workspace dismisses the sheet and consumes the tap,
+			// preventing an accidental wire/chip interaction underneath.
+			if (UIDrawer.ActiveMenu == UIDrawer.MenuType.BottomBarMenuPopup &&
+			    Time.frameCount != toggleMenuFrame &&
+			    InputHelper.IsMouseDownThisFrame(MouseButton.Left) &&
+			    !UI.MouseInsideBounds(sheetBounds) &&
+			    !MouseIsOverBar())
+			{
+				InputHelper.ConsumeMouseButtonDownEvent(MouseButton.Left);
+				UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
+			}
+
+			void DrawPair(
+				string leftLabel,
+				int leftAction,
+				string rightLabel,
+				int rightAction,
+				Vector2 pos,
+				bool leftRequiresEdit,
+				bool rightRequiresEdit)
+			{
+				bool leftEnabled = !leftRequiresEdit || MenuButtonsAndShortcutsEnabled;
+				bool rightEnabled = !rightRequiresEdit || MenuButtonsAndShortcutsEnabled;
+
+				if (UI.Button(leftLabel, theme, pos, new Vector2(buttonWidth, buttonHeightTouch), leftEnabled, false, false, Anchor.TopLeft))
 				{
-					for (int col = 0; col < 2; col++)
-					{
-						int index = row * 2 + col;
-						Vector2 pos = origin + new Vector2(col * (buttonWidth + gap), row * (buttonHeightTouch + gap));
-						bool enabled = MenuButtonsAndShortcutsEnabled || index is 4 or 5 or 6 or 7;
-						if (UI.Button(labels[index], theme, pos, new Vector2(buttonWidth, buttonHeightTouch), enabled, false, false, Anchor.BottomLeft))
-						{
-							switch (index)
-							{
-								case 0: HandleMenuAction(NewChipButtonIndex); break;
-								case 1: HandleMenuAction(SaveChipButtonIndex); break;
-								case 2: HandleMenuAction(FindChipButtonIndex); break;
-								case 3: HandleMenuAction(LibraryButtonIndex); break;
-								case 4: HandleMenuAction(OptionsButtonIndex); break;
-								case 5: HandleMenuAction(DiagnosticsButtonIndex); break;
-								case 6: HandleMenuAction(QuitButtonIndex); break;
-								case 7: UIDrawer.SetActiveMenu(UIDrawer.MenuType.None); break;
-							}
-						}
-					}
+					HandleMenuAction(leftAction);
 				}
 
-				Bounds2D popupBounds = UI.GetCurrentBoundsScope();
-				UI.ModifyPanel(panelID, popupBounds.Centre, popupBounds.Size + Vector2.one * gap * 2, uiTheme.StarredBarCol);
+				if (UI.Button(
+					    rightLabel,
+					    theme,
+					    pos + Vector2.right * (buttonWidth + gap),
+					    new Vector2(buttonWidth, buttonHeightTouch),
+					    rightEnabled,
+					    false,
+					    false,
+					    Anchor.TopLeft))
+				{
+					HandleMenuAction(rightAction);
+				}
 			}
 		}
 
