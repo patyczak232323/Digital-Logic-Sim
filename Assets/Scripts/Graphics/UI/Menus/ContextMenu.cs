@@ -154,8 +154,12 @@ namespace DLS.Graphics
 
 		static void HandleOpenMenuInput()
 		{
-			// Open menu input
-			if (InputHelper.IsMouseDownThisFrame(MouseButton.Right) && !KeyboardShortcuts.CameraActionKeyHeld && !InteractionState.MouseIsOverUI)
+			// Desktop: right click. Touch: hold a finger in place for a short moment.
+			bool contextInput =
+				InputHelper.IsMouseDownThisFrame(MouseButton.Right) ||
+				(TouchUILayout.Enabled && InputHelper.TouchLongPressTriggeredThisFrame);
+
+			if (contextInput && !KeyboardShortcuts.CameraActionKeyHeld && !InteractionState.MouseIsOverUI)
 			{
 				bool inCustomizeMenu = UIDrawer.ActiveMenu == UIDrawer.MenuType.ChipCustomization;
 				IInteractable hoverElement = InteractionState.ElementUnderMouse;
@@ -272,7 +276,7 @@ namespace DLS.Graphics
 		{
 			Draw.StartLayer(Vector2.zero, 1, true);
 
-			const float textOffsetX = 0.45f;
+			float textOffsetX = TouchUILayout.Enabled ? 1.0f : 0.45f;
 			ButtonTheme theme = DrawSettings.ActiveUITheme.MenuPopupButtonTheme;
 			ButtonTheme headerTheme = DrawSettings.ActiveUITheme.MenuPopupButtonTheme;
 			headerTheme.buttonCols.inactive = ColHelper.MakeCol(0.18f);
@@ -281,9 +285,11 @@ namespace DLS.Graphics
 			float menuWidth = Draw.CalculateTextBoundsSize(menuEntries[0].Text, theme.fontSize, theme.font).x + 1;
 			float menuWidthHeader = Draw.CalculateTextBoundsSize(contextMenuHeader, theme.fontSize, theme.font).x + 1;
 			menuWidth = Mathf.Max(menuWidth, menuWidthHeader);
+			if (TouchUILayout.Enabled) menuWidth = Mathf.Max(menuWidth, 28);
 
 			Draw.ID panelID = UI.ReservePanel();
-			Vector2 buttonSize = new(menuWidth, 2);
+			float buttonHeight = TouchUILayout.Enabled ? 4.0f : 2f;
+			Vector2 buttonSize = new(menuWidth, buttonHeight);
 
 
 			Vector2 pos = mouseOpenMenuPos;
