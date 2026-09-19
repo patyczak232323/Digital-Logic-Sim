@@ -89,8 +89,8 @@ namespace DLS.Graphics
 
 			UI.DrawFullscreenPanel(ColHelper.MakeCol255(47, 47, 53));
 			const string title = "DIGITAL LOGIC SIM";
-			const float titleFontSize = 11.5f;
-			const float titleHeight = 24;
+			float titleFontSize = TouchUILayout.Enabled ? 8.6f : 11.5f;
+			float titleHeight = TouchUILayout.Enabled ? Mathf.Min(14f, UI.Height * 0.27f) : 24f;
 			const float shaddowOffset = -0.33f;
 			Color shadowCol = ColHelper.MakeCol255(87, 94, 230);
 
@@ -150,7 +150,7 @@ namespace DLS.Graphics
 			int buttonIndex = UI.VerticalButtonGroup(
 				menuButtonNames,
 				theme.MainMenuButtonTheme,
-				UI.Centre + Vector2.up * (TouchUILayout.Enabled ? 4 : 6),
+				UI.Centre + Vector2.up * (TouchUILayout.Enabled ? Mathf.Min(3f, UI.Height * 0.06f) : 6),
 				new Vector2(buttonWidth, buttonHeight),
 				false,
 				!TouchUILayout.Enabled,
@@ -493,10 +493,23 @@ namespace DLS.Graphics
 			float pad = 1;
 			Color col = new(1, 1, 1, 0.5f);
 
-			Vector2 versionPos = UI.PrevBounds.CentreLeft + Vector2.right * pad;
-			Vector2 datePos = UI.PrevBounds.CentreRight + Vector2.left * pad;
-			UI.DrawText(authorString, theme.FontRegular, theme.FontSizeRegular, versionPos, Anchor.TextCentreLeft, col);
-			UI.DrawText(versionString, theme.FontRegular, theme.FontSizeRegular, datePos, Anchor.TextCentreRight, col);
+			if (TouchUILayout.Enabled)
+			{
+				UI.DrawText(
+					versionString,
+					theme.FontRegular,
+					theme.FontSizeRegular * 0.82f,
+					UI.PrevBounds.Centre,
+					Anchor.TextFirstLineCentre,
+					col);
+			}
+			else
+			{
+				Vector2 versionPos = UI.PrevBounds.CentreLeft + Vector2.right * pad;
+				Vector2 datePos = UI.PrevBounds.CentreRight + Vector2.left * pad;
+				UI.DrawText(authorString, theme.FontRegular, theme.FontSizeRegular, versionPos, Anchor.TextCentreLeft, col);
+				UI.DrawText(versionString, theme.FontRegular, theme.FontSizeRegular, datePos, Anchor.TextCentreRight, col);
+			}
 		}
 
 		static string ResolutionToString(Vector2Int r) => $"{r.x} x {r.y}";
