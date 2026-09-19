@@ -57,6 +57,8 @@ namespace DLS.Graphics
 			{
 				Draw.Quad(controller.SelectionBoxCentre, controller.SelectionBoxSize, ActiveTheme.SelectionBoxCol);
 			}
+
+			DrawHoveredSignalValue();
 		}
 
 		static void DrawWires()
@@ -85,6 +87,76 @@ namespace DLS.Graphics
 			{
 				DrawWire(wire);
 			}
+		}
+
+		static void DrawHoveredSignalValue()
+		{
+			if (InteractionState.MouseIsOverUI ||
+			    controller == null ||
+			    controller.IsMovingSelection ||
+			    controller.IsCreatingSelectionBox)
+			{
+				return;
+			}
+
+			uint state;
+			int width;
+
+			if (InteractionState.ElementUnderMouse is WireInstance wire)
+			{
+				if (!wire.IsFullyConnected || wire.SourcePin == null) return;
+				state = wire.SourcePin.State;
+				width = (int)wire.bitCount;
+			}
+			else if (InteractionState.ElementUnderMouse is PinInstance pin)
+			{
+				state = pin.State;
+				width = (int)pin.bitCount;
+			}
+			else
+			{
+				return;
+			}
+
+			string text = FormatHoveredSignal(state, width);
+			FontType font = FontBold;
+			Vector2 textSize = Draw.CalculateTextBoundsSize(text, FontSizePinLabel, font);
+			Vector2 size = textSize + LabelBackgroundPadding;
+			Vector2 centre = InputHelper.MousePosWorld + new Vector2(size.x / 2 + 0.18f, size.y / 2 + 0.18f);
+
+			Draw.StartLayer(Vector2.zero, 2, false);
+			Draw.Quad(centre, size, new Color(0.025f, 0.025f, 0.025f, 0.94f));
+			Draw.Text(font, text, FontSizePinLabel, centre, Anchor.TextFirstLineCentre, Color.white);
+		}
+
+		static string FormatHoveredSignal(uint state, int bitCount)
+		{
+			int width = Mathf.Clamp(bitCount, 1, 16);
+			uint mask = width >= 16 ? 0xFFFFu : (1u << width) - 1u;
+			uint value = (uint)PinState.GetBitStates(state) & mask;
+			uint tristate = (uint)PinState.GetTristateFlags(state) & mask;
+
+			if (tristate == mask) return width == 1 ? "Z" : $"{width}b  Z";
+			if (tristate != 0)
+			{
+				char[] bits = new char[width];
+				for (int bit = width - 1; bit >= 0; bit--)
+				{
+					uint bitMask = 1u << bit;
+					int textIndex = width - 1 - bit;
+					bits[textIndex] = (tristate & bitMask) != 0
+						? 'Z'
+						: (value & bitMask) != 0 ? '1' : '0';
+				}
+				return $"{width}b  {new string(bits)}";
+			}
+
+			if (width == 1) return value == 0 ? "0" : "1";
+
+			int hexDigits = Math.Max(1, (width + 3) / 4);
+			string hex = value.ToString("X" + hexDigits);
+			string binary = Convert.ToString(value, 2).PadLeft(width, '0');
+			return $"{width}b  0x{hex}  {value}  {binary}";
 		}
 
 		static void DrawAllPinNamesAndChipLabels()
