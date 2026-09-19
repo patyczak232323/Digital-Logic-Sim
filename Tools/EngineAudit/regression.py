@@ -358,6 +358,37 @@ def test_feedback_graphs_use_feedback_jit_instead_of_legacy_routing() -> None:
     assert "chip.FeedbackExecutor != null" in deterministic
 
 
+def test_android_touch_ui_is_separate_from_desktop_layout() -> None:
+    ui = source("Assets/Scripts/Graphics/UI/UIDrawer.cs")
+    bar = source("Assets/Scripts/Graphics/UI/Menus/BottomBarUI.cs")
+    diag = source("Assets/Scripts/Graphics/UI/Menus/SimulationDiagnosticsMenu.cs")
+    camera = source("Assets/Scripts/Game/Interaction/CameraController.cs")
+    main_menu = source("Assets/Scripts/Graphics/UI/Menus/MainMenu.cs")
+
+    assert "public static class TouchUILayout" in ui
+    assert "Application.isMobilePlatform" in ui
+    assert "ForceTouchLayoutForTesting" in ui
+    assert "TouchUILayout.Enabled" in ui
+    assert "UI.CreateUIScope()" in ui
+    assert "UI.CreateFixedAspectUIScope(drawLetterbox: true)" in ui
+
+    assert "static void DrawTouchBottomBar(" in bar
+    assert "static void DrawTouchPopupMenu(" in bar
+    assert '"MENU"' in bar and '"ADD"' in bar and '"LIBRARY"' in bar and '"DIAG"' in bar
+    assert "project.description.Prefs_SimPaused = !project.description.Prefs_SimPaused;" in bar
+    assert "ActiveBarHeight" in camera
+
+    assert "static void DrawTouchMenu()" in diag
+    assert 'TouchPageNames = { "STATUS", "PROFILER", "ANALYZER", "REPLAY" }' in diag
+    assert "DrawTouchStatus(" in diag
+    assert "DrawTouchProfiler(" in diag
+    assert "DrawTouchAnalyzer(" in diag
+    assert "DrawTouchReplay(" in diag
+
+    assert "TouchUILayout.TouchButtonHeight" in main_menu
+    assert "!TouchUILayout.Enabled" in main_menu
+
+
 def test_diagnostics_menu_compacts_dynamic_text_and_balances_sections() -> None:
     menu = source("Assets/Scripts/Graphics/UI/Menus/SimulationDiagnosticsMenu.cs")
 
@@ -459,6 +490,7 @@ TESTS = (
     test_feedback_state_ownership_uses_runtime_active_not_ready,
     test_all_projects_use_rewired_deterministic_engine,
     test_feedback_graphs_use_feedback_jit_instead_of_legacy_routing,
+    test_android_touch_ui_is_separate_from_desktop_layout,
     test_diagnostics_menu_compacts_dynamic_text_and_balances_sections,
     test_non_convergence_diagnostics_are_sticky_and_structured,
     test_native_c_is_experimental_and_downstream_of_safe_combinational_analysis,
