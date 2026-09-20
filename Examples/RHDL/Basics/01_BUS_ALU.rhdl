@@ -1,0 +1,13 @@
+// 8-bit arithmetic, logic and a mux.
+chip BusAlu(WIDTH=8) {
+  input A: WIDTH, B: WIDTH
+  input sel
+  output Y: WIDTH
+  output equal
+
+  wire sum: WIDTH
+  sum = A + B
+
+  Y = sel ? sum : (A ^ B)
+  equal = A == B
+}
