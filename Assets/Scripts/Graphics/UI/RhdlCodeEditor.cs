@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Seb.Helpers;
 using Seb.Types;
 using Seb.Vis;
@@ -29,8 +30,28 @@ namespace DLS.Graphics
 
 		readonly UIHandle scrollID = new("RHDL_DocumentScroll");
 		readonly UI.ScrollViewDrawElementFunc drawLineCallback;
+		readonly List<EditorSnapshot> undoHistory = new();
+		readonly List<EditorSnapshot> redoHistory = new();
+		readonly HashSet<int> diagnosticLines = new();
+
+		const int MaxHistory = 160;
+
+		readonly struct EditorSnapshot
+		{
+			public readonly string Text;
+			public readonly int Caret;
+			public readonly int Anchor;
+
+			public EditorSnapshot(string text, int caret, int anchor)
+			{
+				Text = text;
+				Caret = caret;
+				Anchor = anchor;
+			}
+		}
 
 		string text = string.Empty;
+		string savedText = string.Empty;
 		string[] lines = { string.Empty };
 		int[] lineStarts = { 0 };
 		bool cacheDirty = true;
@@ -52,8 +73,26 @@ namespace DLS.Graphics
 
 		public string Text => text;
 		public bool HasSelection => caret != anchor;
+		public bool IsDirty => !string.Equals(text, savedText, StringComparison.Ordinal);
 		public int SelectionMin => Math.Min(caret, anchor);
 		public int SelectionMax => Math.Max(caret, anchor);
+		public int CaretLine
+		{
+			get
+			{
+				EnsureLineCache();
+				return FindLineForIndex(caret) + 1;
+			}
+		}
+		public int CaretColumn
+		{
+			get
+			{
+				EnsureLineCache();
+				int line = FindLineForIndex(caret);
+				return caret - lineStarts[line] + 1;
+			}
+		}
 		public int LineCount
 		{
 			get
@@ -66,11 +105,35 @@ namespace DLS.Graphics
 		public void SetText(string source)
 		{
 			text = NormalizeNewlines(source ?? string.Empty);
-			caret = Mathf.Clamp(caret, 0, text.Length);
-			anchor = caret;
+			savedText = text;
+			caret = 0;
+			anchor = 0;
 			preferredColumn = -1;
 			cacheDirty = true;
+			undoHistory.Clear();
+			redoHistory.Clear();
+			diagnosticLines.Clear();
 			UI.GetScrollbarState(scrollID).scrollY = 0;
+		}
+
+		public void MarkSaved() => savedText = text;
+
+		public void SetDiagnosticLines(IEnumerable<int> lineNumbers)
+		{
+			diagnosticLines.Clear();
+			if (lineNumbers == null) return;
+			foreach (int line in lineNumbers)
+				if (line > 0) diagnosticLines.Add(line);
+		}
+
+		public void GoTo(int line, int column = 1)
+		{
+			EnsureLineCache();
+			int lineIndex = Mathf.Clamp(line - 1, 0, lines.Length - 1);
+			int localColumn = Mathf.Clamp(column - 1, 0, lines[lineIndex].Length);
+			SetCaret(lineStarts[lineIndex] + localColumn, false);
+			focused = true;
+			UI.GetScrollbarState(scrollID).scrollY = Mathf.Max(0, (lineIndex - 2) * RowHeight);
 		}
 
 		public RhdlEditorCommand Draw(Vector2 topLeft, Vector2 size, ScrollViewTheme scrollTheme, InputFieldTheme textTheme)
@@ -107,7 +170,9 @@ namespace DLS.Graphics
 			Bounds2D row = Bounds2D.CreateFromTopLeftAndSize(topLeft, new Vector2(width, RowHeight));
 			if (!isLayoutPass)
 			{
+				bool diagnosticLine = diagnosticLines.Contains(lineIndex + 1);
 				Color rowCol = lineIndex % 2 == 0 ? RewiredUI.Surface : RewiredUI.SurfaceRaised;
+				if (diagnosticLine) rowCol = Color.Lerp(rowCol, new Color(0.55f, 0.12f, 0.12f, 1f), 0.22f);
 				UI.DrawPanel(row, rowCol);
 
 				// Dedicated line-number gutter. The separator stays visually fixed while
@@ -131,7 +196,7 @@ namespace DLS.Graphics
 					activeTheme.fontSize * 0.86f,
 					row.CentreLeft + Vector2.right * 0.45f,
 					Anchor.TextCentreLeft,
-					RewiredUI.DimText);
+					diagnosticLine ? new Color(1f, 0.48f, 0.48f) : RewiredUI.DimText);
 
 				string line = lines[lineIndex];
 				float textX = row.Left + NumberWidth + TextPad;
@@ -259,6 +324,31 @@ namespace DLS.Graphics
 			bool ctrl = InputHelper.CtrlIsHeld;
 			bool shift = InputHelper.ShiftIsHeld;
 
+			if (ctrl && InputHelper.IsKeyDownThisFrame(KeyCode.Z))
+			{
+				if (shift) Redo();
+				else Undo();
+				return;
+			}
+
+			if (ctrl && InputHelper.IsKeyDownThisFrame(KeyCode.Y))
+			{
+				Redo();
+				return;
+			}
+
+			if (ctrl && InputHelper.IsKeyDownThisFrame(KeyCode.Slash))
+			{
+				ToggleLineComments();
+				return;
+			}
+
+			if (ctrl && InputHelper.IsKeyDownThisFrame(KeyCode.D))
+			{
+				DuplicateLines();
+				return;
+			}
+
 			if (ctrl && InputHelper.IsKeyDownThisFrame(KeyCode.A))
 			{
 				anchor = 0;
@@ -288,7 +378,7 @@ namespace DLS.Graphics
 			if (ctrl && InputHelper.IsKeyDownThisFrame(KeyCode.S))
 				commands |= RhdlEditorCommand.Save;
 
-			if (ctrl && shift && InputHelper.IsKeyDownThisFrame(KeyCode.B))
+			if (ctrl && InputHelper.IsKeyDownThisFrame(KeyCode.B))
 				commands |= RhdlEditorCommand.Build;
 
 			if (InputHelper.IsKeyDownThisFrame(KeyCode.Return) || InputHelper.IsKeyDownThisFrame(KeyCode.KeypadEnter))
@@ -307,7 +397,8 @@ namespace DLS.Graphics
 			if (InputHelper.IsKeyDownThisFrame(KeyCode.Backspace))
 			{
 				if (HasSelection) DeleteSelection();
-				else if (caret > 0) ReplaceRange(caret - 1, caret, string.Empty);
+				else if (!TryDeleteEmptyPair() && !TrySmartIndentBackspace() && caret > 0)
+					ReplaceRange(caret - 1, caret, string.Empty);
 				return;
 			}
 
@@ -345,11 +436,7 @@ namespace DLS.Graphics
 			if (InputHelper.IsKeyDownThisFrame(KeyCode.Home))
 			{
 				if (ctrl) SetCaret(0, shift);
-				else
-				{
-					int line = FindLineForIndex(caret);
-					SetCaret(lineStarts[line], shift);
-				}
+				else MoveToSmartHome(shift);
 				return;
 			}
 
@@ -372,6 +459,162 @@ namespace DLS.Graphics
 					HandleTypedCharacter(c);
 				}
 			}
+		}
+
+		void Undo()
+		{
+			if (undoHistory.Count == 0) return;
+			EditorSnapshot current = Snapshot();
+			EditorSnapshot target = undoHistory[undoHistory.Count - 1];
+			undoHistory.RemoveAt(undoHistory.Count - 1);
+			PushHistory(redoHistory, current);
+			Restore(target);
+		}
+
+		void Redo()
+		{
+			if (redoHistory.Count == 0) return;
+			EditorSnapshot current = Snapshot();
+			EditorSnapshot target = redoHistory[redoHistory.Count - 1];
+			redoHistory.RemoveAt(redoHistory.Count - 1);
+			PushHistory(undoHistory, current);
+			Restore(target);
+		}
+
+		EditorSnapshot Snapshot() => new(text, caret, anchor);
+
+		void Restore(EditorSnapshot snapshot)
+		{
+			text = snapshot.Text ?? string.Empty;
+			caret = Mathf.Clamp(snapshot.Caret, 0, text.Length);
+			anchor = Mathf.Clamp(snapshot.Anchor, 0, text.Length);
+			preferredColumn = -1;
+			cacheDirty = true;
+			Touch();
+		}
+
+		void CaptureUndo()
+		{
+			PushHistory(undoHistory, Snapshot());
+			redoHistory.Clear();
+		}
+
+		static void PushHistory(List<EditorSnapshot> history, EditorSnapshot snapshot)
+		{
+			if (history.Count > 0)
+			{
+				EditorSnapshot last = history[history.Count - 1];
+				if (last.Text == snapshot.Text && last.Caret == snapshot.Caret && last.Anchor == snapshot.Anchor) return;
+			}
+			history.Add(snapshot);
+			if (history.Count > MaxHistory) history.RemoveAt(0);
+		}
+
+		void MoveToSmartHome(bool select)
+		{
+			EnsureLineCache();
+			int line = FindLineForIndex(caret);
+			string value = lines[line];
+			int firstText = 0;
+			while (firstText < value.Length && char.IsWhiteSpace(value[firstText])) firstText++;
+			int currentColumn = caret - lineStarts[line];
+			int targetColumn = currentColumn == firstText ? 0 : firstText;
+			SetCaret(lineStarts[line] + targetColumn, select);
+		}
+
+		bool TryDeleteEmptyPair()
+		{
+			if (caret <= 0 || caret >= text.Length) return false;
+			char open = text[caret - 1];
+			char close = text[caret];
+			bool pair = (open == '{' && close == '}') || (open == '(' && close == ')') || (open == '[' && close == ']');
+			if (!pair) return false;
+			ReplaceRange(caret - 1, caret + 1, string.Empty);
+			return true;
+		}
+
+		bool TrySmartIndentBackspace()
+		{
+			EnsureLineCache();
+			int line = FindLineForIndex(caret);
+			int start = lineStarts[line];
+			int column = caret - start;
+			if (column <= 0) return false;
+			for (int i = start; i < caret; i++)
+				if (text[i] != ' ') return false;
+
+			int remainder = column % Indent.Length;
+			int remove = remainder == 0 ? Math.Min(Indent.Length, column) : remainder;
+			ReplaceRange(caret - remove, caret, string.Empty);
+			return true;
+		}
+
+		void ToggleLineComments()
+		{
+			EnsureLineCache();
+			int firstLine = FindLineForIndex(SelectionMin);
+			int lastLine = FindLineForIndex(Mathf.Max(SelectionMin, SelectionMax - 1));
+			if (!HasSelection) lastLine = firstLine;
+
+			bool allCommented = true;
+			for (int i = firstLine; i <= lastLine; i++)
+			{
+				string line = lines[i];
+				int p = 0;
+				while (p < line.Length && char.IsWhiteSpace(line[p])) p++;
+				if (p >= line.Length) continue;
+				if (p + 1 >= line.Length || line[p] != '/' || line[p + 1] != '/')
+				{
+					allCommented = false;
+					break;
+				}
+			}
+
+			CaptureUndo();
+			string[] work = (string[])lines.Clone();
+			for (int i = firstLine; i <= lastLine; i++)
+			{
+				string line = work[i];
+				int p = 0;
+				while (p < line.Length && char.IsWhiteSpace(line[p])) p++;
+				if (allCommented)
+				{
+					if (p + 1 < line.Length && line[p] == '/' && line[p + 1] == '/')
+					{
+						int remove = p + 2 < line.Length && line[p + 2] == ' ' ? 3 : 2;
+						work[i] = line.Remove(p, remove);
+					}
+				}
+				else if (p < line.Length)
+				{
+					work[i] = line.Insert(p, "// ");
+				}
+			}
+
+			text = string.Join("\n", work);
+			cacheDirty = true;
+			EnsureLineCache();
+			anchor = lineStarts[firstLine];
+			caret = lineStarts[lastLine] + lines[lastLine].Length;
+			Touch();
+		}
+
+		void DuplicateLines()
+		{
+			EnsureLineCache();
+			int firstLine = FindLineForIndex(SelectionMin);
+			int lastLine = HasSelection ? FindLineForIndex(Mathf.Max(SelectionMin, SelectionMax - 1)) : firstLine;
+			int start = lineStarts[firstLine];
+			int end = lineStarts[lastLine] + lines[lastLine].Length;
+			string block = text.Substring(start, end - start);
+			string insertion = "\n" + block;
+			CaptureUndo();
+			text = text.Insert(end, insertion);
+			cacheDirty = true;
+			EnsureLineCache();
+			anchor = end + 1;
+			caret = end + insertion.Length;
+			Touch();
 		}
 
 		void HandleTypedCharacter(char c)
@@ -473,6 +716,7 @@ namespace DLS.Graphics
 		void TransformLineIndent(int firstLine, int lastLine, bool unindent)
 		{
 			EnsureLineCache();
+			CaptureUndo();
 			string[] work = (string[])lines.Clone();
 
 			for (int i = firstLine; i <= lastLine; i++)
@@ -563,6 +807,7 @@ namespace DLS.Graphics
 			end = Mathf.Clamp(end, start, text.Length);
 			replacement ??= string.Empty;
 
+			CaptureUndo();
 			text = text.Remove(start, end - start).Insert(start, replacement);
 			caret = start + replacement.Length;
 			anchor = caret;
