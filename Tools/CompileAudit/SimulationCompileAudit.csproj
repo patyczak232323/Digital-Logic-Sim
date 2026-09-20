@@ -9,8 +9,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../Assets/Scripts/Simulation/*.cs" />
-    <Compile Include="../../Assets/Scripts/Game/Project/SimulationFacade.cs" />
-    <Compile Include="../../Assets/Scripts/Graphics/UI/Menus/SimulationFacade.cs" />
     <Compile Include="Stubs.cs" />
     <Compile Include="RuntimeTests.cs" />
   </ItemGroup>
