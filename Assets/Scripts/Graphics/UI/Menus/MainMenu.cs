@@ -85,7 +85,7 @@ namespace DLS.Graphics
 
 		public static void Draw()
 		{
-			Simulator.UpdateInPausedState();
+			RewiredEngine.UpdatePaused();
 			
 			if (KeyboardShortcuts.CancelShortcutTriggered && activePopup == PopupKind.None)
 			{
