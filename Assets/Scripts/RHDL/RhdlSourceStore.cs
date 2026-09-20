@@ -38,6 +38,9 @@ namespace DLS.RHDL
 			return File.Exists(path) ? File.ReadAllText(path) : string.Empty;
 		}
 
+		public static bool HasChipSource(string projectName, string chipName) =>
+			File.Exists(GetSourcePath(projectName, chipName));
+
 		static void WriteAtomic(string path, string text)
 		{
 			Directory.CreateDirectory(Path.GetDirectoryName(path));
