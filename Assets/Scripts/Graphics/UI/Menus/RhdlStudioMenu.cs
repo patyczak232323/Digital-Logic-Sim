@@ -30,14 +30,27 @@ namespace DLS.Graphics
 		static bool statusSuccess;
 		static int lastBuildSubChipCount;
 		static int lastBuildWireCount;
+		static string requestedSourceChipName;
+
+		public static void OpenSource(string chipName)
+		{
+			requestedSourceChipName = chipName;
+			UIDrawer.SetActiveMenu(UIDrawer.MenuType.RhdlStudio);
+		}
 
 		public static void OnMenuOpened()
 		{
 			Project project = Project.ActiveProject;
 			if (project == null) return;
 
-			string source = RhdlSourceStore.LoadDraft(project.description.ProjectName);
+			string source = string.Empty;
+			if (!string.IsNullOrWhiteSpace(requestedSourceChipName))
+			{
+				source = RhdlSourceStore.LoadChipSource(project.description.ProjectName, requestedSourceChipName);
+			}
+			if (string.IsNullOrWhiteSpace(source)) source = RhdlSourceStore.LoadDraft(project.description.ProjectName);
 			if (string.IsNullOrWhiteSpace(source)) source = DefaultExample;
+			requestedSourceChipName = null;
 			SetEditorSource(source);
 			statusText = "Ready. Edit source and press BUILD.";
 			statusSuccess = false;
