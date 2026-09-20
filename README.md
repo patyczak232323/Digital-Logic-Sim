@@ -64,6 +64,27 @@ Feedback networks can be handled by the deterministic solver or by supported acc
 
 This model is one of the main architectural differences between Rewired and Digital Logic Sim.
 
+## Engine integration architecture
+
+Application and editor code now integrate with the runtime through a single entry point: `RewiredEngine`.
+
+The intended dependency direction is:
+
+```text
+Editor / Project / UI
+        |
+        v
+   RewiredEngine
+        |
+        +-- deterministic runtime
+        +-- simulation graph/backend
+        +-- JIT / feedback JIT
+        +-- LUT cache
+        +-- diagnostics / replay / waveform
+```
+
+The older low-level `Simulator` implementation and `DeterministicSimulator` are internal runtime details. Game/UI code should not call them directly. This keeps editor integration stable while allowing the engine implementation to be reorganized or optimized independently.
+
 ## Current development
 
 Current `main` includes work on:
