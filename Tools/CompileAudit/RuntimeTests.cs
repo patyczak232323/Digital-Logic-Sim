@@ -384,7 +384,15 @@ namespace DLS.Simulation
 				3f,
 				2f);
 
-			ChipLibrary library = new(nand);
+			ChipDescription bus1 = Builtin(
+				"BUS-1",
+				ChipType.Bus_1Bit,
+				new[] { P("BUS-1 (Hidden)", 0) },
+				new[] { P("BUS-1", 1) },
+				2f,
+				2f);
+
+			ChipLibrary library = new(nand, bus1);
 			string source =
 @"chip BlockLayout {
   input A, B, C
