@@ -1103,15 +1103,17 @@ namespace DLS.Simulation
 			SimPin target = allPins[targetIndex];
 			uint newState;
 			ushort contentionMask;
+			int resolvedSourceIndex = triggeringSourceIndex;
 
 			if (sourceCount == 1)
 			{
-				newState = allPins[sourceIndicesByTarget[sourceStart]].State;
+				resolvedSourceIndex = sourceIndicesByTarget[sourceStart];
+				newState = allPins[resolvedSourceIndex].State;
 				contentionMask = 0;
 			}
 			else
 			{
-				newState = ResolveDrivenState(sourceStart, sourceEnd, out contentionMask);
+				newState = ResolveDrivenState(sourceStart, sourceEnd, out contentionMask, out resolvedSourceIndex);
 			}
 
 			target.lastUpdatedFrameIndex = Simulator.simulationFrame;
@@ -1126,7 +1128,7 @@ namespace DLS.Simulation
 			uint oldState = target.State;
 			target.State = newState;
 			stateChangeSerial++;
-			SimPin triggeringSource = allPins[triggeringSourceIndex];
+			SimPin triggeringSource = allPins[resolvedSourceIndex];
 			target.latestSourceID = triggeringSource.ID;
 			target.latestSourceParentChipID = triggeringSource.parentChip.ID;
 
@@ -1146,32 +1148,56 @@ namespace DLS.Simulation
 			}
 		}
 
-		static uint ResolveDrivenState(int sourceStart, int sourceEnd, out ushort contentionMask)
+		static uint ResolveDrivenState(
+			int sourceStart,
+			int sourceEnd,
+			out ushort contentionMask,
+			out int acceptedSourceIndex)
 		{
-			ushort connectedMask = 0;
+			// Legacy Simulator/SimPin compatibility path. Multiple active drivers are
+			// uncommon, so keep the single-driver hot path above branch-free and pay
+			// this extra work only for actual shared nets/buses.
+			int firstSourceIndex = sourceIndicesByTarget[sourceStart];
+			uint resolvedState = allPins[firstSourceIndex].State;
+			acceptedSourceIndex = firstSourceIndex;
+
 			ushort highMask = 0;
 			ushort lowMask = 0;
 
-			for (int i = sourceStart; i < sourceEnd; i++)
-			{
-				uint state = allPins[sourceIndicesByTarget[i]].State;
-				ushort bits = PinState.GetBitStates(state);
-				ushort tristate = PinState.GetTristateFlags(state);
-				ushort activeMask = (ushort)~tristate;
+			AccumulateDriverMasks(resolvedState, ref highMask, ref lowMask);
 
-				connectedMask |= activeMask;
-				highMask |= (ushort)(bits & activeMask);
-				lowMask |= (ushort)((ushort)~bits & activeMask);
+			for (int i = sourceStart + 1; i < sourceEnd; i++)
+			{
+				int sourceIndex = sourceIndicesByTarget[i];
+				uint sourceState = allPins[sourceIndex].State;
+				AccumulateDriverMasks(sourceState, ref highMask, ref lowMask);
+
+				// Match SimPin.ReceiveInput(): combine the already-resolved state with
+				// the next source, randomly accepting/rejecting conflicting driven bits
+				// while always accepting bits whose previous source was tri-stated.
+				uint orState = sourceState | resolvedState;
+				uint andState = sourceState & resolvedState;
+				ushort bitsNew = (ushort)(Simulator.RandomBool() ? orState : andState);
+				ushort tristateMask = (ushort)(orState >> 16);
+				bitsNew = (ushort)((bitsNew & ~tristateMask) | ((ushort)orState & tristateMask));
+				ushort tristateNew = (ushort)(andState >> 16);
+				uint stateNew = (uint)(bitsNew | (tristateNew << 16));
+
+				if (stateNew != resolvedState) acceptedSourceIndex = sourceIndex;
+				resolvedState = stateNew;
 			}
 
 			contentionMask = (ushort)(highMask & lowMask);
+			return resolvedState;
+		}
 
-			// Conflicting active drivers are invalid digital wiring. Resolve them
-			// deterministically low instead of letting RNG choose a result.
-			ushort resolvedBits = (ushort)(highMask & (ushort)~lowMask);
-			ushort resolvedTristate = (ushort)~connectedMask;
-
-			return (uint)(resolvedBits | (resolvedTristate << 16));
+		static void AccumulateDriverMasks(uint state, ref ushort highMask, ref ushort lowMask)
+		{
+			ushort bits = PinState.GetBitStates(state);
+			ushort tristate = PinState.GetTristateFlags(state);
+			ushort activeMask = (ushort)~tristate;
+			highMask |= (ushort)(bits & activeMask);
+			lowMask |= (ushort)((ushort)~bits & activeMask);
 		}
 
 		static void EvaluateCombinationalChip(int chipIndex)
