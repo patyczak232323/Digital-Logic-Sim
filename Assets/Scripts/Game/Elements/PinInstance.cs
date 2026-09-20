@@ -53,17 +53,20 @@ namespace DLS.Game
 					Vector2 chipPos = subchip.Position;
 
 					float xLocal = (chipSize.x / 2 + DrawSettings.ChipOutlineWidth / 2 - DrawSettings.SubChipPinInset) * (faceRight ? 1 : -1);
-					return chipPos + new Vector2(xLocal, LocalPosY);
+					float yLocal = subchip.MirrorY ? -LocalPosY : LocalPosY;
+					return chipPos + new Vector2(xLocal, yLocal);
 				}
 				default:
 					throw new Exception("Parent type not supported");
 			}
 		}
 
-		public void SetBusFlip(bool flipped)
+		public void SetHorizontalFlip(bool flipped)
 		{
 			faceRight = IsSourcePin ^ flipped;
 		}
+
+		public void SetBusFlip(bool flipped) => SetHorizontalFlip(flipped);
 
 		public Color GetColLow() => DrawSettings.ActiveTheme.StateLowCol[(int)Colour];
 		public Color GetColHigh() => DrawSettings.ActiveTheme.StateHighCol[(int)Colour];
