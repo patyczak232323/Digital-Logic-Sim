@@ -22,6 +22,7 @@ namespace DLS.Simulation
 			Run("deterministic replay round-trip", TestReplayRoundTrip);
 			Run("legacy parity: DisplayDot first-high clock edge", TestDisplayDotFirstHighClockParity);
 			Run("legacy parity: seven-segment visual sink propagation", TestSevenSegmentVisualSinkParity);
+			Run("cold imported nested custom chip uses live first tick", TestColdImportedNestedCustomStartup);
 			Run("8-bit feedback latch bank isolation", TestEightBitLatchBank);
 			Run("dormant feedback executor cannot overwrite live state", TestDormantFeedbackOwnership);
 			Run("active child feedback executor materializes on deopt", TestActiveChildFeedbackHandoff);
@@ -258,6 +259,139 @@ namespace DLS.Simulation
 
 			DeterministicSimulator.Reset();
 			Simulator.Reset();
+		}
+
+		static void TestColdImportedNestedCustomStartup()
+		{
+			ChipDescription nand = new()
+			{
+				Name = "NAND_COLD_IMPORT",
+				ChipType = ChipType.Nand,
+				InputPins = new[] { Pin(0), Pin(1) },
+				OutputPins = new[] { Pin(2) },
+				SubChips = Array.Empty<SubChipDescription>(),
+				Wires = Array.Empty<WireDescription>(),
+				Displays = Array.Empty<DisplayDescription>()
+			};
+
+			ChipDescription leaf = new()
+			{
+				Name = "IMPORTED_LEAF",
+				ChipType = ChipType.Custom,
+				CacheMode = ChipCacheMode.Normal,
+				InputPins = new[] { Pin(10), Pin(11) },
+				OutputPins = new[] { Pin(12) },
+				SubChips = new[]
+				{
+					new SubChipDescription { Name = nand.Name, ID = 1 },
+					new SubChipDescription { Name = nand.Name, ID = 2 },
+					new SubChipDescription { Name = nand.Name, ID = 3 }
+				},
+				Wires = new[]
+				{
+					Wire(10, 0, 1, 0),
+					Wire(11, 0, 1, 1),
+					Wire(1, 2, 2, 0),
+					Wire(1, 2, 2, 1),
+					Wire(2, 2, 3, 0),
+					Wire(2, 2, 3, 1),
+					Wire(3, 2, 12, 0)
+				},
+				Displays = Array.Empty<DisplayDescription>()
+			};
+
+			ChipDescription importedWrapper = new()
+			{
+				Name = "IMPORTED_WRAPPER_NEVER_OPENED",
+				ChipType = ChipType.Custom,
+				CacheMode = ChipCacheMode.Normal,
+				InputPins = new[] { Pin(20), Pin(21) },
+				OutputPins = new[] { Pin(22) },
+				SubChips = new[]
+				{
+					new SubChipDescription { Name = leaf.Name, ID = 50 }
+				},
+				Wires = new[]
+				{
+					Wire(20, 0, 50, 10),
+					Wire(21, 0, 50, 11),
+					Wire(50, 12, 22, 0)
+				},
+				Displays = Array.Empty<DisplayDescription>()
+			};
+
+			ChipDescription rootDescription = new()
+			{
+				Name = "COLD_IMPORT_ROOT",
+				ChipType = ChipType.Custom,
+				CacheMode = ChipCacheMode.Normal,
+				InputPins = new[] { Pin(100), Pin(101) },
+				OutputPins = new[] { Pin(102) },
+				SubChips = new[]
+				{
+					new SubChipDescription { Name = importedWrapper.Name, ID = 70 }
+				},
+				Wires = new[]
+				{
+					Wire(100, 0, 70, 20),
+					Wire(101, 0, 70, 21),
+					Wire(70, 22, 102, 0)
+				},
+				Displays = Array.Empty<DisplayDescription>()
+			};
+
+			ChipLibrary library = new(nand, leaf, importedWrapper, rootDescription);
+
+			// Build directly from serialized/library descriptions. No editor/view-mode
+			// load happens first: this models an imported nested chip that has never
+			// previously been opened in the destination project.
+			SimChip root = Simulator.BuildSimChip(rootDescription, library);
+			SimChip wrapper = root.SubChips[0];
+			SimChip nestedLeaf = wrapper.SubChips[0];
+
+			Assert(wrapper.CompiledExecutor != null, "imported wrapper did not receive combinational JIT");
+			Assert(nestedLeaf.CompiledExecutor != null, "nested imported leaf did not receive combinational JIT");
+
+			DevPinInstance inputA = new();
+			DevPinInstance inputB = new();
+			inputA.Pin.Address = new PinAddress(100, 0);
+			inputB.Pin.Address = new PinAddress(101, 0);
+			DevPinInstance[] inputs = { inputA, inputB };
+
+			Simulator.Reset();
+			DeterministicSimulator.Reset();
+
+			inputA.Pin.PlayerInputState = PinState.LogicHigh;
+			inputB.Pin.PlayerInputState = PinState.LogicHigh;
+			DeterministicSimulator.RunSimulationStep(root, inputs, null);
+
+			Assert(Bit(root.OutputPins[0].State) == 0,
+				"cold imported nested chip returned wrong value on first live tick");
+			Assert(DeterministicSimulator.LastJitHits == 0,
+				"cold imported nested hierarchy was collapsed before its mandatory live compatibility tick");
+
+			// The next tick may use acceleration; output must remain identical to the
+			// live hierarchy and JIT should now actually be selected.
+			inputB.Pin.PlayerInputState = PinState.LogicLow;
+			DeterministicSimulator.RunSimulationStep(root, inputs, null);
+
+			Assert(Bit(root.OutputPins[0].State) == 1,
+				"imported nested chip changed behavior after acceleration activated");
+			Assert(DeterministicSimulator.LastJitHits > 0,
+				"nested custom hierarchy did not re-enable JIT after cold live tick");
+
+			DeterministicSimulator.Reset();
+			Simulator.Reset();
+		}
+
+		static WireDescription Wire(int sourceOwner, int sourcePin, int targetOwner, int targetPin)
+		{
+			return new WireDescription
+			{
+				SourcePinAddress = new PinAddress(sourceOwner, sourcePin),
+				TargetPinAddress = new PinAddress(targetOwner, targetPin),
+				Points = Array.Empty<UnityEngine.Vector2>()
+			};
 		}
 
 		static void TestEightBitLatchBank()
