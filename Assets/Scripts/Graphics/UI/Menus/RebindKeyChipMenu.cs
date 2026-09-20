@@ -31,7 +31,10 @@ namespace DLS.Graphics
 					}
 				}
 
-				UI.DrawText("Press a key to rebind\n (alphanumeric only)", theme.FontBold, theme.FontSizeRegular, pos, Anchor.TextCentre, Color.white * 0.8f);
+				const float panelWidth = 28f;
+				Vector2 headerTopLeft = new(pos.x - panelWidth / 2f, pos.y + 4.1f);
+				RewiredUI.DrawSectionHeader("KEY CHIP BINDING", headerTopLeft, panelWidth, true);
+				UI.DrawText("Press a key to rebind\n(alphanumeric only)", theme.FontRegular, theme.FontSizeRegular * 0.78f, pos, Anchor.TextCentre, RewiredUI.SecondaryText);
 
 				UI.DrawPanel(UI.PrevBounds.CentreBottom + Vector2.down, Vector2.one * 3.5f, new Color(0.1f, 0.1f, 0.1f), Anchor.CentreTop);
 				UI.DrawText(chosenKey, theme.FontBold, theme.FontSizeRegular * 1.5f, UI.PrevBounds.Centre, Anchor.TextCentre, Color.white);
