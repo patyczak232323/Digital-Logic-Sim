@@ -167,12 +167,38 @@ namespace DLS.Game
 
     public class ChipLibrary
     {
-        public ChipDescription GetChipDescription(string name) => new ChipDescription { Name = name };
+        readonly Dictionary<string, ChipDescription> descriptions = new(ChipDescription.NameComparer);
+
+        public ChipLibrary() { }
+
+        public ChipLibrary(params ChipDescription[] chipDescriptions)
+        {
+            if (chipDescriptions == null) return;
+            for (int i = 0; i < chipDescriptions.Length; i++)
+            {
+                ChipDescription description = chipDescriptions[i];
+                if (description == null || string.IsNullOrWhiteSpace(description.Name)) continue;
+                descriptions[description.Name] = description;
+            }
+        }
+
+        public ChipDescription GetChipDescription(string name)
+        {
+            if (descriptions.TryGetValue(name ?? string.Empty, out ChipDescription description)) return description;
+            return new ChipDescription { Name = name };
+        }
+
         public bool TryGetChipDescription(string name, out ChipDescription description)
         {
-            description = GetChipDescription(name);
-            return description != null;
+            if (descriptions.Count == 0)
+            {
+                description = GetChipDescription(name);
+                return description != null;
+            }
+
+            return descriptions.TryGetValue(name ?? string.Empty, out description);
         }
+
         public ChipDescription[] GetDirectParentChips(string chipName) => Array.Empty<ChipDescription>();
     }
 
