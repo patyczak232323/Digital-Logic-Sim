@@ -113,7 +113,7 @@ def test_csharp_integration_guards() -> None:
     sim_chip = source("Assets/Scripts/Simulation/SimChip.cs")
     project = source("Assets/Scripts/Game/Project/Project.cs")
     camera = source("Assets/Scripts/Game/Interaction/CameraController.cs")
-    simulation_facade = source("Assets/Scripts/Game/Project/SimulationFacade.cs")
+    simulation_facade = source("Assets/Scripts/Simulation/RewiredEngine.cs")
 
     assert 'string temporaryPath = path + ".tmp";' in saver
     assert 'string backupPath = path + ".bak";' in saver
@@ -138,9 +138,12 @@ def test_csharp_integration_guards() -> None:
     assert "public static bool ApplyModifications()" in simulator
     assert "while (modificationQueue.TryDequeue(out SimModifyCommand cmd))" in simulator
     assert "return topologyChanged;" in simulator
-    assert "bool topologyChanged = DLS.Simulation.Simulator.ApplyModifications();" in simulation_facade
+    assert "public static class RewiredEngine" in simulation_facade
+    assert "if (Simulator.ApplyModifications())" in simulation_facade
     assert "if (topologyChanged) DeterministicSimulator.InvalidateTopology();" in simulation_facade
     assert "pendingTopologyModification" not in simulation_facade
+    assert not (ROOT / "Assets/Scripts/Game/Project/SimulationFacade.cs").exists()
+    assert not (ROOT / "Assets/Scripts/Graphics/UI/Menus/SimulationFacade.cs").exists()
 
 
 TESTS = (
