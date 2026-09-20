@@ -351,13 +351,13 @@ namespace DLS.Graphics
 		static void SetEditorSource(string source) => CodeEditor.SetText(source);
 
 		public const string StarterTemplate =
-@"// Define a chip, its ports, then describe the logic.
-chip MyChip {
-  input A
-  input B
+@"// Widths of outputs and wires can be inferred automatically.
+chip Adder {
+  input A:8
+  input B:8
   output Y
 
-  Y = A & B
+  Y = A + B
 }";
 
 		public const string DefaultExample =
