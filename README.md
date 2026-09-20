@@ -143,7 +143,9 @@ connect n1.OUT -> y
 
 Pin names containing spaces can be written with underscores, for example `IN_A` resolves to `IN A`.
 
-RHDL Studio also provides document-wide selection/clipboard editing, automatic `{}`, `()` and `[]` pairing, automatic indentation, and block expansion: pressing **Tab** or **Enter** with the caret between `{}` expands the pair onto separate indented lines. A dedicated gutter and vertical separator visually separate line numbers from source text.
+RHDL Studio also provides document-wide selection/clipboard editing, syntax highlighting, undo/redo, comment toggling, line duplication, smart Home/Backspace behaviour, automatic `{}`, `()` and `[]` pairing, automatic indentation, and block expansion: pressing **Tab** or **Enter** with the caret between `{}` expands the pair onto separate indented lines. Compiler diagnostics highlight affected source lines and move the caret to the first reported error.
+
+For a practical language reference and beginner examples, see `Docs/RHDL_GUIDE.md` and `Examples/RHDL/Basics/`.
 
 Current bus widths are intentionally limited to **1, 4 and 8 bits**, matching the underlying Rewired pin types. Shift counts are compile-time constants/parameters. Chip parameters are currently compile-time defaults within one source unit rather than fully generic parameterized saved-chip instances.
 
