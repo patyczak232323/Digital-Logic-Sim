@@ -29,7 +29,7 @@ namespace DLS.Graphics
 		public static Vector2 DrawLabelSectionOfLabelInputPair(Vector2 topLeft, Vector2 size, string label, Color labelCol, bool drawBackground)
 		{
 			const float pad = 1;
-			if (drawBackground) UI.DrawPanel(topLeft, size, Color.red * 0.1f, Anchor.TopLeft);
+			if (drawBackground) UI.DrawPanel(topLeft, size, RewiredUI.Surface, Anchor.TopLeft);
 			Vector2 centreLeft = topLeft + Vector2.down * size.y / 2;
 			UI.DrawText(label, Theme.FontRegular, Theme.FontSizeRegular, centreLeft + Vector2.right * pad, Anchor.TextCentreLeft, labelCol);
 			Vector2 centreRight = centreLeft + Vector2.right * size.x;
@@ -85,16 +85,8 @@ namespace DLS.Graphics
 		public static void DrawReservedMenuPanel(Draw.ID panelID, Bounds2D contentBounds, bool pad = true)
 		{
 			if (pad) contentBounds = Bounds2D.Grow(contentBounds, PanelUIPadding);
-			UI.ModifyPanel(panelID, contentBounds, Theme.MenuPanelCol);
-
-
-			Color outlineCol = ColHelper.MakeCol(0.26f);
-			float outlineWidth = 0.05f;
-
-			UI.DrawLine(contentBounds.BottomLeft, contentBounds.TopLeft, outlineWidth, outlineCol);
-			UI.DrawLine(contentBounds.TopLeft, contentBounds.TopRight, outlineWidth, outlineCol);
-			UI.DrawLine(contentBounds.BottomRight, contentBounds.TopRight, outlineWidth, outlineCol);
-			UI.DrawLine(contentBounds.BottomRight, contentBounds.BottomLeft, outlineWidth, outlineCol);
+			UI.ModifyPanel(panelID, contentBounds, RewiredUI.SurfaceRaised);
+			RewiredUI.DrawFrame(contentBounds);
 		}
 
 		public static int DrawButtonPair(string nameA, string nameB, Vector2 topLeft, float width, bool addVerticalPadding, bool interactableA = true, bool interactableB = true, bool ignoreInputs = false)
