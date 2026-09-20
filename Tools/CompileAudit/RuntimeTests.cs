@@ -21,6 +21,7 @@ namespace DLS.Simulation
 			Run("RHDL readable logic synthesis", TestRhdlReadableLogicSynthesis);
 			Run("RHDL v0.3 buses, arithmetic, slices and mux", TestRhdlV3BusExpressions);
 			Run("RHDL implicit width inference", TestRhdlImplicitWidthInference);
+			Run("RHDL block layout and orthogonal routing", TestRhdlBlockLayout);
 			Run("RHDL v0.3 operators, constants and named ports", TestRhdlV3OperatorsAndNamedPorts);
 			Run("RHDL examples and Rewired-8 source pack compile", TestRewired8RhdlPackCompilation);
 			Run("feedback NAND latch", TestFeedbackNandLatch);
@@ -349,6 +350,72 @@ namespace DLS.Simulation
 
 			DeterministicSimulator.Reset();
 			Simulator.Reset();
+		}
+
+		static void TestRhdlBlockLayout()
+		{
+			PinDescription P(string name, int id, PinBitCount bits = PinBitCount.Bit1) =>
+				new(name, id, new UnityEngine.Vector2(), bits, PinColour.Red, PinValueDisplayMode.Off);
+
+			ChipDescription Builtin(
+				string name,
+				ChipType type,
+				PinDescription[] inputs,
+				PinDescription[] outputs,
+				float width = 2f,
+				float height = 2f) =>
+				new()
+				{
+					Name = name,
+					ChipType = type,
+					Size = new UnityEngine.Vector2(width, height),
+					InputPins = inputs ?? Array.Empty<PinDescription>(),
+					OutputPins = outputs ?? Array.Empty<PinDescription>(),
+					SubChips = Array.Empty<SubChipDescription>(),
+					Wires = Array.Empty<WireDescription>(),
+					Displays = Array.Empty<DisplayDescription>()
+				};
+
+			ChipDescription nand = Builtin(
+				"NAND",
+				ChipType.Nand,
+				new[] { P("IN B", 0), P("IN A", 1) },
+				new[] { P("OUT", 2) },
+				3f,
+				2f);
+
+			ChipLibrary library = new(nand);
+			string source =
+@"chip BlockLayout {
+  input A, B, C
+  output Y
+
+  wire ab
+  wire bc
+  ab = A & B
+  bc = B ^ C
+  Y = ab | bc
+}";
+
+			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
+			Assert(result.Success,
+				"Block-layout RHDL failed: " + string.Join(" | ", result.Diagnostics.Select(d => d.ToString())));
+			Assert(result.Description != null, "Block-layout RHDL returned no description");
+			Assert(result.Description.SubChips.Length > 2, "Block-layout sample did not synthesize enough logic");
+
+			// RHDL-generated visual wires should contain bend points. Start/end are
+			// intentionally stored as zero because the editor derives them from pins.
+			Assert(result.Description.Wires.Length > 0, "Block-layout sample has no wires");
+			Assert(result.Description.Wires.All(w => w.Points != null && w.Points.Length >= 4),
+				"RHDL block routing should generate orthogonal bend points");
+
+			// No two generated subchips should occupy exactly the same snapped centre.
+			int distinctPositions = result.Description.SubChips
+				.Select(c => c.Position.x.ToString("R") + ":" + c.Position.y.ToString("R"))
+				.Distinct()
+				.Count();
+			Assert(distinctPositions == result.Description.SubChips.Length,
+				"RHDL block layout placed multiple chips at the same centre");
 		}
 
 		static void TestRhdlImplicitWidthInference()
