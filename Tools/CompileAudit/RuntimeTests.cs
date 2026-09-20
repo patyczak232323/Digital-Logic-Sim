@@ -628,6 +628,16 @@ namespace DLS.Simulation
 				},
 				new[] { P("OUT", 5, PinBitCount.Bit8) });
 
+			ChipDescription rom = Builtin(
+				"ROM 256×16",
+				ChipType.Rom_256x16,
+				new[] { P("ADDRESS", 0, PinBitCount.Bit8) },
+				new[]
+				{
+					P("OUT B", 1, PinBitCount.Bit8),
+					P("OUT A", 2, PinBitCount.Bit8)
+				});
+
 			ChipDescription split8 = Builtin(
 				"8-1BIT",
 				ChipType.Split_8To1Bit,
@@ -663,6 +673,7 @@ namespace DLS.Simulation
 			{
 				nand,
 				ram,
+				rom,
 				split8,
 				split4,
 				merge8,
@@ -677,6 +688,7 @@ namespace DLS.Simulation
 				"Examples/RHDL/Basics/00_AND.rhdl",
 				"Examples/RHDL/Basics/01_BUS_ALU.rhdl",
 				"Examples/RHDL/Basics/02_STRUCTURAL_NAND.rhdl",
+				"Examples/RHDL/CPU4/00_CPU4.rhdl",
 				"Examples/RHDL/Rewired8/00_RW8_REG8.rhdl",
 				"Examples/RHDL/Rewired8/01_RW8_REG16.rhdl",
 				"Examples/RHDL/Rewired8/02_RW8_REGFILE8.rhdl",
@@ -685,6 +697,7 @@ namespace DLS.Simulation
 				"Examples/RHDL/Rewired8/05_RW8_CORE.rhdl"
 			};
 
+			ChipDescription cpu4 = null;
 			ChipDescription core = null;
 			foreach (string sourcePath in sources)
 			{
@@ -701,14 +714,83 @@ namespace DLS.Simulation
 				result.Description.CacheMode = ChipCacheMode.Normal;
 
 				descriptions.Add(result.Description);
-				core = result.Description;
+				if (result.Description.Name == "CPU4") cpu4 = result.Description;
+				if (result.Description.Name == "RW8_CORE") core = result.Description;
 			}
+
+			Assert(cpu4 != null, "CPU4 source did not compile into a CPU4 chip");
+			Assert(cpu4.InputPins.Any(p => p.Name == "CLK"), "CPU4 missing CLK input");
+			Assert(cpu4.OutputPins.Any(p => p.Name == "ACC" && p.BitCount == PinBitCount.Bit4), "CPU4 missing 4-bit ACC");
+			Assert(cpu4.OutputPins.Any(p => p.Name == "OUT_PORT" && p.BitCount == PinBitCount.Bit4), "CPU4 missing 4-bit OUT_PORT");
+			Assert(cpu4.OutputPins.Any(p => p.Name == "HALTED"), "CPU4 missing HALTED output");
 
 			Assert(core != null && core.Name == "RW8_CORE", "Rewired-8 source pack did not finish at RW8_CORE");
 			Assert(core.InputPins.Any(p => p.Name == "IMEM_HI" && p.BitCount == PinBitCount.Bit8), "RW8_CORE missing IMEM_HI");
 			Assert(core.OutputPins.Any(p => p.Name == "DMEM_ADDR_HI" && p.BitCount == PinBitCount.Bit8), "RW8_CORE missing 16-bit data address high byte");
 			Assert(core.OutputPins.Any(p => p.Name == "HALTED"), "RW8_CORE missing HALTED output");
 			Assert(core.SubChips.Length > 100, "RW8_CORE unexpectedly small; high-level logic was not lowered");
+
+			// Execute a real program on CPU4 using its internal ROM:
+			//   LDI 3
+			//   STA 0
+			//   LDI 2
+			//   ADD 0
+			//   OUT
+			//   HLT
+			ChipLibrary cpu4Library = new(descriptions.ToArray());
+			Simulator.Reset();
+			DeterministicSimulator.Reset();
+			SimChip cpu4Root = Simulator.BuildSimChip(cpu4, cpu4Library);
+
+			SimChip cpu4Rom = cpu4Root.SubChips.FirstOrDefault(c => c.ChipType == ChipType.Rom_256x16);
+			Assert(cpu4Rom != null, "CPU4 has no internal program ROM");
+			uint[] cpu4Program = { 0x0013u, 0x0030u, 0x0012u, 0x0040u, 0x00E0u, 0x00F0u };
+			for (int i = 0; i < cpu4Program.Length; i++) cpu4Rom.InternalState[i] = cpu4Program[i];
+
+			DevPinInstance[] cpu4Inputs = new DevPinInstance[cpu4.InputPins.Length];
+			Dictionary<string, int> cpu4InputIndex = new(StringComparer.OrdinalIgnoreCase);
+			for (int i = 0; i < cpu4.InputPins.Length; i++)
+			{
+				cpu4Inputs[i] = new DevPinInstance();
+				cpu4Inputs[i].Pin.Address = new PinAddress(cpu4.InputPins[i].ID, 0);
+				cpu4InputIndex[cpu4.InputPins[i].Name] = i;
+			}
+
+			Dictionary<string, int> cpu4OutputIndex = new(StringComparer.OrdinalIgnoreCase);
+			for (int i = 0; i < cpu4.OutputPins.Length; i++)
+				cpu4OutputIndex[cpu4.OutputPins[i].Name] = i;
+
+			void SetCpu4Input(string name, uint value) =>
+				cpu4Inputs[cpu4InputIndex[name]].Pin.PlayerInputState = value;
+
+			uint ReadCpu4(string name, uint mask = 0xFu) =>
+				PinState.GetBitStates(cpu4Root.OutputPins[cpu4OutputIndex[name]].State) & mask;
+
+			void StepCpu4(uint clock, uint reset)
+			{
+				SetCpu4Input("CLK", clock);
+				SetCpu4Input("RESET", reset);
+				DeterministicSimulator.RunSimulationStep(cpu4Root, cpu4Inputs, new SimAudio());
+			}
+
+			StepCpu4(0, 1);
+			StepCpu4(1, 1);
+			StepCpu4(0, 1);
+			StepCpu4(0, 0);
+
+			for (int edge = 0; edge < 10 && ReadCpu4("HALTED", 1) == 0; edge++)
+			{
+				StepCpu4(1, 0);
+				StepCpu4(0, 0);
+			}
+
+			Assert(ReadCpu4("HALTED", 1) == 1, "CPU4 did not reach HLT");
+			Assert(ReadCpu4("ACC") == 5, $"CPU4 ACC expected 5, got {ReadCpu4("ACC")}");
+			Assert(ReadCpu4("OUT_PORT") == 5, $"CPU4 OUT_PORT expected 5, got {ReadCpu4("OUT_PORT")}");
+			Assert(ReadCpu4("PC") == 5, $"CPU4 PC should remain on HLT at address 5, got {ReadCpu4("PC")}");
+
+			DeterministicSimulator.Reset();
+			Simulator.Reset();
 
 			// Execute a minimal real program through the generated CPU:
 			//   LDI0 R1,5
