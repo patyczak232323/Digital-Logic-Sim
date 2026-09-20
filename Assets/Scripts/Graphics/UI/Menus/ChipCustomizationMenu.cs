@@ -15,9 +15,9 @@ namespace DLS.Graphics
 	{
 		static readonly string[] nameDisplayOptions =
 		{
-			"Name: Middle",
-			"Name: Top",
-			"Name: Hidden"
+			"MIDDLE",
+			"TOP",
+			"HIDDEN"
 		};
 
 		static readonly string[] cacheModeOptions = { "AUTO", "NORMAL", "FULL" };
@@ -63,64 +63,94 @@ namespace DLS.Graphics
 			// Don't draw menu when placing display
 			if (CustomizationSceneDrawer.IsPlacingDisplay) return;
 
-			const float width = 20;
-			const float pad = UILayoutHelper.DefaultSpacing;
-			const float pw = width - pad * 2;
-
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
-			UI.DrawPanel(UI.TopLeft, new Vector2(width, UI.Height), theme.MenuPanelCol, Anchor.TopLeft);
+			WheelSelectorTheme wheelTheme = GetCustomizationWheelTheme(theme);
 
-			// ---- Cancel/confirm buttons ----
-			int cancelConfirmButtonIndex = MenuHelper.DrawButtonPair("CANCEL", "CONFIRM", UI.TopLeft + Vector2.down * pad, pw, false);
+			const float leftPanelWidth = 24f;
+			const float rightPanelWidth = 31f;
+			const float edgePad = 1.1f;
+			const float sectionGap = 0.75f;
+			const float headerHeight = 3.1f;
+			const float subHeaderHeight = 2.55f;
 
-			// ---- Chip name UI ----
-			int nameDisplayMode = UI.WheelSelector(ID_NameDisplayOptions, nameDisplayOptions, NextPos(), new Vector2(pw, DrawSettings.ButtonHeight), theme.OptionsWheel, Anchor.TopLeft);
+			Color panelCol = theme.MenuPanelCol;
+			Color dividerCol = ColHelper.MakeCol255(58);
+
+			// Two fixed sidebars leave the centre of the screen exclusively for the
+			// live chip preview/customization scene.
+			UI.DrawPanel(UI.TopLeft, new Vector2(leftPanelWidth, UI.Height), panelCol, Anchor.TopLeft);
+			UI.DrawPanel(UI.TopRight, new Vector2(rightPanelWidth, UI.Height), panelCol, Anchor.TopRight);
+			UI.DrawLine(new Vector2(leftPanelWidth, 0), new Vector2(leftPanelWidth, UI.Height), 0.08f, dividerCol);
+			UI.DrawLine(new Vector2(UI.Width - rightPanelWidth, 0), new Vector2(UI.Width - rightPanelWidth, UI.Height), 0.08f, dividerCol);
+
+			// ---------------- Left: chip properties ----------------
+			float leftContentWidth = leftPanelWidth - edgePad * 2;
+			Vector2 leftTop = new(edgePad, UI.Height - edgePad);
+			DrawSectionHeader("CUSTOMIZE CHIP", leftTop, leftContentWidth, headerHeight, theme, true);
+			float leftY = leftTop.y - headerHeight - 1.35f;
+
+			DrawFieldLabel("NAME DISPLAY", new Vector2(edgePad, leftY), theme);
+			leftY -= 1.85f;
+			int nameDisplayMode = UI.WheelSelector(
+				ID_NameDisplayOptions,
+				nameDisplayOptions,
+				new Vector2(edgePad, leftY),
+				new Vector2(leftContentWidth, DrawSettings.ButtonHeight),
+				wheelTheme,
+				Anchor.TopLeft);
 			ChipSaveMenu.ActiveCustomizeDescription.NameLocation = (NameDisplayLocation)nameDisplayMode;
+			leftY -= DrawSettings.ButtonHeight + 2.1f;
 
-			// ---- Simulation cache UI ----
-			int cacheModeIndex = MenuHelper.LabeledOptionsWheel(
-				"SIM CACHE",
-				Color.white,
-				NextPos(),
-				new Vector2(pw, DrawSettings.ButtonHeight),
+			DrawFieldLabel("SIM CACHE", new Vector2(edgePad, leftY), theme);
+			leftY -= 1.85f;
+			int cacheModeIndex = UI.WheelSelector(
 				ID_CacheMode,
 				cacheModeOptions,
-				7,
-				true);
+				new Vector2(edgePad, leftY),
+				new Vector2(leftContentWidth, DrawSettings.ButtonHeight),
+				wheelTheme,
+				Anchor.TopLeft);
 			ChipSaveMenu.ActiveCustomizeDescription.CacheMode = (ChipCacheMode)cacheModeIndex;
+			leftY -= DrawSettings.ButtonHeight + 1.2f;
 
-			DrawCacheInfoPanel(theme);
+			Color hintCol = new(1, 1, 1, 0.55f);
+			UI.DrawText("Controls simulation cache", theme.FontRegular, theme.FontSizeRegular * 0.64f, new Vector2(edgePad, leftY), Anchor.TextCentreLeft, hintCol);
+			leftY -= 1.45f;
+			UI.DrawText("behaviour for this chip.", theme.FontRegular, theme.FontSizeRegular * 0.64f, new Vector2(edgePad, leftY), Anchor.TextCentreLeft, hintCol);
 
-			// ---- Chip colour UI ----
-			Color newCol = UI.DrawColourPicker(ID_ColourPicker, NextPos(), pw, Anchor.TopLeft);
-			InputFieldTheme inputTheme = MenuHelper.Theme.ChipNameInputField;
-			inputTheme.fontSize = MenuHelper.Theme.FontSizeRegular;
+			// Actions stay pinned to the bottom instead of shifting with content.
+			Vector2 actionTopLeft = new(edgePad, edgePad + DrawSettings.ButtonHeight);
+			int cancelConfirmButtonIndex = MenuHelper.DrawButtonPair(
+				"CANCEL",
+				"CONFIRM",
+				actionTopLeft,
+				leftContentWidth,
+				false);
 
-			InputFieldState hexColInput = UI.InputField(ID_ColourHexInput, inputTheme, NextPos(), new Vector2(pw, DrawSettings.ButtonHeight), "#", Anchor.TopLeft, 1, hexStringInputValidator);
+			// ---------------- Right: unified inspector ----------------
+			float rightX = UI.Width - rightPanelWidth + edgePad;
+			float rightContentWidth = rightPanelWidth - edgePad * 2;
+			Vector2 rightTop = new(rightX, UI.Height - edgePad);
+			DrawSectionHeader("CHIP INSPECTOR", rightTop, rightContentWidth, headerHeight, theme, true);
+			float rightY = rightTop.y - headerHeight - sectionGap;
 
-			if (newCol != ChipSaveMenu.ActiveCustomizeDescription.Colour)
-			{
-				ChipSaveMenu.ActiveCustomizeDescription.Colour = newCol;
-				UpdateChipColHexStringFromColour(newCol);
-			}
-			else if (colHexCodeString != hexColInput.text)
-			{
-				UpdateChipColFromHexString(hexColInput.text);
-			}
+			DrawSectionHeader("CACHE INFO", new Vector2(rightX, rightY), rightContentWidth, subHeaderHeight, theme, false);
+			rightY -= subHeaderHeight;
+			const float cacheBodyHeight = 13.7f;
+			DrawCacheInfoPanel(theme, new Vector2(rightX, rightY), rightContentWidth, cacheBodyHeight);
+			rightY -= cacheBodyHeight + sectionGap;
 
-			// ---- Displays UI ----
-			Color labelCol = ColHelper.Darken(theme.MenuPanelCol, 0.01f);
-			Vector2 labelPos = NextPos(1);
-			UI.TextWithBackground(labelPos, new Vector2(pw, DrawSettings.ButtonHeight), Anchor.TopLeft, displayLabelString, theme.FontBold, theme.FontSizeRegular, Color.white, labelCol);
+			DrawSectionHeader("APPEARANCE", new Vector2(rightX, rightY), rightContentWidth, subHeaderHeight, theme, false);
+			rightY -= subHeaderHeight;
+			const float appearanceBodyHeight = 17.4f;
+			DrawAppearancePanel(theme, new Vector2(rightX, rightY), rightContentWidth, appearanceBodyHeight);
+			rightY -= appearanceBodyHeight + sectionGap;
 
-			float scrollViewHeight = 20;
-			float scrollViewSpacing = UILayoutHelper.DefaultSpacing;
-			UI.DrawScrollView(ID_DisplaysScrollView, NextPos(), new Vector2(pw, scrollViewHeight), scrollViewSpacing, Anchor.TopLeft, theme.ScrollTheme, drawDisplayScrollEntry, subChipsWithDisplays.Length);
+			DrawSectionHeader($"DISPLAYS ({subChipsWithDisplays.Length})", new Vector2(rightX, rightY), rightContentWidth, subHeaderHeight, theme, false);
+			rightY -= subHeaderHeight;
 
-			Vector2 NextPos(float extraPadding = 0)
-			{
-				return UI.PrevBounds.BottomLeft + Vector2.down * (pad + extraPadding);
-			}
+			float displayHeight = Mathf.Max(4f, rightY - edgePad);
+			DrawDisplaysPanel(theme, new Vector2(rightX, rightY), rightContentWidth, displayHeight);
 
 			// Cancel
 			if (cancelConfirmButtonIndex == 0)
@@ -134,6 +164,145 @@ namespace DLS.Graphics
 				UpdateCustomizeDescription();
 				UIDrawer.SetActiveMenu(UIDrawer.MenuType.ChipSave);
 			}
+		}
+
+		static WheelSelectorTheme GetCustomizationWheelTheme(DrawSettings.UIThemeDLS theme)
+		{
+			WheelSelectorTheme wheelTheme = theme.OptionsWheel;
+			wheelTheme.buttonTheme = theme.MainMenuButtonTheme;
+			wheelTheme.buttonTheme.font = theme.FontBold;
+			wheelTheme.buttonTheme.fontSize = theme.FontSizeRegular;
+			wheelTheme.backgroundCol = ColHelper.Darken(theme.MenuPanelCol, 0.08f);
+			wheelTheme.textCol = Color.white;
+			wheelTheme.inactiveTextCol = ColHelper.MakeCol255(125);
+			return wheelTheme;
+		}
+
+		static void DrawSectionHeader(string text, Vector2 topLeft, float width, float height, DrawSettings.UIThemeDLS theme, bool major)
+		{
+			Color bg = ColHelper.Darken(theme.MenuPanelCol, major ? 0.055f : 0.035f);
+			UI.DrawPanel(topLeft, new Vector2(width, height), bg, Anchor.TopLeft);
+			Bounds2D bounds = UI.PrevBounds;
+			float fontScale = major ? 0.92f : 0.78f;
+			UI.DrawText(
+				text,
+				theme.FontBold,
+				theme.FontSizeRegular * fontScale,
+				bounds.CentreLeft + Vector2.right * 0.9f,
+				Anchor.TextCentreLeft,
+				Color.white);
+			UI.DrawLine(bounds.BottomLeft, bounds.BottomRight, 0.07f, ColHelper.MakeCol255(72, 108, 233));
+			UI.OverridePreviousBounds(bounds);
+		}
+
+		static void DrawFieldLabel(string text, Vector2 pos, DrawSettings.UIThemeDLS theme)
+		{
+			UI.DrawText(
+				text,
+				theme.FontBold,
+				theme.FontSizeRegular * 0.72f,
+				pos,
+				Anchor.TextCentreLeft,
+				new Color(1, 1, 1, 0.78f));
+		}
+
+		static void DrawAppearancePanel(DrawSettings.UIThemeDLS theme, Vector2 topLeft, float width, float height)
+		{
+			Color bodyCol = ColHelper.Darken(theme.MenuPanelCol, 0.065f);
+			UI.DrawPanel(topLeft, new Vector2(width, height), bodyCol, Anchor.TopLeft);
+
+			const float innerPad = 0.9f;
+			const float pickerWidth = 12.8f;
+			Vector2 pickerTopLeft = topLeft + new Vector2(innerPad, -innerPad - 1.45f);
+			UI.DrawText(
+				"CHIP COLOR",
+				theme.FontBold,
+				theme.FontSizeRegular * 0.68f,
+				topLeft + new Vector2(innerPad, -0.8f),
+				Anchor.TextCentreLeft,
+				new Color(1, 1, 1, 0.78f));
+
+			Color newCol = UI.DrawColourPicker(ID_ColourPicker, pickerTopLeft, pickerWidth, Anchor.TopLeft);
+
+			float detailsX = topLeft.x + innerPad + pickerWidth + 1.25f;
+			float detailsWidth = width - (detailsX - topLeft.x) - innerPad;
+			Vector2 detailsTop = new(detailsX, topLeft.y - 1.25f);
+
+			UI.DrawText(
+				"PREVIEW",
+				theme.FontBold,
+				theme.FontSizeRegular * 0.62f,
+				detailsTop,
+				Anchor.TextCentreLeft,
+				new Color(1, 1, 1, 0.72f));
+
+			Vector2 previewTopLeft = detailsTop + Vector2.down * 1.25f;
+			float previewHeight = 4.4f;
+			UI.DrawPanel(previewTopLeft, new Vector2(detailsWidth, previewHeight), ChipSaveMenu.ActiveCustomizeDescription.Colour, Anchor.TopLeft);
+			Bounds2D previewBounds = UI.PrevBounds;
+			UI.DrawLine(previewBounds.BottomLeft, previewBounds.TopLeft, 0.05f, ColHelper.MakeCol255(100));
+			UI.DrawLine(previewBounds.TopLeft, previewBounds.TopRight, 0.05f, ColHelper.MakeCol255(100));
+			UI.DrawLine(previewBounds.TopRight, previewBounds.BottomRight, 0.05f, ColHelper.MakeCol255(100));
+			UI.DrawLine(previewBounds.BottomRight, previewBounds.BottomLeft, 0.05f, ColHelper.MakeCol255(100));
+
+			Vector2 hexLabelPos = previewTopLeft + Vector2.down * (previewHeight + 1.25f);
+			UI.DrawText(
+				"HEX VALUE",
+				theme.FontBold,
+				theme.FontSizeRegular * 0.62f,
+				hexLabelPos,
+				Anchor.TextCentreLeft,
+				new Color(1, 1, 1, 0.72f));
+
+			InputFieldTheme inputTheme = theme.ChipNameInputField;
+			inputTheme.fontSize = theme.FontSizeRegular * 0.8f;
+			InputFieldState hexColInput = UI.InputField(
+				ID_ColourHexInput,
+				inputTheme,
+				hexLabelPos + Vector2.down * 1.1f,
+				new Vector2(detailsWidth, DrawSettings.ButtonHeight),
+				"#",
+				Anchor.TopLeft,
+				0.65f,
+				hexStringInputValidator);
+
+			if (newCol != ChipSaveMenu.ActiveCustomizeDescription.Colour)
+			{
+				ChipSaveMenu.ActiveCustomizeDescription.Colour = newCol;
+				UpdateChipColHexStringFromColour(newCol);
+			}
+			else if (colHexCodeString != hexColInput.text)
+			{
+				UpdateChipColFromHexString(hexColInput.text);
+			}
+		}
+
+		static void DrawDisplaysPanel(DrawSettings.UIThemeDLS theme, Vector2 topLeft, float width, float height)
+		{
+			if (subChipsWithDisplays.Length == 0)
+			{
+				Color emptyCol = ColHelper.Darken(theme.MenuPanelCol, 0.065f);
+				UI.DrawPanel(topLeft, new Vector2(width, height), emptyCol, Anchor.TopLeft);
+				Bounds2D bounds = UI.PrevBounds;
+				UI.DrawText(
+					"No displays available.",
+					theme.FontRegular,
+					theme.FontSizeRegular * 0.65f,
+					bounds.Centre,
+					Anchor.Centre,
+					new Color(1, 1, 1, 0.45f));
+				return;
+			}
+
+			UI.DrawScrollView(
+				ID_DisplaysScrollView,
+				topLeft,
+				new Vector2(width, height),
+				UILayoutHelper.DefaultSpacing,
+				Anchor.TopLeft,
+				theme.ScrollTheme,
+				drawDisplayScrollEntry,
+				subChipsWithDisplays.Length);
 		}
 
 		static void DrawDisplayScroll(Vector2 pos, float width, int i, bool isLayoutPass)
@@ -185,42 +354,41 @@ namespace DLS.Graphics
 		}
 
 
-		static void DrawCacheInfoPanel(DrawSettings.UIThemeDLS theme)
+		static void DrawCacheInfoPanel(DrawSettings.UIThemeDLS theme, Vector2 topLeft, float width, float height)
 		{
-			const float panelWidth = 35;
-			const float panelHeight = 24;
-			const float rowHeight = 3.1f;
-			const float pad = UILayoutHelper.DefaultSpacing;
+			Color bodyCol = ColHelper.Darken(theme.MenuPanelCol, 0.065f);
+			UI.DrawPanel(topLeft, new Vector2(width, height), bodyCol, Anchor.TopLeft);
 
-			Vector2 panelTopRight = UI.TopRight + Vector2.left * pad + Vector2.down * pad;
-			UI.DrawPanel(panelTopRight, new Vector2(panelWidth, panelHeight), theme.MenuPanelCol, Anchor.TopRight);
+			const float padX = 0.9f;
+			const float rowStep = 1.58f;
+			Vector2 pos = topLeft + new Vector2(padX, -1.15f);
+			Color secondaryCol = new(1, 1, 1, 0.68f);
 
-			float contentWidth = panelWidth - pad * 2;
-			Vector2 rowPos = panelTopRight + Vector2.left * (panelWidth - pad) + Vector2.down * pad;
-			Color rowCol = ColHelper.Darken(theme.MenuPanelCol, 0.01f);
-
-			DrawRow("CACHE INFO", theme.FontBold, 0.92f);
-			DrawRow(GetCacheHeadline(), theme.FontBold, 0.72f);
+			DrawInfoLine(GetCacheHeadline(), true, 0.68f, Color.white);
 
 			GetCacheReasonLines(out string reasonA, out string reasonB);
-			DrawRow(reasonA, theme.FontRegular, 0.56f);
-			DrawRow(reasonB, theme.FontRegular, 0.56f);
+			DrawInfoLine(reasonA, false, 0.52f, secondaryCol);
+			if (!string.IsNullOrWhiteSpace(reasonB)) DrawInfoLine(reasonB, false, 0.52f, secondaryCol);
 
-			DrawRow(GetCacheRamLine(), theme.FontRegular, 0.62f);
-			DrawRow(GetCacheDiskLine(), theme.FontRegular, 0.62f);
+			SplitPanelText(GetCacheRamLine(), 38, out string ramA, out string ramB);
+			DrawInfoLine(ramA, false, 0.56f, Color.white);
+			if (!string.IsNullOrWhiteSpace(ramB)) DrawInfoLine(ramB, false, 0.56f, secondaryCol);
 
-			void DrawRow(string text, FontType font, float fontScale)
+			SplitPanelText(GetCacheDiskLine(), 38, out string diskA, out string diskB);
+			DrawInfoLine(diskA, false, 0.56f, Color.white);
+			if (!string.IsNullOrWhiteSpace(diskB)) DrawInfoLine(diskB, false, 0.56f, secondaryCol);
+
+			void DrawInfoLine(string text, bool bold, float scale, Color col)
 			{
-				UI.TextWithBackground(
-					rowPos,
-					new Vector2(contentWidth, rowHeight),
-					Anchor.TopLeft,
+				if (string.IsNullOrWhiteSpace(text)) return;
+				UI.DrawText(
 					text,
-					font,
-					theme.FontSizeRegular * fontScale,
-					Color.white,
-					rowCol);
-				rowPos += Vector2.down * (rowHeight + pad * 0.35f);
+					bold ? theme.FontBold : theme.FontRegular,
+					theme.FontSizeRegular * scale,
+					pos,
+					Anchor.TextCentreLeft,
+					col);
+				pos += Vector2.down * rowStep;
 			}
 		}
 
@@ -269,7 +437,7 @@ namespace DLS.Graphics
 				text = "Mode: full binary LUT; build/load runs in background";
 			}
 
-			SplitPanelText(text, 48, out first, out second);
+			SplitPanelText(text, 38, out first, out second);
 		}
 
 		static string GetCacheRamLine()
