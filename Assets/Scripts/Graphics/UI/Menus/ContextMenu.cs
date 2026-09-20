@@ -34,18 +34,24 @@ namespace DLS.Graphics
 		static readonly MenuEntry openChipEntry = new(Format("OPEN"), OpenChip, CanOpenChip);
 		static readonly MenuEntry labelChipEntry = new(Format("LABEL"), OpenChipLabelPopup, CanLabelChip);
 		static readonly MenuEntry toggleProbeEntry = new(Format("TOGGLE PROBE"), ToggleProbe, CanProbePin);
+		static readonly MenuEntry mirrorHorizontalEntry = new(Format("MIRROR H"), MirrorHorizontal, CanMirrorChip);
+		static readonly MenuEntry mirrorVerticalEntry = new(Format("MIRROR V"), MirrorVertical, CanMirrorChip);
 
 		static readonly MenuEntry[] entries_customSubchip =
 		{
 			new(Format("VIEW"), EnterViewMode, CanEnterViewMode),
 			openChipEntry,
 			labelChipEntry,
+			mirrorHorizontalEntry,
+			mirrorVerticalEntry,
 			deleteEntry
 		};
 
 		static readonly MenuEntry[] entries_builtinSubchip =
 		{
 			labelChipEntry,
+			mirrorHorizontalEntry,
+			mirrorVerticalEntry,
 			deleteEntry
 		};
 
@@ -62,6 +68,8 @@ namespace DLS.Graphics
 		{
 			new(Format("REBIND"), OpenKeyBindMenu, CanEditCurrentChip),
 			labelChipEntry,
+			mirrorHorizontalEntry,
+			mirrorVerticalEntry,
 			deleteEntry
 		};
 
@@ -69,6 +77,8 @@ namespace DLS.Graphics
 		{
 			new(Format("EDIT"), OpenRomEditMenu, CanEditCurrentChip),
 			labelChipEntry,
+			mirrorHorizontalEntry,
+			mirrorVerticalEntry,
 			deleteEntry
 		};
 
@@ -76,6 +86,8 @@ namespace DLS.Graphics
 		{
 			new(Format("EDIT"), OpenPulseEditMenu, CanEditCurrentChip),
 			labelChipEntry,
+			mirrorHorizontalEntry,
+			mirrorVerticalEntry,
 			deleteEntry
 		};
 
@@ -345,6 +357,28 @@ namespace DLS.Graphics
 
 		static bool CanDelete() => Project.ActiveProject.CanEditViewedChip;
 		static bool CanFlipBus() => Project.ActiveProject.CanEditViewedChip;
+
+		static bool CanMirrorChip() =>
+			Project.ActiveProject.CanEditViewedChip &&
+			interactionContext is SubChipInstance subchip &&
+			!subchip.IsBus;
+
+		static void MirrorHorizontal()
+		{
+			if (interactionContext is SubChipInstance subchip)
+			{
+				Project.ActiveProject.controller.MirrorSubChips(new[] { subchip }, true);
+			}
+		}
+
+		static void MirrorVertical()
+		{
+			if (interactionContext is SubChipInstance subchip)
+			{
+				Project.ActiveProject.controller.MirrorSubChips(new[] { subchip }, false);
+			}
+		}
+
 
 		static bool CanProbePin()
 		{
