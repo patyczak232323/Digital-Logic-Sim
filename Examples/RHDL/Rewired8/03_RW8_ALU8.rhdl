@@ -38,9 +38,9 @@ chip RW8_ALU8 {
   wire adc_v
   wire sub_v
   wire sbc_v
-  wire neg_v
-  wire inc_v
-  wire dec_v
+  wire ov_neg
+  wire ov_inc
+  wire ov_dec
 
   add0 = A + B
   adc = add0 + (CIN ? 0x01 : 0x00)
@@ -71,9 +71,9 @@ chip RW8_ALU8 {
   adc_v = !(A[7] ^ B[7]) & (adc[7] ^ A[7])
   sub_v = (A[7] ^ B[7]) & (sub[7] ^ A[7])
   sbc_v = (A[7] ^ B[7]) & (sbc[7] ^ A[7])
-  neg_v = A == 0x80
-  inc_v = A == 0x7F
-  dec_v = A == 0x80
+  ov_neg = A == 0x80
+  ov_inc = A == 0x7F
+  ov_dec = A == 0x80
 
   result = OP == 0x0 ? add0 : OP == 0x1 ? adc : OP == 0x2 ? sub : OP == 0x3 ? sbc : OP == 0x4 ? sub : OP == 0x5 ? andv : OP == 0x6 ? orv : OP == 0x7 ? xorv : OP == 0x8 ? notv : OP == 0x9 ? negv : OP == 0xA ? incv : OP == 0xB ? decv : OP == 0xC ? add0 : OP == 0xD ? sub : OP == 0xE ? sub : andv
 
@@ -83,5 +83,5 @@ chip RW8_ALU8 {
 
   C = OP == 0x0 ? add_c : OP == 0x1 ? adc_c : OP == 0x2 ? sub_c : OP == 0x3 ? sbc_c : OP == 0x4 ? sub_c : OP == 0x5 ? 0 : OP == 0x6 ? 0 : OP == 0x7 ? 0 : OP == 0x8 ? 0 : OP == 0x9 ? neg_c : OP == 0xA ? inc_c : OP == 0xB ? dec_c : OP == 0xC ? add_c : OP == 0xD ? sub_c : OP == 0xE ? sub_c : 0
 
-  V = OP == 0x0 ? add_v : OP == 0x1 ? adc_v : OP == 0x2 ? sub_v : OP == 0x3 ? sbc_v : OP == 0x4 ? sub_v : OP == 0x5 ? 0 : OP == 0x6 ? 0 : OP == 0x7 ? 0 : OP == 0x8 ? 0 : OP == 0x9 ? neg_v : OP == 0xA ? inc_v : OP == 0xB ? dec_v : OP == 0xC ? add_v : OP == 0xD ? sub_v : OP == 0xE ? sub_v : 0
+  V = OP == 0x0 ? add_v : OP == 0x1 ? adc_v : OP == 0x2 ? sub_v : OP == 0x3 ? sbc_v : OP == 0x4 ? sub_v : OP == 0x5 ? 0 : OP == 0x6 ? 0 : OP == 0x7 ? 0 : OP == 0x8 ? 0 : OP == 0x9 ? ov_neg : OP == 0xA ? ov_inc : OP == 0xB ? ov_dec : OP == 0xC ? add_v : OP == 0xD ? sub_v : OP == 0xE ? sub_v : 0
 }
