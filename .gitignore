@@ -75,3 +75,20 @@ crashlytics-build.properties
 
 # Generated persistent full-LUT simulation caches (Unity editor test projects)
 /TestData/Projects/*/Cache/
+
+# Repository hygiene
+.DS_Store
+Thumbs.db
+Desktop.ini
+*~
+*.bak
+*.orig
+*.rej
+*.log
+*.trace
+*.profraw
+*.profdata
+/TestResults/
+/coverage/
+/.coverage/
+/.vscode/
