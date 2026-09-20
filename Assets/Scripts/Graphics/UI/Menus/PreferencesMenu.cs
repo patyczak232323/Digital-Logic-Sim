@@ -86,14 +86,15 @@ namespace DLS.Graphics
 			UpdateSimSpeedString(project);
 
 			const int inputTextPad = 1;
-			const float headerSpacing = 1.5f;
 			Color labelCol = Color.white;
-			Color headerCol = new(0.46f, 1, 0.54f);
 			Vector2 topLeft = UI.Centre + new Vector2(-menuWidth / 2, verticalOffset);
 			Vector2 labelPosCurr = topLeft;
 
 			using (UI.BeginBoundsScope(true))
 			{
+				Bounds2D titleBounds = RewiredUI.DrawSectionHeader("PREFERENCES", labelPosCurr, menuWidth, true);
+				labelPosCurr = titleBounds.BottomLeft + Vector2.down * 0.7f;
+
 				// ---- Draw settings ----
 				DrawHeader("DISPLAY:");
 				int mainPinNamesMode = DrawNextWheel("Show I/O pin names", PinDisplayOptions, ID_MainPinNames);
@@ -168,9 +169,9 @@ namespace DLS.Graphics
 
 			void DrawHeader(string text)
 			{
-				AddHeaderSpacing();
-				UI.DrawText(text, theme.FontBold, theme.FontSizeRegular, labelPosCurr, Anchor.TextCentreLeft, headerCol);
-				AddHeaderSpacing();
+				labelPosCurr.y -= 0.45f;
+				Bounds2D header = RewiredUI.DrawSectionHeader(text.TrimEnd(':'), labelPosCurr, menuWidth);
+				labelPosCurr = header.BottomLeft + Vector2.down * entrySpacing;
 			}
 
 			void AddSpacing()
@@ -178,10 +179,6 @@ namespace DLS.Graphics
 				labelPosCurr.y -= entrySize.y + entrySpacing;
 			}
 
-			void AddHeaderSpacing()
-			{
-				labelPosCurr.y -= headerSpacing;
-			}
 		}
 
 		public static void OnMenuOpened()
