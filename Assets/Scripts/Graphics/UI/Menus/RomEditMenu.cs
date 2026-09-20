@@ -48,6 +48,13 @@ namespace DLS.Graphics
 
 			// ---- Draw ROM contents ----
 			scrollViewBounds = Bounds2D.CreateFromCentreAndSize(UI.Centre, new Vector2(UI.Width * 0.4f, UI.Height * 0.8f));
+			float workspaceWidth = UI.Width * 0.65f;
+			RewiredUI.DrawSectionHeader(
+				"ROM EDITOR",
+				scrollViewBounds.TopLeft + Vector2.up * 2.8f,
+				workspaceWidth,
+				true,
+				$"{RowCount} WORDS  /  {ActiveRomDataBitCount} BIT");
 
 			ScrollViewTheme scrollTheme = DrawSettings.ActiveUITheme.ScrollTheme;
 			UI.DrawScrollView(ID_scrollbar, scrollViewBounds.TopLeft, scrollViewBounds.Size, 0, Anchor.TopLeft, scrollTheme, scrollViewDrawElementFunc, RowCount);
