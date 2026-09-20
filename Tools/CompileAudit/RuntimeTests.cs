@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Threading;
 using DLS.Description;
 using DLS.Game;
+using DLS.RHDL;
 
 namespace DLS.Simulation
 {
@@ -15,6 +16,7 @@ namespace DLS.Simulation
 
 		static void Main()
 		{
+			Run("RHDL HalfAdder compilation", TestRhdlHalfAdderCompilation);
 			Run("feedback NAND latch", TestFeedbackNandLatch);
 			Run("feedback unchanged-input zero sweep", TestFeedbackZeroSweep);
 			Run("feedback state materialization", TestFeedbackMaterialization);
@@ -48,6 +50,60 @@ namespace DLS.Simulation
 				failures++;
 				Console.WriteLine("FAIL  " + name + ": " + ex.Message);
 			}
+		}
+
+
+		static void TestRhdlHalfAdderCompilation()
+		{
+			PinDescription InPin(string name, int id) =>
+				new(name, id, new UnityEngine.Vector2(), PinBitCount.Bit1, PinColour.Red, PinValueDisplayMode.Off);
+
+			ChipDescription nand = new()
+			{
+				Name = "NAND",
+				ChipType = ChipType.Nand,
+				InputPins = new[] { InPin("IN B", 0), InPin("IN A", 1) },
+				OutputPins = new[] { InPin("OUT", 2) },
+				SubChips = Array.Empty<SubChipDescription>(),
+				Wires = Array.Empty<WireDescription>(),
+				Displays = Array.Empty<DisplayDescription>()
+			};
+
+			ChipLibrary library = new(nand);
+			string source =
+@"chip HalfAdder {
+  input a
+  input b
+  output sum
+  output carry
+  NAND n1
+  NAND n2
+  NAND n3
+  NAND n4
+  NAND n5
+  connect a -> n1.IN_A
+  connect b -> n1.IN_B
+  connect a -> n2.IN_A
+  connect n1.OUT -> n2.IN_B
+  connect b -> n3.IN_A
+  connect n1.OUT -> n3.IN_B
+  connect n2.OUT -> n4.IN_A
+  connect n3.OUT -> n4.IN_B
+  connect n4.OUT -> sum
+  connect n1.OUT -> n5.IN_A
+  connect n1.OUT -> n5.IN_B
+  connect n5.OUT -> carry
+}";
+
+			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
+			Assert(result.Success, "RHDL compile failed: " + string.Join(" | ", result.Diagnostics.Select(d => d.ToString())));
+			Assert(result.Description != null, "RHDL returned no chip description");
+			Assert(result.Description.Name == "HalfAdder", "RHDL chip name mismatch");
+			Assert(result.Description.InputPins.Length == 2, "RHDL input count mismatch");
+			Assert(result.Description.OutputPins.Length == 2, "RHDL output count mismatch");
+			Assert(result.Description.SubChips.Length == 5, "RHDL NAND count mismatch");
+			Assert(result.Description.Wires.Length == 12, "RHDL wire count mismatch");
+			Assert(result.Description.SubChips.Select(s => s.ID).Distinct().Count() == 5, "RHDL subchip IDs are not unique");
 		}
 
 		static void TestFeedbackNandLatch()
