@@ -24,6 +24,7 @@ namespace DLS.Graphics
 		static readonly UIHandle ID_DisplayResolutionWheel = new("MainMenu_DisplayResolutionWheel");
 		static readonly UIHandle ID_FullscreenWheel = new("MainMenu_FullscreenWheel");
 		static readonly UIHandle ID_ProjectsScrollView = new("MainMenu_ProjectsScrollView");
+		static readonly UIHandle ID_KeyBindingsScrollView = new("MainMenu_KeyBindingsScrollView");
 
 		static readonly string[] SettingsWheelFullScreenOptions = { "OFF", "MAXIMIZED", "BORDERLESS", "EXCLUSIVE" };
 		static readonly FullScreenMode[] FullScreenModes = { FullScreenMode.Windowed, FullScreenMode.MaximizedWindow, FullScreenMode.FullScreenWindow, FullScreenMode.ExclusiveFullScreen };
@@ -31,6 +32,9 @@ namespace DLS.Graphics
 
 		static readonly Func<string, bool> projectNameValidator = ProjectNameValidator;
 		static readonly UI.ScrollViewDrawContentFunc loadProjectScrollViewDrawer = DrawAllProjectsInScrollView;
+		static readonly UI.ScrollViewDrawContentFunc keyBindingsScrollViewDrawer = DrawKeyBindingsScrollView;
+		static readonly ShortcutAction[] configurableShortcutActions = (ShortcutAction[])Enum.GetValues(typeof(ShortcutAction));
+		static int shortcutCaptureIndex = -1;
 
 
 		static readonly string[] menuButtonNames =
@@ -84,7 +88,18 @@ namespace DLS.Graphics
 			
 			if (KeyboardShortcuts.CancelShortcutTriggered && activePopup == PopupKind.None)
 			{
-				BackToMain();
+				if (activeMenuScreen == MenuScreen.KeyBindings && shortcutCaptureIndex >= 0)
+				{
+					shortcutCaptureIndex = -1;
+				}
+				else if (activeMenuScreen == MenuScreen.KeyBindings)
+				{
+					activeMenuScreen = MenuScreen.Settings;
+				}
+				else
+				{
+					BackToMain();
+				}
 			}
 
 			UI.DrawFullscreenPanel(ColHelper.MakeCol255(47, 47, 53));
@@ -107,6 +122,9 @@ namespace DLS.Graphics
 					break;
 				case MenuScreen.Settings:
 					DrawSettingsScreen();
+					break;
+				case MenuScreen.KeyBindings:
+					DrawKeyBindingsScreen();
 					break;
 				case MenuScreen.About:
 					DrawAboutScreen();
@@ -348,6 +366,15 @@ namespace DLS.Graphics
 				int vsyncSetting = UI.WheelSelector(EditedAppSettings.VSyncEnabled ? 1 : 0, SettingsWheelVSyncOptions, new Vector2(elementOriginRight, pos.y), wheelSize, theme.OptionsWheel, Anchor.CentreRight);
 				EditedAppSettings.VSyncEnabled = vsyncSetting == 1;
 
+				// -- Key bindings --
+				pos += Vector2.down * 4;
+				UI.DrawText("Keyboard shortcuts", theme.FontRegular, theme.FontSizeRegular, pos, Anchor.CentreLeft, Color.white);
+				if (UI.Button("KEYBINDINGS", theme.MainMenuButtonTheme, new Vector2(elementOriginRight, pos.y), wheelSize, true, false, false, Anchor.CentreRight))
+				{
+					shortcutCaptureIndex = -1;
+					activeMenuScreen = MenuScreen.KeyBindings;
+				}
+
 				// Background panel
 				UI.ModifyPanel(backgroundPanelID, UI.GetCurrentBoundsScope().Centre, UI.GetCurrentBoundsScope().Size + Vector2.one * 3, ColHelper.MakeCol255(37, 37, 43));
 			}
@@ -367,6 +394,149 @@ namespace DLS.Graphics
 				Main.SaveAndApplyAppSettings(EditedAppSettings);
 			}
 		}
+
+		static void DrawKeyBindingsScreen()
+		{
+			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
+
+			UI.DrawText("KEYBINDINGS", theme.FontBold, theme.FontSizeRegular * 1.35f, UI.CentreTop + Vector2.down * 5, Anchor.Centre, Color.white);
+			UI.DrawText(
+				"Click a binding, then press a key combination. Backspace/Delete clears it.",
+				theme.FontRegular,
+				theme.FontSizeRegular * 0.72f,
+				UI.CentreTop + Vector2.down * 8,
+				Anchor.Centre,
+				new Color(1, 1, 1, 0.62f));
+
+			Vector2 scrollSize = new(72, 37);
+			Vector2 scrollPos = UI.Centre + Vector2.up * 1.5f;
+			UI.DrawScrollView(
+				ID_KeyBindingsScrollView,
+				scrollPos,
+				scrollSize,
+				Anchor.Centre,
+				theme.ScrollTheme,
+				keyBindingsScrollViewDrawer);
+
+			Vector2 buttonPos = UI.PrevBounds.BottomLeft + Vector2.down * DrawSettings.VerticalButtonSpacing;
+			string[] buttonNames = { "BACK", "RESET DEFAULTS" };
+			int buttonIndex = UI.HorizontalButtonGroup(
+				buttonNames,
+				theme.MainMenuButtonTheme,
+				buttonPos,
+				UI.PrevBounds.Width,
+				UILayoutHelper.DefaultSpacing,
+				0,
+				Anchor.TopLeft);
+
+			if (buttonIndex == 0)
+			{
+				shortcutCaptureIndex = -1;
+				activeMenuScreen = MenuScreen.Settings;
+			}
+			else if (buttonIndex == 1)
+			{
+				EditedAppSettings.ResetKeyBindings();
+				shortcutCaptureIndex = -1;
+			}
+
+			UI.DrawText(
+				"Changes are stored when you press APPLY in Settings.",
+				theme.FontRegular,
+				theme.FontSizeRegular * 0.66f,
+				UI.CentreBottom + Vector2.up * 2.4f,
+				Anchor.Centre,
+				new Color(1, 1, 1, 0.5f));
+
+			if (shortcutCaptureIndex >= 0) CaptureShortcutInput();
+		}
+
+		static void DrawKeyBindingsScrollView(Vector2 topLeft, float width, bool isLayoutPass)
+		{
+			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
+			const float rowHeight = 3.3f;
+			const float rowSpacing = 0.45f;
+			const float horizontalPad = 0.8f;
+			const float bindingWidth = 23f;
+
+			for (int i = 0; i < configurableShortcutActions.Length; i++)
+			{
+				ShortcutAction action = configurableShortcutActions[i];
+				Color rowCol = i % 2 == 0 ? ColHelper.MakeCol255(38) : ColHelper.MakeCol255(43);
+				UI.DrawPanel(topLeft, new Vector2(width, rowHeight), rowCol, Anchor.TopLeft);
+				Bounds2D rowBounds = UI.PrevBounds;
+
+				UI.DrawText(
+					KeyboardShortcuts.GetActionDisplayName(action),
+					theme.FontRegular,
+					theme.FontSizeRegular * 0.78f,
+					rowBounds.CentreLeft + Vector2.right * horizontalPad,
+					Anchor.TextCentreLeft,
+					Color.white);
+
+				string bindingText = shortcutCaptureIndex == i
+					? "PRESS KEYS..."
+					: EditedAppSettings.GetBinding(action).ToDisplayString();
+
+				ButtonTheme bindingTheme = theme.MainMenuButtonTheme;
+				if (shortcutCaptureIndex == i)
+				{
+					bindingTheme.buttonCols.normal = bindingTheme.buttonCols.hover;
+				}
+
+				if (UI.Button(
+					bindingText,
+					bindingTheme,
+					rowBounds.CentreRight - Vector2.right * horizontalPad,
+					new Vector2(bindingWidth, 2.35f),
+					true,
+					false,
+					false,
+					Anchor.CentreRight))
+				{
+					shortcutCaptureIndex = i;
+				}
+
+				topLeft += Vector2.down * (rowHeight + rowSpacing);
+			}
+		}
+
+		static void CaptureShortcutInput()
+		{
+			if (shortcutCaptureIndex < 0 || shortcutCaptureIndex >= configurableShortcutActions.Length) return;
+
+			ShortcutAction action = configurableShortcutActions[shortcutCaptureIndex];
+
+			if (InputHelper.IsKeyDownThisFrame(KeyCode.Backspace) || InputHelper.IsKeyDownThisFrame(KeyCode.Delete))
+			{
+				EditedAppSettings.SetBinding(action, new ShortcutBinding(action, KeyCode.None));
+				shortcutCaptureIndex = -1;
+				return;
+			}
+
+			foreach (KeyCode key in (KeyCode[])Enum.GetValues(typeof(KeyCode)))
+			{
+				if (key == KeyCode.None || IsModifierKey(key) || key.ToString().StartsWith("Mouse", StringComparison.Ordinal)) continue;
+				if (!InputHelper.IsKeyDownThisFrame(key)) continue;
+
+				ShortcutBinding binding = new(
+					action,
+					key,
+					InputHelper.CtrlIsHeld,
+					InputHelper.ShiftIsHeld,
+					InputHelper.AltIsHeld);
+
+				EditedAppSettings.SetBinding(action, binding);
+				shortcutCaptureIndex = -1;
+				return;
+			}
+		}
+
+		static bool IsModifierKey(KeyCode key) =>
+			key is KeyCode.LeftControl or KeyCode.RightControl or
+				KeyCode.LeftShift or KeyCode.RightShift or
+				KeyCode.LeftAlt or KeyCode.RightAlt or
+				KeyCode.LeftCommand or KeyCode.RightCommand;
 
 		static void DrawNamePopup()
 		{
@@ -545,6 +715,7 @@ namespace DLS.Graphics
 			Main,
 			LoadProject,
 			Settings,
+			KeyBindings,
 			About
 		}
 
