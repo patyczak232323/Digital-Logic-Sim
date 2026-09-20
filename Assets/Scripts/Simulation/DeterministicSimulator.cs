@@ -172,6 +172,13 @@ namespace DLS.Simulation
 				// native state only after the normal pre/edge/post settle sequence finishes.
 				feedbackActivationPending = true;
 				needsPowerOnSettle = false;
+
+				// The first initialization deliberately expanded every Custom Chip and
+				// evaluated it through the live solver. Rebuild topology on the next
+				// simulation step so JIT/FULL LUT acceleration can take over only after
+				// this cold-start compatibility pass. This is especially important for
+				// imported/nested chips that have never been opened in the editor.
+				topologyDirty = true;
 			}
 			else
 			{
@@ -559,6 +566,7 @@ namespace DLS.Simulation
 			bool hasVisibleDisplaySurface = (chip.Description?.Displays?.Length ?? 0) > 0;
 
 			bool acceleratedCustom =
+				!needsPowerOnSettle &&
 				allowMemoCache &&
 				chip.ChipType == ChipType.Custom &&
 				!hasVisibleDisplaySurface &&
