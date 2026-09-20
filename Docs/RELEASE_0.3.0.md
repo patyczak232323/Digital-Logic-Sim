@@ -6,14 +6,18 @@ Version 0.3.0 is the next major development milestone for Rewired. Its main them
 
 ## Highlights
 
-- Added **RHDL Studio v0.1**, a dedicated source-driven circuit authoring workspace.
+- Added **RHDL Studio**, including the RHDL v0.2 readable logic layer and structural authoring mode.
 - Added the structural **RHDL** compiler:
   - `chip`, `input`, `output`, instance and `connect` statements
+  - readable `AND`, `OR`, `XOR`, `NOT` logic expressions with parentheses
+  - symbolic `&`, `|`, `^`, `!` aliases
+  - synthesis of high-level 1-bit expressions into normal NAND-based circuit topology
   - 1-bit, 4-bit and 8-bit ports
   - references to existing builtin and custom chips
   - automatic dependency-based circuit layout
   - generation of ordinary Rewired `ChipDescription`, pins, subchips and wires
 - Added `BUILD` and `BUILD & OPEN` workflows for RHDL sources.
+- Added normal editor-style Enter handling that splits the current source line and moves editing to the new line.
 - Added project-local RHDL source persistence under `HDL/`.
 - Added `OPEN SOURCE` for generated RHDL chips.
 - Added runtime regression coverage proving that an RHDL-generated HalfAdder executes correctly through Rewired Engine.
