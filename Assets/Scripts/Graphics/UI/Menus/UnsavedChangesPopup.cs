@@ -23,8 +23,9 @@ namespace DLS.Graphics
 			{
 				Draw.ID panelID = UI.ReservePanel();
 				Draw.ID textBGPanelID = UI.ReservePanel();
-				UI.DrawText(text, DrawSettings.ActiveUITheme.FontRegular, DrawSettings.ActiveUITheme.FontSizeRegular, textPos, Anchor.TextCentre, textCol);
-				UI.ModifyPanel(textBGPanelID, Bounds2D.Grow(UI.PrevBounds, 1.5f), ColHelper.MakeCol(0.11f));
+				Bounds2D warningHeader = RewiredUI.DrawSectionHeader("UNSAVED CHANGES", textPos + new Vector2(-18f, 5f), 36f, true);
+				UI.DrawText(text, DrawSettings.ActiveUITheme.FontRegular, DrawSettings.ActiveUITheme.FontSizeRegular * 0.82f, textPos, Anchor.TextCentre, textCol);
+				UI.ModifyPanel(textBGPanelID, Bounds2D.Grow(UI.PrevBounds, 1.5f), RewiredUI.Surface);
 
 				Vector2 topLeft = UI.PrevBounds.BottomLeft + Vector2.down * 1;
 				MenuHelper.CancelConfirmResult button = MenuHelper.DrawCancelConfirmButtons(topLeft, UI.PrevBounds.Width, false);
