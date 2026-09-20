@@ -101,6 +101,7 @@ namespace DLS.Graphics
 				MaxSourceLines);
 
 			HandleEditorEnterKey();
+			HandleEditorMultilinePaste();
 			DrawRightPanel(theme, infoTop, project);
 
 			Vector2 actionsTopLeft = sourceCard.BottomLeft + Vector2.down * 0.7f;
@@ -292,6 +293,82 @@ namespace DLS.Graphics
 			InputFieldState next = UI.GetInputFieldState(LineIDs[focusedLine + 1]);
 			next.SetText(right, true);
 			next.SetCursorIndex(0);
+		}
+
+		static void HandleEditorMultilinePaste()
+		{
+			if (!InputHelper.CtrlIsHeld || !InputHelper.IsKeyDownThisFrame(KeyCode.V)) return;
+
+			string clipboard = (InputHelper.GetClipboardContents() ?? string.Empty)
+				.Replace("\r\n", "\n")
+				.Replace('\r', '\n');
+
+			// Single-line paste is already handled by the normal InputField implementation.
+			if (!clipboard.Contains("\n")) return;
+
+			int focusedLine = -1;
+			for (int i = 0; i < MaxSourceLines; i++)
+			{
+				if (UI.GetInputFieldState(LineIDs[i]).focused)
+				{
+					focusedLine = i;
+					break;
+				}
+			}
+
+			if (focusedLine < 0) return;
+
+			string[] pastedLines = clipboard.Split('\n');
+			int insertedLineCount = pastedLines.Length - 1;
+			if (focusedLine + insertedLineCount >= MaxSourceLines)
+			{
+				statusText = "Paste does not fit in the RHDL editor.";
+				statusSuccess = false;
+				return;
+			}
+
+			// Ensure shifting the existing tail down will not discard source text.
+			for (int i = MaxSourceLines - insertedLineCount; i < MaxSourceLines; i++)
+			{
+				if (i >= 0 && !string.IsNullOrEmpty(UI.GetInputFieldState(LineIDs[i]).text))
+				{
+					statusText = "Paste would push source past the editor line limit.";
+					statusSuccess = false;
+					return;
+				}
+			}
+
+			InputFieldState current = UI.GetInputFieldState(LineIDs[focusedLine]);
+			if (current.isSelecting) current.Delete(true, ValidateSourceLine);
+
+			int caret = Mathf.Clamp(current.cursorBeforeCharIndex, 0, current.text.Length);
+			string prefix = current.text.Substring(0, caret);
+			string suffix = current.text.Substring(caret);
+
+			// Make room for all additional clipboard lines.
+			for (int sourceLine = MaxSourceLines - insertedLineCount - 1; sourceLine > focusedLine; sourceLine--)
+			{
+				string text = UI.GetInputFieldState(LineIDs[sourceLine]).text;
+				UI.GetInputFieldState(LineIDs[sourceLine + insertedLineCount]).SetText(text, false);
+			}
+
+			current.SetText(prefix + pastedLines[0], false);
+
+			for (int i = 1; i < pastedLines.Length - 1; i++)
+			{
+				UI.GetInputFieldState(LineIDs[focusedLine + i]).SetText(pastedLines[i], false);
+			}
+
+			int finalLineIndex = focusedLine + insertedLineCount;
+			string finalInsertedText = pastedLines[^1];
+			InputFieldState finalLine = UI.GetInputFieldState(LineIDs[finalLineIndex]);
+			finalLine.SetText(finalInsertedText + suffix, true);
+			finalLine.SetCursorIndex(finalInsertedText.Length);
+
+			statusText = pastedLines.Length == 2
+				? "Pasted 2 source lines."
+				: $"Pasted {pastedLines.Length} source lines.";
+			statusSuccess = true;
 		}
 
 		static bool ValidateSourceLine(string text) =>
