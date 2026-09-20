@@ -9,6 +9,13 @@ namespace UnityEngine
         public Vector2(float x, float y) { this.x = x; this.y = y; }
     }
 
+    public static class Mathf
+    {
+        public static float Max(float a, float b) => Math.Max(a, b);
+        public static int Max(int a, int b) => Math.Max(a, b);
+        public static float Round(float value) => (float)Math.Round(value);
+    }
+
     public struct Color
     {
         public float r, g, b, a;
@@ -116,9 +123,48 @@ namespace DLS.Description
         public PinBitCount BitCount;
         public PinColour Colour;
         public PinValueDisplayMode ValueDisplayMode;
+
+        public PinDescription(string name, int id, UnityEngine.Vector2 position, PinBitCount bitCount, PinColour colour, PinValueDisplayMode valueDisplayMode)
+        {
+            Name = name;
+            ID = id;
+            Position = position;
+            BitCount = bitCount;
+            Colour = colour;
+            ValueDisplayMode = valueDisplayMode;
+        }
     }
 
-    public struct SubChipDescription { public string Name; public int ID; public uint[] InternalData; }
+    public struct OutputPinColourInfo
+    {
+        public PinColour PinColour;
+        public int PinID;
+        public OutputPinColourInfo(PinColour pinColour, int pinID) { PinColour = pinColour; PinID = pinID; }
+    }
+
+    public struct SubChipDescription
+    {
+        public string Name;
+        public int ID;
+        public string Label;
+        public UnityEngine.Vector2 Position;
+        public OutputPinColourInfo[] OutputPinColourInfo;
+        public uint[] InternalData;
+        public bool MirrorX;
+        public bool MirrorY;
+
+        public SubChipDescription(string name, int id, string label, UnityEngine.Vector2 position, OutputPinColourInfo[] outputPinColInfo, uint[] internalData = null, bool mirrorX = false, bool mirrorY = false)
+        {
+            Name = name;
+            ID = id;
+            Label = label;
+            Position = position;
+            OutputPinColourInfo = outputPinColInfo;
+            InternalData = internalData;
+            MirrorX = mirrorX;
+            MirrorY = mirrorY;
+        }
+    }
 
     public struct WireDescription
     {
@@ -147,6 +193,9 @@ namespace DLS.Description
         public SubChipDescription[] SubChips = Array.Empty<SubChipDescription>();
         public WireDescription[] Wires = Array.Empty<WireDescription>();
         public DisplayDescription[] Displays = Array.Empty<DisplayDescription>();
+
+        public bool NameMatch(string otherName) => NameMatch(Name, otherName);
+        public static bool NameMatch(string a, string b) => string.Equals(a, b, NameComparison);
     }
 }
 
@@ -169,6 +218,7 @@ namespace DLS.Game
     public class ChipLibrary
     {
         readonly Dictionary<string, ChipDescription> descriptions = new(ChipDescription.NameComparer);
+        public readonly List<ChipDescription> allChips = new();
 
         public ChipLibrary() { }
 
@@ -180,6 +230,7 @@ namespace DLS.Game
                 ChipDescription description = chipDescriptions[i];
                 if (description == null || string.IsNullOrWhiteSpace(description.Name)) continue;
                 descriptions[description.Name] = description;
+                allChips.Add(description);
             }
         }
 
@@ -203,6 +254,17 @@ namespace DLS.Game
         public ChipDescription[] GetDirectParentChips(string chipName) => Array.Empty<ChipDescription>();
     }
 
+    public static class Main
+    {
+        public static object DLSVersion => "test";
+    }
+
+    public static class SubChipInstance
+    {
+        public static UnityEngine.Vector2 CalculateMinChipSize(PinDescription[] inputPins, PinDescription[] outputPins, string name)
+            => new UnityEngine.Vector2(1.5f, 1.0f);
+    }
+
     public class ProjectDescription
     {
         public string ProjectName;
@@ -220,5 +282,14 @@ namespace DLS.SaveSystem
     public static class SavePaths
     {
         public static string GetProjectPath(string projectName) => projectName ?? string.Empty;
+    }
+}
+
+
+namespace DLS.Graphics
+{
+    public static class DrawSettings
+    {
+        public const float GridSize = 0.125f;
     }
 }
