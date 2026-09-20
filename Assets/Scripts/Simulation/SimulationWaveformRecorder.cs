@@ -104,7 +104,7 @@ namespace DLS.Simulation
 				int id = nextId++;
 				probes.Add(id, new Probe(id, string.IsNullOrWhiteSpace(name) ? $"PIN {pin.ID}" : name, pin, capacity));
 				Volatile.Write(ref probeCount, probes.Count);
-				DeterministicSimulator.InvalidateTopology();
+				RewiredEngine.InvalidateTopology();
 				return id;
 			}
 		}
@@ -142,7 +142,7 @@ namespace DLS.Simulation
 				if (removed)
 				{
 					Volatile.Write(ref probeCount, probes.Count);
-					DeterministicSimulator.InvalidateTopology();
+					RewiredEngine.InvalidateTopology();
 				}
 				return removed;
 			}
@@ -169,7 +169,7 @@ namespace DLS.Simulation
 				probes.Clear();
 				Volatile.Write(ref probeCount, 0);
 				nextId = 1;
-				if (hadProbes) DeterministicSimulator.InvalidateTopology();
+				if (hadProbes) RewiredEngine.InvalidateTopology();
 			}
 		}
 
