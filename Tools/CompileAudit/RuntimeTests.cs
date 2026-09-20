@@ -20,6 +20,8 @@ namespace DLS.Simulation
 			Run("feedback state materialization", TestFeedbackMaterialization);
 			Run("waveform transition compression", TestWaveformTransitionCompression);
 			Run("deterministic replay round-trip", TestReplayRoundTrip);
+			Run("legacy parity: DisplayDot first-high clock edge", TestDisplayDotFirstHighClockParity);
+			Run("legacy parity: seven-segment visual sink propagation", TestSevenSegmentVisualSinkParity);
 			Run("8-bit feedback latch bank isolation", TestEightBitLatchBank);
 			Run("dormant feedback executor cannot overwrite live state", TestDormantFeedbackOwnership);
 			Run("active child feedback executor materializes on deopt", TestActiveChildFeedbackHandoff);
@@ -550,6 +552,225 @@ namespace DLS.Simulation
 			Assert(root.FeedbackExecutor.Ready, "feedback executor did not become ready");
 
 			return (root, root.FeedbackExecutor, nandQ, nandNotQ);
+		}
+
+		static void TestSevenSegmentVisualSinkParity()
+		{
+			(SimChip Root, SimChip Display, DevPinInstance[] Inputs) legacy = BuildSevenSegmentHarness();
+			uint[] pattern = { 1, 0, 1, 1, 0, 0, 1 };
+			for (int i = 0; i < pattern.Length; i++) legacy.Inputs[i].Pin.PlayerInputState = pattern[i];
+
+			Simulator.Reset();
+			Simulator.RunSimulationStep(legacy.Root, legacy.Inputs, new SimAudio());
+
+			uint[] legacyPins = new uint[legacy.Display.InputPins.Length];
+			for (int i = 0; i < legacyPins.Length; i++) legacyPins[i] = legacy.Display.InputPins[i].State;
+
+			(SimChip Root, SimChip Display, DevPinInstance[] Inputs) rewired = BuildSevenSegmentHarness();
+			for (int i = 0; i < pattern.Length; i++) rewired.Inputs[i].Pin.PlayerInputState = pattern[i];
+
+			Simulator.Reset();
+			DeterministicSimulator.Reset();
+			DeterministicSimulator.RunSimulationStep(rewired.Root, rewired.Inputs, new SimAudio());
+
+			for (int i = 0; i < legacyPins.Length; i++)
+			{
+				Assert(rewired.Display.InputPins[i].State == legacyPins[i],
+					$"7-segment visual input {i} mismatch: rewired={rewired.Display.InputPins[i].State} legacy={legacyPins[i]}");
+			}
+
+			ChipCacheAnalysis analysis = CombinationalChipCacheManager.Analyze(
+				new ChipDescription
+				{
+					Name = "7SEG_CACHE_GUARD",
+					ChipType = ChipType.SevenSegmentDisplay,
+					InputPins = Array.Empty<PinDescription>(),
+					OutputPins = Array.Empty<PinDescription>(),
+					SubChips = Array.Empty<SubChipDescription>(),
+					Wires = Array.Empty<WireDescription>(),
+					Displays = Array.Empty<DisplayDescription>()
+				},
+				new ChipLibrary());
+			Assert(!analysis.CanCache, "seven-segment display must never be treated as a pure cacheable primitive");
+
+			ChipCacheAnalysis surfacedCustom = CombinationalChipCacheManager.Analyze(
+				new ChipDescription
+				{
+					Name = "CUSTOM_DISPLAY_SURFACE_GUARD",
+					ChipType = ChipType.Custom,
+					InputPins = Array.Empty<PinDescription>(),
+					OutputPins = Array.Empty<PinDescription>(),
+					SubChips = Array.Empty<SubChipDescription>(),
+					Wires = Array.Empty<WireDescription>(),
+					Displays = new[] { new DisplayDescription() }
+				},
+				new ChipLibrary());
+			Assert(!surfacedCustom.CanCache,
+				"custom chip exposing a display surface must stay live instead of collapsing to LUT/JIT");
+
+			DeterministicSimulator.Reset();
+			Simulator.Reset();
+		}
+
+		static (SimChip Root, SimChip Display, DevPinInstance[] Inputs) BuildSevenSegmentHarness()
+		{
+			PinDescription[] displayInputs = new PinDescription[7];
+			PinDescription[] rootInputs = new PinDescription[7];
+			for (int i = 0; i < 7; i++)
+			{
+				displayInputs[i] = Pin(i);
+				rootInputs[i] = Pin(200 + i);
+			}
+
+			ChipDescription displayDescription = new()
+			{
+				Name = "SEVEN_SEGMENT_COMPAT",
+				ChipType = ChipType.SevenSegmentDisplay,
+				InputPins = displayInputs,
+				OutputPins = Array.Empty<PinDescription>(),
+				SubChips = Array.Empty<SubChipDescription>(),
+				Wires = Array.Empty<WireDescription>(),
+				Displays = Array.Empty<DisplayDescription>()
+			};
+
+			SimChip display = new(displayDescription, 2, null, Array.Empty<SimChip>());
+
+			ChipDescription rootDescription = new()
+			{
+				Name = "SEVEN_SEGMENT_COMPAT_ROOT",
+				ChipType = ChipType.Custom,
+				InputPins = rootInputs,
+				OutputPins = Array.Empty<PinDescription>(),
+				SubChips = Array.Empty<SubChipDescription>(),
+				Wires = Array.Empty<WireDescription>(),
+				Displays = Array.Empty<DisplayDescription>()
+			};
+
+			SimChip root = new(rootDescription, -1, null, new[] { display });
+			DevPinInstance[] inputs = new DevPinInstance[7];
+
+			for (int i = 0; i < 7; i++)
+			{
+				root.AddConnection(new PinAddress(200 + i, 0), new PinAddress(2, i));
+				inputs[i] = new DevPinInstance();
+				inputs[i].Pin.Address = new PinAddress(200 + i, 0);
+			}
+
+			return (root, display, inputs);
+		}
+
+		static void TestDisplayDotFirstHighClockParity()
+		{
+			(SimChip Root, SimChip Display, DevPinInstance[] Inputs) legacy = BuildDisplayDotHarness();
+			SetDisplayDotInputs(legacy.Inputs, address: 3, pixel: 1, reset: 0, write: 1, refresh: 1, clock: 1);
+
+			// Legacy/original engine: a high clock on the first normal simulation step
+			// is a rising edge because the persisted/default previous clock state is low.
+			Simulator.Reset();
+			Simulator.RunSimulationStep(legacy.Root, legacy.Inputs, new SimAudio());
+
+			uint legacyFront = legacy.Display.InternalState[3];
+			uint legacyBack = legacy.Display.InternalState[256 + 3];
+			uint legacyOutput = legacy.Display.OutputPins[0].State;
+			uint legacyClockMemory = legacy.Display.InternalState[^1];
+
+			(SimChip Root, SimChip Display, DevPinInstance[] Inputs) rewired = BuildDisplayDotHarness();
+			SetDisplayDotInputs(rewired.Inputs, address: 3, pixel: 1, reset: 0, write: 1, refresh: 1, clock: 1);
+
+			Simulator.Reset();
+			DeterministicSimulator.Reset();
+			DeterministicSimulator.RunSimulationStep(rewired.Root, rewired.Inputs, new SimAudio());
+
+			Assert(rewired.Display.InternalState[3] == legacyFront,
+				$"DisplayDot front-buffer startup mismatch: rewired={rewired.Display.InternalState[3]} legacy={legacyFront}");
+			Assert(rewired.Display.InternalState[256 + 3] == legacyBack,
+				$"DisplayDot back-buffer startup mismatch: rewired={rewired.Display.InternalState[256 + 3]} legacy={legacyBack}");
+			Assert(rewired.Display.OutputPins[0].State == legacyOutput,
+				$"DisplayDot output startup mismatch: rewired={rewired.Display.OutputPins[0].State} legacy={legacyOutput}");
+			Assert(rewired.Display.InternalState[^1] == legacyClockMemory,
+				$"DisplayDot clock-memory startup mismatch: rewired={rewired.Display.InternalState[^1]} legacy={legacyClockMemory}");
+
+			Assert(legacyFront == 1 && legacyBack == 1 && Bit(legacyOutput) == 1,
+				"legacy DisplayDot did not write+refresh on first high clock edge as expected");
+
+			DeterministicSimulator.Reset();
+			Simulator.Reset();
+		}
+
+		static (SimChip Root, SimChip Display, DevPinInstance[] Inputs) BuildDisplayDotHarness()
+		{
+			ChipDescription displayDescription = new()
+			{
+				Name = "DISPLAY_DOT_COMPAT",
+				ChipType = ChipType.DisplayDot,
+				InputPins = new[]
+				{
+					Pin(0, PinBitCount.Bit8),
+					Pin(1),
+					Pin(2),
+					Pin(3),
+					Pin(4),
+					Pin(5)
+				},
+				OutputPins = new[] { Pin(6) },
+				SubChips = Array.Empty<SubChipDescription>(),
+				Wires = Array.Empty<WireDescription>(),
+				Displays = Array.Empty<DisplayDescription>()
+			};
+
+			SimChip display = new(displayDescription, 1, null, Array.Empty<SimChip>());
+
+			ChipDescription rootDescription = new()
+			{
+				Name = "DISPLAY_DOT_COMPAT_ROOT",
+				ChipType = ChipType.Custom,
+				InputPins = new[]
+				{
+					Pin(100, PinBitCount.Bit8),
+					Pin(101),
+					Pin(102),
+					Pin(103),
+					Pin(104),
+					Pin(105)
+				},
+				OutputPins = new[] { Pin(106) },
+				SubChips = Array.Empty<SubChipDescription>(),
+				Wires = Array.Empty<WireDescription>(),
+				Displays = Array.Empty<DisplayDescription>()
+			};
+
+			SimChip root = new(rootDescription, -1, null, new[] { display });
+			for (int i = 0; i < 6; i++)
+			{
+				root.AddConnection(new PinAddress(100 + i, 0), new PinAddress(1, i));
+			}
+			root.AddConnection(new PinAddress(1, 6), new PinAddress(106, 0));
+
+			DevPinInstance[] inputs = new DevPinInstance[6];
+			for (int i = 0; i < inputs.Length; i++)
+			{
+				inputs[i] = new DevPinInstance();
+				inputs[i].Pin.Address = new PinAddress(100 + i, 0);
+			}
+
+			return (root, display, inputs);
+		}
+
+		static void SetDisplayDotInputs(
+			DevPinInstance[] inputs,
+			uint address,
+			uint pixel,
+			uint reset,
+			uint write,
+			uint refresh,
+			uint clock)
+		{
+			inputs[0].Pin.PlayerInputState = address;
+			inputs[1].Pin.PlayerInputState = pixel;
+			inputs[2].Pin.PlayerInputState = reset;
+			inputs[3].Pin.PlayerInputState = write;
+			inputs[4].Pin.PlayerInputState = refresh;
+			inputs[5].Pin.PlayerInputState = clock;
 		}
 
 		static void TestFullLutBackgroundPipeline()

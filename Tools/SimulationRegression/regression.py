@@ -553,7 +553,8 @@ def test_source_integration_static() -> None:
 
     required_solver_tokens = (
         "SettleCombinational",
-        "PrimeInitialCombinationalState",
+        "PowerOnAsynchronousSettle",
+        "FullDeterministicResettle",
         "maxDeltaCycles",
         "ResolveDrivenState",
         "AdvanceSequentialComponents",
@@ -580,9 +581,15 @@ def test_source_integration_static() -> None:
     assert "sourceIndices.Length" not in solver, "stale jagged-adjacency reference breaks the CSR build"
 
     assert "RandomBool()" not in solver
-    assert "rng.Next" not in solver
+    # Randomized ordering is intentionally restricted to the one-time power-on
+    # settle used to choose a stable state for symmetric feedback circuits.
+    assert solver.count("Simulator.rng.Next(") == 1
+    assert "int slot = Simulator.rng.Next(dirtyChips.Count);" in solver
     assert "HashSet<SimPin>" not in solver
-    assert "HashSet<SimChip>" not in solver
+    # One SimChip hash-set is allowed for editor inspection/deoptimization paths;
+    # it is not part of the per-step propagation hot path.
+    assert solver.count("HashSet<SimChip>") == 1
+    assert "static readonly HashSet<SimChip> inspectionPath = new();" in solver
     assert "Dictionary<SimPin, SimPin[]>" not in solver
     assert "DeterministicSimulator.RunSimulationStep" in facade
     assert "bool topologyChanged = DLS.Simulation.Simulator.ApplyModifications();" in facade

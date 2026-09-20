@@ -54,7 +54,8 @@ namespace DLS.Simulation
 			    simChip.CompiledExecutor != null ||
 			    description == null ||
 			    library == null ||
-			    description.ChipType != ChipType.Custom)
+			    description.ChipType != ChipType.Custom ||
+			    (description.Displays?.Length ?? 0) > 0)
 			{
 				return;
 			}

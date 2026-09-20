@@ -659,6 +659,14 @@ namespace DLS.Simulation
 				return new ChipCacheAnalysis(false, "missing chip description", 0, 0);
 			}
 
+			// DisplayDescription exposes live internal subchip state to the renderer.
+			// Collapsing such a chip to input/output-only LUT/JIT state would make the
+			// visible display stale even if the chip's external outputs stayed correct.
+			if ((description.Displays?.Length ?? 0) > 0)
+			{
+				return MakeFailure(description, includeInputCount, "contains visible display surface");
+			}
+
 			if (description.ChipType != ChipType.Custom)
 			{
 				bool pure = IsPureBuiltin(description.ChipType);
