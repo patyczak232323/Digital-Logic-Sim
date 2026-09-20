@@ -1,4 +1,9 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Reflection;
+using System.Threading;
 using DLS.Description;
 using DLS.Game;
 
@@ -18,6 +23,7 @@ namespace DLS.Simulation
 			Run("8-bit feedback latch bank isolation", TestEightBitLatchBank);
 			Run("dormant feedback executor cannot overwrite live state", TestDormantFeedbackOwnership);
 			Run("active child feedback executor materializes on deopt", TestActiveChildFeedbackHandoff);
+			Run("FULL LUT 4/8/12/16/20/22-bit background pipeline + persistence", TestFullLutBackgroundPipeline);
 
 			if (failures != 0)
 			{
@@ -544,6 +550,160 @@ namespace DLS.Simulation
 			Assert(root.FeedbackExecutor.Ready, "feedback executor did not become ready");
 
 			return (root, root.FeedbackExecutor, nandQ, nandNotQ);
+		}
+
+		static void TestFullLutBackgroundPipeline()
+		{
+			int[] bitCounts = { 4, 8, 12, 16, 20, 22 };
+			string persistedPath = Path.Combine(Path.GetTempPath(), "rewired-full-lut-" + Guid.NewGuid().ToString("N") + ".dlscache");
+
+			try
+			{
+				for (int i = 0; i < bitCounts.Length; i++)
+				{
+					int bits = bitCounts[i];
+					ChipDescription description = BuildTrivialCombinationalDescription("FULL_LUT_" + bits, bits, 5000);
+					ChipCacheAnalysis analysis = new(true, "cacheable", bits, 1UL << bits);
+					byte[] fingerprint = GetLogicFingerprintForRuntimeTest(description);
+
+					string path = bits == 22 ? persistedPath : string.Empty;
+					CombinationalChipMemoCache cache = new(description, analysis, fingerprint, path);
+					CombinationalChipCacheManager.CacheBuildSnapshot snapshot = Snapshot(description);
+
+					cache.EnsureReadyAsync(snapshot);
+					bool sawIntermediateProgress = WaitForCache(cache, TimeSpan.FromSeconds(60));
+
+					int expectedEntries = CombinationalChipCacheManager.GetFullCacheEntryCount(bits);
+					Assert(cache.Ready, $"{bits}-bit FULL LUT did not become ready: {cache.BuildFailureReason}");
+					Assert(cache.EntryCount == expectedEntries,
+						$"{bits}-bit FULL LUT entry count mismatch: {cache.EntryCount}/{expectedEntries}");
+
+					if (bits >= 20)
+					{
+						Assert(sawIntermediateProgress,
+							$"{bits}-bit FULL LUT never exposed progress > 0 before completion");
+					}
+
+					if (bits != 22) continue;
+
+					Assert(File.Exists(persistedPath), "22-bit FULL LUT was not persisted to disk");
+					Assert(cache.PersistenceMessage == "DISK VALID",
+						"22-bit FULL LUT persistence did not finish successfully: " + cache.PersistenceMessage);
+
+					// Same fingerprint must load from disk instead of rebuilding.
+					CombinationalChipMemoCache loaded = new(description, analysis, fingerprint, persistedPath);
+					loaded.EnsureReadyAsync(null);
+					WaitForCache(loaded, TimeSpan.FromSeconds(30));
+
+					Assert(loaded.Ready, "22-bit persisted FULL LUT did not load");
+					Assert(loaded.LoadedFromDisk, "22-bit persisted FULL LUT rebuilt instead of loading from disk");
+					Assert(loaded.EntryCount == expectedEntries, "22-bit loaded FULL LUT has wrong entry count");
+
+					// Change one structural field that participates in the real topology
+					// fingerprint. The old file must be rejected and rebuilt.
+					ChipDescription changed = BuildTrivialCombinationalDescription("FULL_LUT_" + bits, bits, 5001);
+					byte[] changedFingerprint = GetLogicFingerprintForRuntimeTest(changed);
+					Assert(!CombinationalChipCacheManager.FingerprintsEqual(fingerprint, changedFingerprint),
+						"topology change did not invalidate FULL LUT fingerprint");
+
+					CombinationalChipMemoCache invalidated = new(changed, analysis, changedFingerprint, persistedPath);
+					invalidated.EnsureReadyAsync(Snapshot(changed));
+					bool invalidationProgress = WaitForCache(invalidated, TimeSpan.FromSeconds(60));
+
+					Assert(invalidated.Ready, "invalidated 22-bit FULL LUT did not rebuild: " + invalidated.BuildFailureReason);
+					Assert(!invalidated.LoadedFromDisk, "invalidated 22-bit FULL LUT incorrectly loaded stale disk cache");
+					Assert(invalidationProgress, "invalidated 22-bit FULL LUT rebuild never exposed intermediate progress");
+					Assert(invalidated.PersistenceMessage == "DISK VALID",
+						"rebuilt 22-bit FULL LUT was not saved: " + invalidated.PersistenceMessage);
+				}
+			}
+			finally
+			{
+				try { if (File.Exists(persistedPath)) File.Delete(persistedPath); } catch { }
+				try { if (File.Exists(persistedPath + ".tmp")) File.Delete(persistedPath + ".tmp"); } catch { }
+			}
+		}
+
+		static ChipDescription BuildTrivialCombinationalDescription(string name, int inputBits, int outputPinId)
+		{
+			List<PinDescription> inputs = new();
+			int remaining = inputBits;
+			int id = 100;
+
+			while (remaining >= 8)
+			{
+				inputs.Add(Pin(id++, PinBitCount.Bit8));
+				remaining -= 8;
+			}
+
+			if (remaining >= 4)
+			{
+				inputs.Add(Pin(id++, PinBitCount.Bit4));
+				remaining -= 4;
+			}
+
+			while (remaining-- > 0)
+			{
+				inputs.Add(Pin(id++, PinBitCount.Bit1));
+			}
+
+			return new ChipDescription
+			{
+				Name = name,
+				ChipType = ChipType.Custom,
+				CacheMode = ChipCacheMode.Full,
+				InputPins = inputs.ToArray(),
+				OutputPins = new[] { Pin(outputPinId, PinBitCount.Bit1) },
+				SubChips = Array.Empty<SubChipDescription>(),
+				Wires = Array.Empty<WireDescription>(),
+				Displays = Array.Empty<DisplayDescription>()
+			};
+		}
+
+		static CombinationalChipCacheManager.CacheBuildSnapshot Snapshot(ChipDescription description)
+		{
+			Dictionary<string, ChipDescription> descriptions = new(ChipDescription.NameComparer)
+			{
+				[description.Name] = description
+			};
+			return new CombinationalChipCacheManager.CacheBuildSnapshot(description, descriptions);
+		}
+
+		static byte[] GetLogicFingerprintForRuntimeTest(ChipDescription description)
+		{
+			MethodInfo method = typeof(CombinationalChipCacheManager).GetMethod(
+				"GetLogicFingerprint",
+				BindingFlags.Static | BindingFlags.NonPublic);
+			Assert(method != null, "GetLogicFingerprint reflection lookup failed");
+			return (byte[])method.Invoke(null, new object[] { description, new ChipLibrary() });
+		}
+
+		static bool WaitForCache(CombinationalChipMemoCache cache, TimeSpan timeout)
+		{
+			Stopwatch sw = Stopwatch.StartNew();
+			bool sawIntermediateProgress = false;
+
+			while (cache.Working && sw.Elapsed < timeout)
+			{
+				int progress = cache.EntryCount;
+				if (progress > 0 && progress < cache.TargetEntryCount)
+				{
+					sawIntermediateProgress = true;
+				}
+				Thread.Sleep(1);
+			}
+
+			Assert(!cache.Working, "FULL LUT worker timed out");
+			return sawIntermediateProgress;
+		}
+
+		static PinDescription Pin(int id, PinBitCount bitCount)
+		{
+			return new PinDescription
+			{
+				ID = id,
+				BitCount = bitCount
+			};
 		}
 
 		static PinDescription Pin(int id)
