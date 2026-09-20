@@ -187,12 +187,12 @@ def test_replay_captures_authoritative_state_and_verifies_outputs() -> None:
     keyboard = source("Assets/Scripts/Simulation/SimKeyboardHelper.cs")
 
     capture = extract_method(replay, "internal static void CaptureStepStart(")
-    assert "DeterministicSimulator.MaterializeStateForSnapshot(root);" in capture
+    assert "RewiredEngine.MaterializeStateForSnapshot(root);" in capture
     assert "SimulationStateSnapshot.Capture(root)" in capture
     assert "SimKeyboardHelper.CaptureHeldKeys()" in capture
 
     run = extract_method(replay, "public static SimulationReplayResult Replay(")
-    assert "DeterministicSimulator.PrepareForSnapshotRestore(root);" in run
+    assert "RewiredEngine.PrepareForSnapshotRestore(root);" in run
     assert "SimKeyboardHelper.SetReplayInputState(frame.HeldKeys);" in run
     assert "actual == expected[output]" in run
     assert "diverged at replay frame" in run
@@ -258,7 +258,7 @@ def test_probes_keep_their_signal_path_out_of_collapsed_acceleration() -> None:
 
     assert "!SimulationWaveformRecorder.ContainsProbeInSubtree(chip)" in collect
     assert "SimulationWaveformRecorder.PruneToRoot(root);" in ensure
-    assert "DeterministicSimulator.InvalidateTopology();" in recorder
+    assert "RewiredEngine.InvalidateTopology();" in recorder
     assert "internal static bool ContainsProbeInSubtree" in recorder
     assert "internal static void PruneToRoot" in recorder
 
