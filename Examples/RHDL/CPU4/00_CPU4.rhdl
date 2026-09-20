@@ -40,14 +40,7 @@ chip CPU4 {
   wire pc_we
 
   pc_d8 = {0x0, pc_d}
-  dev.RAM-8 pc_reg(
-    ADDRESS=0x00,
-    DATA=pc_d8,
-    WRITE=pc_we,
-    RESET=RESET,
-    CLOCK=CLK,
-    OUT=pc_raw
-  )
+  dev.RAM-8 pc_reg(ADDRESS=0x00, DATA=pc_d8, WRITE=pc_we, RESET=RESET, CLOCK=CLK, OUT=pc_raw)
   pc_q = pc_raw[3:0]
 
   wire acc_q: 4
@@ -57,14 +50,7 @@ chip CPU4 {
   wire acc_we
 
   acc_d8 = {0x0, acc_d}
-  dev.RAM-8 acc_reg(
-    ADDRESS=0x00,
-    DATA=acc_d8,
-    WRITE=acc_we,
-    RESET=RESET,
-    CLOCK=CLK,
-    OUT=acc_raw
-  )
+  dev.RAM-8 acc_reg(ADDRESS=0x00, DATA=acc_d8, WRITE=acc_we, RESET=RESET, CLOCK=CLK, OUT=acc_raw)
   acc_q = acc_raw[3:0]
 
   wire out_q: 4
@@ -73,14 +59,7 @@ chip CPU4 {
   wire out_we
 
   out_d8 = {0x0, acc_q}
-  dev.RAM-8 out_reg(
-    ADDRESS=0x00,
-    DATA=out_d8,
-    WRITE=out_we,
-    RESET=RESET,
-    CLOCK=CLK,
-    OUT=out_raw
-  )
+  dev.RAM-8 out_reg(ADDRESS=0x00, DATA=out_d8, WRITE=out_we, RESET=RESET, CLOCK=CLK, OUT=out_raw)
   out_q = out_raw[3:0]
 
   // A one-bit HALT latch implemented with the low bit of another byte cell.
@@ -90,14 +69,7 @@ chip CPU4 {
   wire halted
 
   halt_data = 0x01
-  dev.RAM-8 halt_reg(
-    ADDRESS=0x00,
-    DATA=halt_data,
-    WRITE=halt_we,
-    RESET=RESET,
-    CLOCK=CLK,
-    OUT=halt_raw
-  )
+  dev.RAM-8 halt_reg(ADDRESS=0x00, DATA=halt_data, WRITE=halt_we, RESET=RESET, CLOCK=CLK, OUT=halt_raw)
   halted = halt_raw[0]
 
   // -----------------------------------------------------------------------
@@ -111,11 +83,7 @@ chip CPU4 {
   wire rom_high_unused: 8
 
   rom_addr = {0x0, pc_q}
-  ROM25616 program_rom(
-    ADDRESS=rom_addr,
-    OUT_A=instruction,
-    OUT_B=rom_high_unused
-  )
+  ROM25616 program_rom(ADDRESS=rom_addr, OUT_A=instruction, OUT_B=rom_high_unused)
 
   wire opcode: 4
   wire operand: 4
@@ -137,14 +105,7 @@ chip CPU4 {
   ram_addr = {0x0, operand}
   ram_in = {0x0, acc_q}
 
-  dev.RAM-8 data_ram(
-    ADDRESS=ram_addr,
-    DATA=ram_in,
-    WRITE=ram_write,
-    RESET=RESET,
-    CLOCK=CLK,
-    OUT=ram_raw
-  )
+  dev.RAM-8 data_ram(ADDRESS=ram_addr, DATA=ram_in, WRITE=ram_write, RESET=RESET, CLOCK=CLK, OUT=ram_raw)
   ram_q = ram_raw[3:0]
 
   // -----------------------------------------------------------------------
@@ -214,17 +175,7 @@ chip CPU4 {
   not_v = !acc_q
   inc_v = acc_q + 0x1
 
-  acc_d =
-    i_ldi ? operand :
-    i_lda ? ram_q :
-    i_add ? add_v :
-    i_sub ? sub_v :
-    i_and ? and_v :
-    i_or ? or_v :
-    i_xor ? xor_v :
-    i_not ? not_v :
-    i_inc ? inc_v :
-    acc_q
+  acc_d = i_ldi ? operand : i_lda ? ram_q : i_add ? add_v : i_sub ? sub_v : i_and ? and_v : i_or ? or_v : i_xor ? xor_v : i_not ? not_v : i_inc ? inc_v : acc_q
 
   wire running
   wire acc_instruction
@@ -233,9 +184,7 @@ chip CPU4 {
   running = !halted
   zero = acc_q == 0x0
 
-  acc_instruction =
-    i_ldi | i_lda | i_add | i_sub |
-    i_and | i_or | i_xor | i_not | i_inc
+  acc_instruction = i_ldi | i_lda | i_add | i_sub | i_and | i_or | i_xor | i_not | i_inc
 
   acc_we = running & acc_instruction
   ram_write = running & i_sta
