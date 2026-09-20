@@ -117,6 +117,7 @@ namespace DLS.Graphics
 		}
 
 		public void MarkSaved() => savedText = text;
+		public void MarkDirty() => savedText = null;
 
 		public void SetDiagnosticLines(IEnumerable<int> lineNumbers)
 		{
