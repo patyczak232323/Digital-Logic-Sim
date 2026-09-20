@@ -16,17 +16,15 @@ namespace DLS.Graphics
 		const float buttonSpacing = 0.25f;
 		const float buttonHeight = barHeight - padY * 2;
 
-		const string shortcutTextCol = "<color=#666666ff>";
-
 		static readonly string[] menuButtonNames =
 		{
-			$"NEW CHIP     {shortcutTextCol}Ctrl+N",
-			$"SAVE CHIP    {shortcutTextCol}Ctrl+S",
-			$"FIND CHIP    {shortcutTextCol}Ctrl+F",
-			$"LIBRARY      {shortcutTextCol}Ctrl+L",
-			$"PREFS        {shortcutTextCol}Ctrl+P",
+			"NEW CHIP",
+			"SAVE CHIP",
+			"FIND CHIP",
+			"LIBRARY",
+			"PREFS",
 			"SIM DIAGNOSTICS",
-			$"QUIT         {shortcutTextCol}Ctrl+Q"
+			"QUIT"
 		};
 
 		const int NewChipButtonIndex = 0;
@@ -70,7 +68,22 @@ namespace DLS.Graphics
 		static void DrawPopupMenu()
 		{
 			ButtonTheme theme = DrawSettings.ActiveUITheme.MenuPopupButtonTheme;
-			float menuWidth = Draw.CalculateTextBoundsSize(menuButtonNames[0].AsSpan(), theme.fontSize, theme.font).x + 1;
+			const float textPadX = 0.75f;
+			const float columnGap = 2.2f;
+
+			float maxLabelWidth = 0;
+			float maxShortcutWidth = 0;
+			for (int i = 0; i < menuButtonNames.Length; i++)
+			{
+				maxLabelWidth = Mathf.Max(maxLabelWidth, Draw.CalculateTextBoundsSize(menuButtonNames[i].AsSpan(), theme.fontSize, theme.font).x);
+				string shortcut = GetMenuShortcutText(i);
+				if (!string.IsNullOrEmpty(shortcut))
+				{
+					maxShortcutWidth = Mathf.Max(maxShortcutWidth, Draw.CalculateTextBoundsSize(shortcut.AsSpan(), theme.fontSize, theme.font).x);
+				}
+			}
+
+			float menuWidth = textPadX * 2 + maxLabelWidth + columnGap + maxShortcutWidth;
 			Vector2 pos = new(buttonSpacing, barHeight + buttonSpacing);
 			Vector2 size = new(menuWidth, buttonHeight);
 			Draw.ID panelID = UI.ReservePanel();
@@ -80,13 +93,35 @@ namespace DLS.Graphics
 				for (int i = menuButtonNames.Length - 1; i >= 0; i--)
 				{
 					bool buttonEnabled = MenuButtonsAndShortcutsEnabled || i is QuitButtonIndex or OptionsButtonIndex or DiagnosticsButtonIndex;
-					string text = menuButtonNames[i];
-					if (UI.Button(text, theme, pos, size, buttonEnabled, false, false, Anchor.BottomLeft))
+					bool pressed = UI.Button(
+						menuButtonNames[i],
+						theme,
+						pos,
+						size,
+						buttonEnabled,
+						false,
+						false,
+						Anchor.BottomLeft,
+						true,
+						textPadX);
+
+					Bounds2D buttonBounds = UI.PrevBounds;
+					string shortcut = GetMenuShortcutText(i);
+					if (!string.IsNullOrEmpty(shortcut))
 					{
-						ButtonPressed(i);
+						Color shortcutCol = new(0.42f, 0.42f, 0.42f, buttonEnabled ? 1f : 0.45f);
+						UI.DrawText(
+							shortcut,
+							theme.font,
+							theme.fontSize,
+							buttonBounds.CentreRight + Vector2.left * textPadX,
+							Anchor.TextCentreRight,
+							shortcutCol);
+						UI.OverridePreviousBounds(buttonBounds);
 					}
 
-					pos = UI.PrevBounds.TopLeft;
+					if (pressed) ButtonPressed(i);
+					pos = buttonBounds.TopLeft;
 				}
 
 				Bounds2D uiBounds = UI.GetCurrentBoundsScope();
@@ -117,6 +152,20 @@ namespace DLS.Graphics
 				else if (i == DiagnosticsButtonIndex) OpenDiagnosticsMenu();
 				else if (i == QuitButtonIndex) ExitToMainMenu();
 			}
+		}
+
+		static string GetMenuShortcutText(int buttonIndex)
+		{
+			return buttonIndex switch
+			{
+				NewChipButtonIndex => KeyboardShortcuts.GetBindingDisplayString(ShortcutAction.CreateNewChip),
+				SaveChipButtonIndex => KeyboardShortcuts.GetBindingDisplayString(ShortcutAction.Save),
+				FindChipButtonIndex => KeyboardShortcuts.GetBindingDisplayString(ShortcutAction.Search),
+				LibraryButtonIndex => KeyboardShortcuts.GetBindingDisplayString(ShortcutAction.ChipLibrary),
+				OptionsButtonIndex => KeyboardShortcuts.GetBindingDisplayString(ShortcutAction.Preferences),
+				QuitButtonIndex => KeyboardShortcuts.GetBindingDisplayString(ShortcutAction.QuitToMainMenu),
+				_ => string.Empty
+			};
 		}
 
 		static void DrawBottomBar(Project project)
