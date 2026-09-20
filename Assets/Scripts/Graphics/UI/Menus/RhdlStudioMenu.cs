@@ -74,7 +74,7 @@ namespace DLS.Graphics
 				topLeft,
 				WorkspaceWidth,
 				true,
-				"RHDL v0.2  /  LOGIC + STRUCTURAL");
+				"RHDL v0.3  /  BUS + EXPRESSIONS + STRUCTURAL");
 
 			Vector2 contentTop = mainHeader.BottomLeft + Vector2.down * 0.7f;
 			Vector2 sourceTop = contentTop;
@@ -178,26 +178,29 @@ namespace DLS.Graphics
 				statusCol);
 
 			cursor = statusCard.BottomLeft + Vector2.down * 0.6f;
-			Bounds2D syntaxHeader = RewiredUI.DrawSectionHeader("RHDL v0.2 SYNTAX", cursor, RightWidth);
+			Bounds2D syntaxHeader = RewiredUI.DrawSectionHeader("RHDL v0.3 SYNTAX", cursor, RightWidth);
 			cursor = syntaxHeader.BottomLeft;
 
 			RewiredUI.DrawCard(cursor, new Vector2(RightWidth, 20.5f));
 			Bounds2D syntaxCard = UI.PrevBounds;
 			string help =
-				"chip Name {\n" +
-				"  input a, b, c\n" +
-				"  output y\n\n" +
-				"  y = (a AND b) OR c\n" +
+				"chip Name(WIDTH=8) {\n" +
+				"  input A: WIDTH, B: WIDTH\n" +
+				"  input sel\n" +
+				"  output Y: WIDTH\n" +
+				"  wire sum: WIDTH\n\n" +
+				"  sum = A + B\n" +
+				"  Y = sel ? sum : (A ^ B)\n" +
 				"}\n\n" +
-				"Logic: AND OR XOR NOT\n" +
-				"Also: &  |  ^  !\n" +
-				"Parentheses are supported.\n\n" +
-				"Structural connect still works.\n" +
-				"Bus ports: [1] [4] [8]\n\n" +
-				"ENTER new line + auto-indent\n" +
+				"Ops: + - & | ^ ! == != < > <= >= << >>\n" +
+				"Bits: A[3]   slice: A[7:4]\n" +
+				"Concat: {A[7:4], B[3:0]}\n" +
+				"Constants: 0b1010  0xFF  42\n" +
+				"Widths: 1 / 4 / 8 bits\n" +
+				"Named ports: NAND n(IN_A=a, IN_B=b, OUT=y)\n\n" +
+				"{} auto-pairs; TAB/ENTER inside {} expands block\n" +
 				"TAB / SHIFT+TAB indent\n" +
-				"CTRL+S save  CTRL+SHIFT+B build\n" +
-				"CTRL+C/V/X/A whole-document editing";
+				"CTRL+S save  CTRL+SHIFT+B build";
 
 			UI.DrawText(
 				help,
@@ -209,7 +212,7 @@ namespace DLS.Graphics
 
 			cursor = syntaxCard.BottomLeft + Vector2.down * 0.6f;
 			if (UI.Button(
-				"LOAD HALF ADDER EXAMPLE",
+				"LOAD RHDL v0.3 EXAMPLE",
 				theme.MainMenuButtonTheme,
 				cursor,
 				new Vector2(RightWidth, DrawSettings.ButtonHeight),
@@ -290,13 +293,21 @@ namespace DLS.Graphics
 		static void SetEditorSource(string source) => CodeEditor.SetText(source);
 
 		public const string DefaultExample =
-@"// RHDL v0.2 example: readable half adder
-chip HalfAdder {
-  input a, b
-  output sum, carry
+@"// RHDL v0.3 example: 8-bit arithmetic + mux
+chip AluMini(WIDTH=8) {
+  input A: WIDTH, B: WIDTH
+  input sel
+  output Y: WIDTH
+  output equal
 
-  sum = a XOR b
-  carry = a AND b
+  wire sum: WIDTH
+  wire mixed: WIDTH
+
+  sum = A + B
+  mixed = {A[7:4], B[3:0]}
+
+  Y = sel ? sum : mixed
+  equal = A == B
 }";
 	}
 }
