@@ -13,7 +13,8 @@ namespace DLS.Graphics
 	{
 		None = 0,
 		Save = 1,
-		Build = 2
+		Build = 2,
+		BuildAndOpen = 4
 	}
 
 	/// <summary>
@@ -450,6 +451,9 @@ namespace DLS.Graphics
 			if (ctrl && InputHelper.IsKeyDownThisFrame(KeyCode.B))
 				commands |= RhdlEditorCommand.Build;
 
+			if (InputHelper.IsKeyDownThisFrame(KeyCode.F5))
+				commands |= RhdlEditorCommand.BuildAndOpen;
+
 			if (InputHelper.IsKeyDownThisFrame(KeyCode.Return) || InputHelper.IsKeyDownThisFrame(KeyCode.KeypadEnter))
 			{
 				if (!TryExpandBracePair()) InsertNewlineWithIndent();
@@ -714,9 +718,23 @@ namespace DLS.Graphics
 					SetCaret(caret + 1, false);
 					return;
 				}
+				if (c == '}') DedentBeforeClosingBrace();
 			}
 
 			ReplaceSelection(c.ToString());
+		}
+
+		void DedentBeforeClosingBrace()
+		{
+			if (HasSelection) return;
+			EnsureLineCache();
+			int line = FindLineForIndex(caret);
+			int start = lineStarts[line];
+			if (caret <= start) return;
+			for (int i = start; i < caret; i++)
+				if (text[i] != ' ') return;
+			int remove = Math.Min(Indent.Length, caret - start);
+			if (remove > 0) ReplaceRange(caret - remove, caret, string.Empty);
 		}
 
 		bool TryExpandBracePair()
@@ -766,7 +784,11 @@ namespace DLS.Graphics
 
 			if (!unindent)
 			{
-				ReplaceSelection(Indent);
+				EnsureLineCache();
+				int line = FindLineForIndex(caret);
+				int column = caret - lineStarts[line];
+				int spaces = Indent.Length - (column % Indent.Length);
+				ReplaceSelection(new string(' ', spaces));
 				return;
 			}
 
