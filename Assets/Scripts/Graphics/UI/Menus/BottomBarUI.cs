@@ -24,6 +24,7 @@ namespace DLS.Graphics
 			"FIND CHIP",
 			"LIBRARY",
 			"PREFS",
+			"RHDL STUDIO",
 			"SIM DIAGNOSTICS",
 			"QUIT"
 		};
@@ -33,8 +34,9 @@ namespace DLS.Graphics
 		const int FindChipButtonIndex = 2;
 		const int LibraryButtonIndex = 3;
 		const int OptionsButtonIndex = 4;
-		const int DiagnosticsButtonIndex = 5;
-		const int QuitButtonIndex = 6;
+		const int RhdlButtonIndex = 5;
+		const int DiagnosticsButtonIndex = 6;
+		const int QuitButtonIndex = 7;
 
 		// ---- State ----
 		static float scrollX;
@@ -101,7 +103,7 @@ namespace DLS.Graphics
 			{
 				for (int i = menuButtonNames.Length - 1; i >= 0; i--)
 				{
-					bool buttonEnabled = MenuButtonsAndShortcutsEnabled || i is QuitButtonIndex or OptionsButtonIndex or DiagnosticsButtonIndex;
+					bool buttonEnabled = MenuButtonsAndShortcutsEnabled || i is QuitButtonIndex or OptionsButtonIndex or DiagnosticsButtonIndex or RhdlButtonIndex;
 					bool pressed = UI.Button(
 						menuButtonNames[i],
 						theme,
@@ -158,6 +160,7 @@ namespace DLS.Graphics
 				else if (i == FindChipButtonIndex) OpenSearchMenu();
 				else if (i == LibraryButtonIndex) OpenLibraryMenu();
 				else if (i == OptionsButtonIndex) OpenPreferencesMenu();
+				else if (i == RhdlButtonIndex) OpenRhdlStudio();
 				else if (i == DiagnosticsButtonIndex) OpenDiagnosticsMenu();
 				else if (i == QuitButtonIndex) ExitToMainMenu();
 			}
@@ -675,6 +678,7 @@ namespace DLS.Graphics
 		static void OpenSearchMenu() => UIDrawer.SetActiveMenu(UIDrawer.MenuType.Search);
 		static void OpenLibraryMenu() => UIDrawer.SetActiveMenu(UIDrawer.MenuType.ChipLibrary);
 		static void OpenPreferencesMenu() => UIDrawer.SetActiveMenu(UIDrawer.MenuType.Preferences);
+		static void OpenRhdlStudio() => UIDrawer.SetActiveMenu(UIDrawer.MenuType.RhdlStudio);
 		static void OpenDiagnosticsMenu() => UIDrawer.SetActiveMenu(UIDrawer.MenuType.SimulationDiagnostics);
 
 		static void CreateNewChip()
