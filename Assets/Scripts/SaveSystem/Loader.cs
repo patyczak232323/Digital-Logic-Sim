@@ -19,7 +19,7 @@ namespace DLS.SaveSystem
 
 			try
 			{
-				return LoadWithBackup(SavePaths.AppSettingsPath, Serializer.DeserializeAppSettings);
+				return AppSettings.Normalize(LoadWithBackup(SavePaths.AppSettingsPath, Serializer.DeserializeAppSettings));
 			}
 			catch (Exception e)
 			{
