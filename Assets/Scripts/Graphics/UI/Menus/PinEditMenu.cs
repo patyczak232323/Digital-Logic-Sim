@@ -52,7 +52,9 @@ namespace DLS.Graphics
 				Vector2 unpaddedSize = Draw.CalculateTextBoundsSize(MaxLengthPinName, inputTheme.fontSize, inputTheme.font);
 				const float padX = 2.25f;
 				Vector2 inputFieldSize = unpaddedSize + new Vector2(padX, 2.25f);
-				Vector2 pos = UI.Centre + Vector2.up * 5;
+				Vector2 pos = UI.Centre + Vector2.up * 4;
+				Vector2 headerTopLeft = new(pos.x - inputFieldSize.x / 2f, pos.y + inputFieldSize.y / 2f + 3f);
+				RewiredUI.DrawSectionHeader("PIN SETTINGS", headerTopLeft, inputFieldSize.x, true);
 
 				// Draw input field
 				InputFieldState inputFieldState = UI.InputField(ID_NameField, inputTheme, pos, inputFieldSize, devPin.Pin.Name, Anchor.Centre, padX / 2, ValidatePinNameInput, true);
