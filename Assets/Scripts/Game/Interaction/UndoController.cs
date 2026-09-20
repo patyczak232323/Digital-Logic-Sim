@@ -99,6 +99,17 @@ namespace DLS.Game
 			RecordUndoAction(moveUndoAction);
 		}
 
+		public void RecordMirrorSubChips(IReadOnlyList<SubChipInstance> subchips, bool horizontal)
+		{
+			if (subchips == null || subchips.Count == 0) return;
+			MirrorUndoAction action = new()
+			{
+				subChipIDs = subchips.Select(s => s.ID).ToArray(),
+				horizontal = horizontal
+			};
+			RecordUndoAction(action);
+		}
+
 		public void RecordDeleteElements(List<IMoveable> deletedElements)
 		{
 			bool hasConnectedWires = true; // Todo: test if true so don't backup wire state unnecessarily
@@ -195,6 +206,10 @@ namespace DLS.Game
 				{
 					wireExistence.Trigger(undo, devChip);
 				}
+				else if (action is MirrorUndoAction mirror)
+				{
+					mirror.Trigger(devChip);
+				}
 			}
 			catch (Exception e)
 			{
@@ -202,6 +217,27 @@ namespace DLS.Game
 			}
 		}
 
+
+		class MirrorUndoAction : UndoAction
+		{
+			public int[] subChipIDs;
+			public bool horizontal;
+
+			public void Trigger(DevChipInstance devChip)
+			{
+				Dictionary<int, SubChipInstance> lookup = devChip.Elements
+					.OfType<SubChipInstance>()
+					.ToDictionary(s => s.ID, s => s);
+
+				for (int i = 0; i < subChipIDs.Length; i++)
+				{
+					if (!lookup.TryGetValue(subChipIDs[i], out SubChipInstance subchip)) continue;
+					if (horizontal) subchip.MirrorHorizontal();
+					else subchip.MirrorVertical();
+					Project.ActiveProject.controller.Select(subchip, true);
+				}
+			}
+		}
 
 		class MoveUndoAction : UndoAction
 		{
