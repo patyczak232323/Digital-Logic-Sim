@@ -21,7 +21,7 @@ namespace DLS.Simulation
 			Run("RHDL readable logic synthesis", TestRhdlReadableLogicSynthesis);
 			Run("RHDL v0.3 buses, arithmetic, slices and mux", TestRhdlV3BusExpressions);
 			Run("RHDL v0.3 operators, constants and named ports", TestRhdlV3OperatorsAndNamedPorts);
-			Run("Rewired-8 RHDL source pack compiles", TestRewired8RhdlPackCompilation);
+			Run("RHDL examples and Rewired-8 source pack compile", TestRewired8RhdlPackCompilation);
 			Run("feedback NAND latch", TestFeedbackNandLatch);
 			Run("feedback unchanged-input zero sweep", TestFeedbackZeroSweep);
 			Run("feedback state materialization", TestFeedbackMaterialization);
@@ -526,6 +526,9 @@ namespace DLS.Simulation
 
 			string[] sources =
 			{
+				"Examples/RHDL/Basics/00_AND.rhdl",
+				"Examples/RHDL/Basics/01_BUS_ALU.rhdl",
+				"Examples/RHDL/Basics/02_STRUCTURAL_NAND.rhdl",
 				"Examples/RHDL/Rewired8/00_RW8_REG8.rhdl",
 				"Examples/RHDL/Rewired8/01_RW8_REG16.rhdl",
 				"Examples/RHDL/Rewired8/02_RW8_REGFILE8.rhdl",
