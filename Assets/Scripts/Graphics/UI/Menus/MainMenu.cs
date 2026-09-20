@@ -338,7 +338,9 @@ namespace DLS.Graphics
 		{
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
 
-			float regionWidth = 30;
+			// Keep enough separation between setting labels and controls, especially
+			// for the longer "Keyboard shortcuts" row.
+			float regionWidth = 38;
 			float labelOriginLeft = UI.Centre.x - regionWidth / 2;
 			float elementOriginRight = UI.Centre.x + regionWidth / 2;
 			Vector2 wheelSize = new(16, 2.5f);
@@ -370,7 +372,8 @@ namespace DLS.Graphics
 				// -- Key bindings --
 				pos += Vector2.down * 4;
 				UI.DrawText("Keyboard shortcuts", theme.FontRegular, theme.FontSizeRegular, pos, Anchor.CentreLeft, Color.white);
-				if (UI.Button("KEYBINDINGS", theme.MainMenuButtonTheme, new Vector2(elementOriginRight, pos.y), wheelSize, true, false, false, Anchor.CentreRight))
+				Vector2 keyBindingsButtonSize = new(14, wheelSize.y);
+				if (UI.Button("KEYBINDINGS", theme.MainMenuButtonTheme, new Vector2(elementOriginRight, pos.y), keyBindingsButtonSize, true, false, false, Anchor.CentreRight))
 				{
 					shortcutCaptureIndex = -1;
 					activeMenuScreen = MenuScreen.KeyBindings;
