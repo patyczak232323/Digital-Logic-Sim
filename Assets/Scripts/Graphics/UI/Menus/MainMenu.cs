@@ -103,7 +103,7 @@ namespace DLS.Graphics
 				}
 			}
 
-			UI.DrawFullscreenPanel(ColHelper.MakeCol255(47, 47, 53));
+			UI.DrawFullscreenPanel(ColHelper.MakeCol255(29, 30, 34));
 
 			// Branding belongs only to the landing screen. Submenus need the full
 			// canvas so the large Rewired title cannot overlap their content.
@@ -219,6 +219,8 @@ namespace DLS.Graphics
 
 			Vector2 pos = UI.Centre + new Vector2(0, -1);
 			Vector2 size = new(68, 32);
+			Vector2 headerTopLeft = new(pos.x - size.x / 2f, pos.y + size.y / 2f + 3.2f);
+			RewiredUI.DrawSectionHeader("LOAD PROJECT", headerTopLeft, size.x, true);
 
 			UI.DrawScrollView(ID_ProjectsScrollView, pos, size, Anchor.Centre, theme.ScrollTheme, loadProjectScrollViewDrawer);
 			ButtonTheme buttonTheme = DrawSettings.ActiveUITheme.MainMenuButtonTheme;
@@ -560,6 +562,15 @@ namespace DLS.Graphics
 				Vector2 padding = new(2, 2);
 				Vector2 inputFieldSize = new Vector2(charSize.x * MaxProjectNameLength, charSize.y) + padding * 2;
 
+				string popupTitle = activePopup switch
+				{
+					PopupKind.NamePopup_NewProject => "NEW PROJECT",
+					PopupKind.NamePopup_RenameProject => "RENAME PROJECT",
+					PopupKind.NamePopup_DuplicateProject => "DUPLICATE PROJECT",
+					_ => "PROJECT"
+				};
+				Vector2 headerTopLeft = new(UI.Centre.x - inputFieldSize.x / 2f, UI.Centre.y + inputFieldSize.y / 2f + 3.2f);
+				RewiredUI.DrawSectionHeader(popupTitle, headerTopLeft, inputFieldSize.x, true);
 
 				InputFieldState state = UI.InputField(ID_ProjectNameInput, inputTheme, UI.Centre, inputFieldSize, "", Anchor.Centre, padding.x, projectNameValidator, true);
 
@@ -603,7 +614,7 @@ namespace DLS.Graphics
 					OnNamePopupConfirmed(kind, projectName);
 				}
 
-				UI.ModifyPanel(panelID, UI.GetCurrentBoundsScope().Centre, UI.GetCurrentBoundsScope().Size + Vector2.one * 2, ColHelper.MakeCol255(37, 37, 43));
+				MenuHelper.DrawReservedMenuPanel(panelID, UI.GetCurrentBoundsScope());
 			}
 		}
 
@@ -634,7 +645,9 @@ namespace DLS.Graphics
 			using (UI.BeginBoundsScope(true))
 			{
 				Draw.ID panelID = UI.ReservePanel();
-				UI.DrawText("Are you sure you want to delete this project?", theme.FontRegular, theme.FontSizeRegular, UI.Centre, Anchor.Centre, Color.yellow);
+				const float deleteWidth = 42f;
+				RewiredUI.DrawSectionHeader("DELETE PROJECT", UI.Centre + new Vector2(-deleteWidth / 2f, 6.2f), deleteWidth, true);
+				UI.DrawText("Are you sure you want to delete this project?", theme.FontRegular, theme.FontSizeRegular * 0.82f, UI.Centre, Anchor.Centre, Color.yellow);
 
 				Vector2 buttonRegionTopLeft = UI.PrevBounds.BottomLeft + Vector2.down * DrawSettings.VerticalButtonSpacing;
 				float buttonRegionWidth = UI.PrevBounds.Width;
@@ -664,6 +677,7 @@ namespace DLS.Graphics
 			Vector2 panelCentre = UI.Centre + Vector2.up * 1;
 			Vector2 panelSize = new(76, 36);
 			UI.DrawPanel(panelCentre, panelSize, RewiredUI.SurfaceRaised, Anchor.Centre);
+			RewiredUI.DrawFrame(UI.PrevBounds);
 
 			Vector2 pos = panelCentre + new Vector2(0, 13);
 			UI.DrawText("REWIRED", FontType.Born2bSporty, 8f, pos, Anchor.Centre, Color.white);
