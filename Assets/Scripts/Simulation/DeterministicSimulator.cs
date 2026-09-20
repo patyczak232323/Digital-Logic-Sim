@@ -161,9 +161,11 @@ namespace DLS.Simulation
 					TracePowerOnVerificationAdjustment(serialBeforeVerify, stateChangeSerial);
 				}
 
-				// Edge-sensitive built-ins start from the already-settled level.
-				// The initialization itself is not an edge.
-				SynchronizeSequentialEdgeState();
+				// Preserve the original Simulator startup semantics. Initialization itself
+				// does not advance sequential components, but it must not consume the
+				// current input level as the "previous" clock/input state either.
+				// On the first normal simulation tick, RAM/Display/Pulse therefore see
+				// the same rising edge the legacy engine sees when the signal starts high.
 
 				// Feedback JIT stays dormant for the first normal tick as well. That tick
 				// can legitimately change a latch/register after power-on. We seed the
@@ -1488,45 +1490,6 @@ namespace DLS.Simulation
 			}
 
 			return SettleCombinational();
-		}
-
-		static void SynchronizeSequentialEdgeState()
-		{
-			for (int i = 0; i < sequentialChips.Count; i++)
-			{
-				SimChip chip = sequentialChips[i].Chip;
-
-				switch (chip.ChipType)
-				{
-					case ChipType.Pulse:
-						// [2] stores the previous input level for rising-edge detection.
-						if (chip.InternalState.Length > 2 && chip.InputPins.Length > 0)
-						{
-							chip.InternalState[2] = PinState.FirstBitHigh(chip.InputPins[0].State) ? 1u : 0u;
-						}
-						break;
-
-					case ChipType.dev_Ram_8Bit:
-						SynchronizeLastClockState(chip, 4);
-						break;
-
-					case ChipType.DisplayRGB:
-						SynchronizeLastClockState(chip, 7);
-						break;
-
-					case ChipType.DisplayDot:
-						SynchronizeLastClockState(chip, 5);
-						break;
-				}
-			}
-		}
-
-		static void SynchronizeLastClockState(SimChip chip, int clockInputIndex)
-		{
-			if (chip.InternalState.Length == 0 || chip.InputPins.Length <= clockInputIndex) return;
-
-			chip.InternalState[^1] =
-				PinState.FirstBitHigh(chip.InputPins[clockInputIndex].State) ? 1u : 0u;
 		}
 
 		static bool SynchronizeFeedbackExecutors(SimChip chip)
