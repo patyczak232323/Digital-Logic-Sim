@@ -410,6 +410,21 @@ namespace DLS.Simulation
 
 			ChipLibrary library = new(nand, bus8, split8, merge8, split4, merge4);
 
+			string minimalSource =
+@"chip Adder {
+  input A:8
+  input B:8
+  output Y
+
+  Y = A + B
+}";
+			RhdlCompileResult minimal = RhdlCompiler.Compile(minimalSource, library);
+			Assert(minimal.Success,
+				"Minimal inferred adder failed: " + string.Join(" | ", minimal.Diagnostics.Select(d => d.ToString())));
+			Assert(minimal.Description.OutputPins.Length == 1 &&
+			       minimal.Description.OutputPins[0].BitCount == PinBitCount.Bit8,
+				"Minimal 'output Y' should infer to 8 bits from A + B");
+
 			string source =
 @"chip Adder {
   input A:8
