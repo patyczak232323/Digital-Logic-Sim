@@ -99,11 +99,38 @@ namespace DLS.Simulation
 		// Building several large LUTs in parallel can easily starve Unity's main/simulation
 		// threads and was the source of the multi-second UI freezes seen with the first
 		// persistent-cache implementation.
+		sealed class BackgroundCacheWorkItem
+		{
+			public readonly string JobKey;
+			public readonly CancellationTokenSource Cancellation;
+			public readonly Action<CancellationToken> Work;
+
+			public BackgroundCacheWorkItem(string jobKey, CancellationTokenSource cancellation, Action<CancellationToken> work)
+			{
+				JobKey = jobKey;
+				Cancellation = cancellation;
+				Work = work;
+			}
+		}
+
 		static readonly object backgroundQueueLock = new();
-		static Task backgroundTail = Task.CompletedTask;
+		static readonly Queue<BackgroundCacheWorkItem> backgroundQueue = new();
+		static readonly Dictionary<string, CancellationTokenSource> backgroundCancellations = new(ChipDescription.NameComparer);
+		static Thread backgroundWorker;
 		static int readyGeneration;
 
 		internal static int ReadyGeneration => Volatile.Read(ref readyGeneration);
+
+		internal static void LogFullLut(string message)
+		{
+			UnityEngine.Debug.Log("[FULL LUT] " + message);
+		}
+
+		internal static void LogFullLutError(string message, Exception ex = null)
+		{
+			string details = ex == null ? message : message + Environment.NewLine + ex;
+			UnityEngine.Debug.LogError("[FULL LUT] " + details);
+		}
 
 		public static ChipCacheAnalysis Analyze(ChipDescription description, ChipLibrary library)
 		{
@@ -157,49 +184,101 @@ namespace DLS.Simulation
 		public static int GetInputBitLimit(ChipCacheMode mode) => FullCacheMaxInputBits;
 		public static int GetEntryLimit(ChipCacheMode mode) => AutoMaxEntries;
 
-		internal static void QueueBackgroundCacheWork(Action work)
+		internal static int GetFullCacheEntryCount(int inputBitCount)
+		{
+			if (inputBitCount < 0 || inputBitCount > FullCacheMaxInputBits)
+			{
+				throw new ArgumentOutOfRangeException(nameof(inputBitCount), inputBitCount, "FULL LUT input bit count is outside supported range.");
+			}
+
+			long entries = 1L << inputBitCount;
+			if (entries > int.MaxValue)
+			{
+				throw new OverflowException("FULL LUT entry count exceeds Int32 capacity.");
+			}
+
+			return checked((int)entries);
+		}
+
+		internal static void QueueBackgroundCacheWork(string jobKey, Action<CancellationToken> work)
 		{
 			if (work == null) return;
+			jobKey ??= string.Empty;
+
+			CancellationTokenSource cancellation = new();
+			int queueDepth;
 
 			lock (backgroundQueueLock)
 			{
-				backgroundTail = backgroundTail.ContinueWith(
-					_ => RunBackgroundCacheWork(work),
-					CancellationToken.None,
-					TaskContinuationOptions.None,
-					TaskScheduler.Default);
+				if (backgroundCancellations.TryGetValue(jobKey, out CancellationTokenSource previous))
+				{
+					LogFullLut($"Superseding older queued/running job: chip={jobKey}");
+					try { previous.Cancel(); } catch { }
+				}
+
+				backgroundCancellations[jobKey] = cancellation;
+				backgroundQueue.Enqueue(new BackgroundCacheWorkItem(jobKey, cancellation, work));
+				queueDepth = backgroundQueue.Count;
+
+				if (backgroundWorker == null)
+				{
+					backgroundWorker = new Thread(BackgroundCacheWorkerLoop)
+					{
+						IsBackground = true,
+						Name = "Rewired FULL LUT worker"
+					};
+					backgroundWorker.Start();
+				}
+
+				Monitor.PulseAll(backgroundQueueLock);
+			}
+
+			LogFullLut($"Job queued: chip={jobKey} depth={queueDepth}");
+		}
+
+		static void BackgroundCacheWorkerLoop()
+		{
+			try { Thread.CurrentThread.Priority = ThreadPriority.BelowNormal; } catch { }
+
+			while (true)
+			{
+				BackgroundCacheWorkItem item;
+				lock (backgroundQueueLock)
+				{
+					while (backgroundQueue.Count == 0)
+					{
+						Monitor.Wait(backgroundQueueLock);
+					}
+
+					item = backgroundQueue.Dequeue();
+				}
+
+				RunBackgroundCacheWork(item);
 			}
 		}
 
-		static void RunBackgroundCacheWork(Action work)
+		static void RunBackgroundCacheWork(BackgroundCacheWorkItem item)
 		{
-			Thread thread = Thread.CurrentThread;
-			ThreadPriority oldPriority = ThreadPriority.Normal;
-			bool restorePriority = false;
-
 			try
 			{
-				try
-				{
-					oldPriority = thread.Priority;
-					thread.Priority = ThreadPriority.BelowNormal;
-					restorePriority = true;
-				}
-				catch { }
-
-				work();
+				item.Work(item.Cancellation.Token);
 			}
-			catch
+			catch (Exception ex)
 			{
-				// Individual cache objects record their own failure state. The queue must
-				// never fault permanently because a later cache should still be processed.
+				LogFullLutError($"UNHANDLED WORKER ERROR: chip={item.JobKey}", ex);
 			}
 			finally
 			{
-				if (restorePriority)
+				lock (backgroundQueueLock)
 				{
-					try { thread.Priority = oldPriority; } catch { }
+					if (backgroundCancellations.TryGetValue(item.JobKey, out CancellationTokenSource current) &&
+					    ReferenceEquals(current, item.Cancellation))
+					{
+						backgroundCancellations.Remove(item.JobKey);
+					}
 				}
+
+				try { item.Cancellation.Dispose(); } catch { }
 			}
 		}
 
@@ -326,7 +405,7 @@ namespace DLS.Simulation
 
 			byte[] fingerprint = GetLogicFingerprint(description, library);
 			string path = GetPersistentCachePath(description.Name, projectName);
-			return InspectPersistentCacheFile(path, fingerprint, analysis.InputBitCount, description.OutputPins?.Length ?? 0, 1 << analysis.InputBitCount);
+			return InspectPersistentCacheFile(path, fingerprint, analysis.InputBitCount, description.OutputPins?.Length ?? 0, GetFullCacheEntryCount(analysis.InputBitCount));
 		}
 
 		// Called after a chip description has changed in the library. This invalidates
@@ -491,9 +570,9 @@ namespace DLS.Simulation
 					fingerprint,
 					analysis.InputBitCount,
 					description.OutputPins?.Length ?? 0,
-					1 << analysis.InputBitCount);
+					GetFullCacheEntryCount(analysis.InputBitCount));
 
-			CacheBuildSnapshot snapshot = info.Valid ? null : CreateBuildSnapshot(description, library);
+			CacheBuildSnapshot snapshot = CreateBuildSnapshot(description, library);
 			cache.EnsureReadyAsync(snapshot);
 		}
 
@@ -548,7 +627,7 @@ namespace DLS.Simulation
 				fingerprint,
 				analysis.InputBitCount,
 				description.OutputPins?.Length ?? 0,
-				1 << analysis.InputBitCount);
+				GetFullCacheEntryCount(analysis.InputBitCount));
 
 			if (info.Valid) return;
 
@@ -1016,6 +1095,7 @@ namespace DLS.Simulation
 
 	internal sealed class CombinationalChipMemoCache
 	{
+		readonly string chipName;
 		readonly int[] inputWidths;
 		readonly int inputBitCount;
 		readonly int outputCount;
@@ -1067,11 +1147,12 @@ namespace DLS.Simulation
 			byte[] fingerprint,
 			string persistentPath)
 		{
+			chipName = string.IsNullOrWhiteSpace(description?.Name) ? "<unnamed>" : description.Name;
 			this.fingerprint = fingerprint;
 			this.persistentPath = persistentPath;
 			inputBitCount = analysis.InputBitCount;
 			outputCount = description.OutputPins?.Length ?? 0;
-			targetEntryCount = 1 << analysis.InputBitCount;
+			targetEntryCount = CombinationalChipCacheManager.GetFullCacheEntryCount(analysis.InputBitCount);
 
 			PinDescription[] inputs = description.InputPins ?? Array.Empty<PinDescription>();
 			inputWidths = new int[inputs.Length];
@@ -1097,47 +1178,66 @@ namespace DLS.Simulation
 
 			buildFailureReason = string.Empty;
 			persistenceMessage = "QUEUED";
-			CombinationalChipCacheManager.QueueBackgroundCacheWork(() => LoadOrBuildInBackground(snapshot));
+			CombinationalChipCacheManager.LogFullLut($"Requested: chip={chipName} inputBits={inputBitCount} entries={targetEntryCount}");
+			CombinationalChipCacheManager.QueueBackgroundCacheWork(
+				chipName,
+				token => LoadOrBuildInBackground(snapshot, token));
 		}
 
-		void LoadOrBuildInBackground(CombinationalChipCacheManager.CacheBuildSnapshot snapshot)
+		void LoadOrBuildInBackground(CombinationalChipCacheManager.CacheBuildSnapshot snapshot, CancellationToken token)
 		{
+			CombinationalChipCacheManager.LogFullLut($"Worker picked job: chip={chipName}");
+
 			try
 			{
-				if (TryLoadPersistent())
+				token.ThrowIfCancellationRequested();
+
+				if (TryLoadPersistent(token))
 				{
 					Volatile.Write(ref buildState, 2);
 					return;
 				}
 
+				token.ThrowIfCancellationRequested();
+
 				if (snapshot == null)
 				{
-					buildFailureReason = "persistent cache could not be loaded and no build snapshot is available";
-					persistenceMessage = "BUILD DEFERRED";
-					Volatile.Write(ref buildState, 3);
+					AbortBuild("persistent cache could not be loaded and no build snapshot is available");
 					return;
 				}
 
 				SimChip isolatedChip = BuildIsolatedSimChip(snapshot);
-				BuildFullLut(isolatedChip);
+				token.ThrowIfCancellationRequested();
+				BuildFullLut(isolatedChip, token);
 
 				if (Ready)
 				{
-					TrySavePersistent();
+					token.ThrowIfCancellationRequested();
+					TrySavePersistent(token);
 					Volatile.Write(ref buildState, 2);
 				}
 				else
 				{
-					Volatile.Write(ref buildState, 3);
+					AbortBuild("RAM LUT build completed without publishing a LUT");
 				}
+			}
+			catch (OperationCanceledException)
+			{
+				AbortBuild("superseded by a newer FULL LUT request");
 			}
 			catch (Exception ex)
 			{
-				buildFailureReason = ex.GetType().Name + ": " + ex.Message;
-				persistenceMessage = "BUILD FAILED";
-				lut = null;
-				Volatile.Write(ref buildState, 3);
+				AbortBuild(ex.GetType().Name + ": " + ex.Message, ex);
 			}
+		}
+
+		void AbortBuild(string reason, Exception ex = null)
+		{
+			buildFailureReason = reason ?? "unknown FULL LUT failure";
+			persistenceMessage = "BUILD ABORTED";
+			lut = null;
+			Volatile.Write(ref buildState, 3);
+			CombinationalChipCacheManager.LogFullLutError($"BUILD ABORTED: chip={chipName} reason={buildFailureReason}", ex);
 		}
 
 		static SimChip BuildIsolatedSimChip(CombinationalChipCacheManager.CacheBuildSnapshot snapshot)
@@ -1185,7 +1285,7 @@ namespace DLS.Simulation
 			}
 		}
 
-		void BuildFullLut(SimChip chip)
+		void BuildFullLut(SimChip chip, CancellationToken token)
 		{
 			Stopwatch sw = Stopwatch.StartNew();
 			Interlocked.Exchange(ref completedEntries, 0);
@@ -1193,6 +1293,8 @@ namespace DLS.Simulation
 
 			try
 			{
+				token.ThrowIfCancellationRequested();
+
 				int stride = Math.Max(1, outputCount);
 				long valueCount = (long)targetEntryCount * stride;
 				if (valueCount > int.MaxValue)
@@ -1200,10 +1302,17 @@ namespace DLS.Simulation
 					throw new InvalidOperationException("full LUT exceeds maximum .NET array length");
 				}
 
+				CombinationalChipCacheManager.LogFullLut($"Allocation started: chip={chipName} values={valueCount}");
 				uint[] built = new uint[(int)valueCount];
+				CombinationalChipCacheManager.LogFullLut($"Build started: chip={chipName} entries={targetEntryCount}");
+
+				int progressMask = targetEntryCount <= 65536 ? 0 : 0xFFF;
+				long nextProgressLog = 100000;
 
 				for (int key = 0; key < targetEntryCount; key++)
 				{
+					if ((key & 0x3FF) == 0) token.ThrowIfCancellationRequested();
+
 					SetBinaryInputs(chip, key);
 					Simulator.EvaluatePureCombinationalForMemo(chip);
 
@@ -1212,24 +1321,28 @@ namespace DLS.Simulation
 						built[key * stride + output] = chip.OutputPins[output].State;
 					}
 
-					if ((key & 0x3FF) == 0)
+					if ((key & progressMask) == 0 || key == targetEntryCount - 1)
 					{
-						Interlocked.Exchange(ref completedEntries, key + 1L);
-						if ((key & 0x3FFF) == 0) Thread.Yield();
+						long completed = key + 1L;
+						Interlocked.Exchange(ref completedEntries, completed);
+
+						if (completed == 1 || completed >= nextProgressLog)
+						{
+							CombinationalChipCacheManager.LogFullLut($"Progress {completed}/{targetEntryCount}: chip={chipName}");
+							while (nextProgressLog <= completed) nextProgressLog += 100000;
+						}
 					}
+
+					if ((key & 0x3FFF) == 0) Thread.Yield();
 				}
 
+				token.ThrowIfCancellationRequested();
 				Interlocked.Exchange(ref completedEntries, targetEntryCount);
 				Volatile.Write(ref loadedFromDisk, 0);
 				lut = built;
 				persistenceMessage = "BUILT";
 				CombinationalChipCacheManager.NotifyCacheReady();
-			}
-			catch (Exception ex)
-			{
-				buildFailureReason = ex.GetType().Name + ": " + ex.Message;
-				persistenceMessage = "BUILD FAILED";
-				lut = null;
+				CombinationalChipCacheManager.LogFullLut($"RAM build complete: chip={chipName} entries={targetEntryCount}");
 			}
 			finally
 			{
@@ -1238,7 +1351,7 @@ namespace DLS.Simulation
 			}
 		}
 
-		bool TryLoadPersistent()
+		bool TryLoadPersistent(CancellationToken token)
 		{
 			if (string.IsNullOrWhiteSpace(persistentPath) || !File.Exists(persistentPath))
 			{
@@ -1248,8 +1361,10 @@ namespace DLS.Simulation
 
 			Stopwatch sw = Stopwatch.StartNew();
 			persistenceMessage = "LOADING FROM DISK";
+			CombinationalChipCacheManager.LogFullLut($"Disk load started: chip={chipName}");
 			try
 			{
+				token.ThrowIfCancellationRequested();
 				using FileStream stream = new(persistentPath, FileMode.Open, FileAccess.Read, FileShare.Read);
 				using BinaryReader reader = new(stream);
 
@@ -1267,18 +1382,27 @@ namespace DLS.Simulation
 				}
 
 				uint[] loaded = new uint[storedValueCount];
-				ReadUIntArray(reader, loaded);
+				ReadUIntArray(reader, loaded, token);
+				token.ThrowIfCancellationRequested();
 				Interlocked.Exchange(ref completedEntries, targetEntryCount);
 				Volatile.Write(ref loadedFromDisk, 1);
 				lut = loaded;
 				persistenceMessage = "DISK VALID";
 				CombinationalChipCacheManager.NotifyCacheReady();
+				CombinationalChipCacheManager.LogFullLut($"Disk load complete: chip={chipName} entries={targetEntryCount}");
 				return true;
 			}
-			catch
+			catch (OperationCanceledException)
+			{
+				persistenceMessage = "CANCELLED";
+				lut = null;
+				throw;
+			}
+			catch (Exception ex)
 			{
 				persistenceMessage = "DISK CORRUPT";
 				lut = null;
+				CombinationalChipCacheManager.LogFullLutError($"Disk cache rejected; rebuilding: chip={chipName}", ex);
 				return false;
 			}
 			finally
@@ -1309,15 +1433,17 @@ namespace DLS.Simulation
 			return storedValueCount >= 0 && storedValueCount == expectedValueCount;
 		}
 
-		void TrySavePersistent()
+		void TrySavePersistent(CancellationToken token)
 		{
 			uint[] data = lut;
 			if (data == null || string.IsNullOrWhiteSpace(persistentPath)) return;
 
 			persistenceMessage = "SAVING TO DISK";
 			string temporaryPath = persistentPath + ".tmp";
+			CombinationalChipCacheManager.LogFullLut($"Disk save started: chip={chipName}");
 			try
 			{
+				token.ThrowIfCancellationRequested();
 				string directory = Path.GetDirectoryName(persistentPath);
 				if (!string.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
 
@@ -1332,7 +1458,8 @@ namespace DLS.Simulation
 					writer.Write(outputCount);
 					writer.Write(targetEntryCount);
 					writer.Write(data.Length);
-					WriteUIntArray(stream, writer, data);
+					WriteUIntArray(stream, writer, data, token);
+					token.ThrowIfCancellationRequested();
 					writer.Flush();
 					stream.Flush(true);
 				}
@@ -1340,15 +1467,23 @@ namespace DLS.Simulation
 				if (File.Exists(persistentPath)) File.Delete(persistentPath);
 				File.Move(temporaryPath, persistentPath);
 				persistenceMessage = "DISK VALID";
+				CombinationalChipCacheManager.LogFullLut($"Disk save complete: chip={chipName}");
+			}
+			catch (OperationCanceledException)
+			{
+				persistenceMessage = "CANCELLED";
+				try { if (File.Exists(temporaryPath)) File.Delete(temporaryPath); } catch { }
+				throw;
 			}
 			catch (Exception ex)
 			{
 				persistenceMessage = "RAM ONLY: " + ex.GetType().Name;
+				CombinationalChipCacheManager.LogFullLutError($"Disk save failed; RAM LUT remains usable: chip={chipName}", ex);
 				try { if (File.Exists(temporaryPath)) File.Delete(temporaryPath); } catch { }
 			}
 		}
 
-		static void ReadUIntArray(BinaryReader reader, uint[] destination)
+		static void ReadUIntArray(BinaryReader reader, uint[] destination, CancellationToken token)
 		{
 			int totalBytes = checked(destination.Length * sizeof(uint));
 			byte[] buffer = new byte[Math.Min(CombinationalChipCacheManager.PersistentIoBufferBytes, Math.Max(sizeof(uint), totalBytes))];
@@ -1356,6 +1491,7 @@ namespace DLS.Simulation
 
 			while (destinationByteOffset < totalBytes)
 			{
+				token.ThrowIfCancellationRequested();
 				int requested = Math.Min(buffer.Length, totalBytes - destinationByteOffset);
 				int readTotal = 0;
 				while (readTotal < requested)
@@ -1370,7 +1506,7 @@ namespace DLS.Simulation
 			}
 		}
 
-		static void WriteUIntArray(FileStream stream, BinaryWriter writer, uint[] source)
+		static void WriteUIntArray(FileStream stream, BinaryWriter writer, uint[] source, CancellationToken token)
 		{
 			writer.Flush();
 			int totalBytes = checked(source.Length * sizeof(uint));
@@ -1379,6 +1515,7 @@ namespace DLS.Simulation
 
 			while (sourceByteOffset < totalBytes)
 			{
+				token.ThrowIfCancellationRequested();
 				int count = Math.Min(buffer.Length, totalBytes - sourceByteOffset);
 				Buffer.BlockCopy(source, sourceByteOffset, buffer, 0, count);
 				stream.Write(buffer, 0, count);
