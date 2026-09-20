@@ -89,13 +89,16 @@ The older low-level `Simulator` implementation and `DeterministicSimulator` are 
 
 Rewired **0.3.0** introduces an experimental source-driven circuit generator called **RHDL Studio**.
 
-RHDL v0.1 is a structural HDL: source code is compiled into an ordinary Rewired `ChipDescription` containing normal pins, subchips and wires. Generated circuits therefore use the same editor, save format and `RewiredEngine` runtime as manually drawn circuits.
+RHDL v0.2 combines a readable logic-expression layer with the original structural HDL. Source code is still compiled into an ordinary Rewired `ChipDescription` containing normal pins, subchips and wires, so generated circuits use the same editor, save format and `RewiredEngine` runtime as manually drawn circuits.
 
 Current v0.1 features include:
 
 - dedicated `RHDL STUDIO` workspace
 - project-local source files under `HDL/`
 - `chip`, `input`, `output`, chip-instance and `connect` statements
+- readable 1-bit logic assignments with `AND`, `OR`, `XOR`, `NOT` and parentheses
+- symbolic aliases `&`, `|`, `^`, `!`
+- automatic synthesis of readable logic expressions into ordinary NAND-based Rewired circuits
 - 1-bit, 4-bit and 8-bit ports
 - references to existing builtin or custom chips
 - automatic gate placement by dependency depth
@@ -105,20 +108,25 @@ Current v0.1 features include:
 Example:
 
 ```text
-chip NandWrapper {
-  input a
-  input b
-  output y
+chip HalfAdder {
+  input a, b
+  output sum, carry
 
-  NAND n1
-
-  connect a -> n1.IN_A
-  connect b -> n1.IN_B
-  connect n1.OUT -> y
+  sum = a XOR b
+  carry = a AND b
 }
 ```
 
-Pin names containing spaces can be written with underscores, for example `IN_A` resolves to `IN A`.
+The structural form remains available when exact topology is desired:
+
+```text
+NAND n1
+connect a -> n1.IN_A
+connect b -> n1.IN_B
+connect n1.OUT -> y
+```
+
+Pin names containing spaces can be written with underscores, for example `IN_A` resolves to `IN A`. In RHDL Studio, Enter splits the current source line at the caret and continues editing on the newly created line.
 
 ## Current development
 
