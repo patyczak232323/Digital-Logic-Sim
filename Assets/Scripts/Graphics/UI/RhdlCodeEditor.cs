@@ -28,6 +28,12 @@ namespace DLS.Graphics
 		const float TextPad = 0.45f;
 		const string Indent = "  ";
 
+		static readonly HashSet<string> SyntaxKeywords = new(StringComparer.OrdinalIgnoreCase)
+		{
+			"chip", "input", "output", "wire", "param", "connect", "use",
+			"AND", "OR", "XOR", "NOT"
+		};
+
 		readonly UIHandle scrollID = new("RHDL_DocumentScroll");
 		readonly UI.ScrollViewDrawElementFunc drawLineCallback;
 		readonly List<EditorSnapshot> undoHistory = new();
@@ -204,13 +210,75 @@ namespace DLS.Graphics
 				Vector2 textPos = new(textX, row.Centre.y);
 
 				DrawSelectionForLine(lineIndex, row, textX);
-				UI.DrawText(line, activeTheme.font, activeTheme.fontSize, textPos, Anchor.TextCentreLeft, activeTheme.textCol);
+				DrawSyntaxLine(line, textPos);
 				DrawCaretForLine(lineIndex, row, textX);
 
 				HandleMouseForLine(lineIndex, row, textX);
 			}
 
 			UI.OverridePreviousBounds(row);
+		}
+
+		void DrawSyntaxLine(string line, Vector2 textPos)
+		{
+			if (string.IsNullOrEmpty(line)) return;
+
+			int commentStart = line.IndexOf("//", StringComparison.Ordinal);
+			int codeEnd = commentStart >= 0 ? commentStart : line.Length;
+			int i = 0;
+			while (i < codeEnd)
+			{
+				if (char.IsWhiteSpace(line[i]))
+				{
+					i++;
+					continue;
+				}
+
+				int start = i;
+				Color colour = activeTheme.textCol;
+
+				if (char.IsLetter(line[i]) || line[i] == '_')
+				{
+					i++;
+					while (i < codeEnd && (char.IsLetterOrDigit(line[i]) || line[i] is '_' or '.')) i++;
+					string token = line.Substring(start, i - start);
+					if (SyntaxKeywords.Contains(token)) colour = RewiredUI.Accent;
+				}
+				else if (char.IsDigit(line[i]))
+				{
+					i++;
+					while (i < codeEnd && (char.IsLetterOrDigit(line[i]) || line[i] == '_')) i++;
+					colour = new Color(0.92f, 0.76f, 0.43f);
+				}
+				else if ("{}[]():?,=+-&|^!~<>;".IndexOf(line[i]) >= 0)
+				{
+					i++;
+					while (i < codeEnd && "{}[]():?,=+-&|^!~<>;".IndexOf(line[i]) >= 0) i++;
+					colour = RewiredUI.SecondaryText;
+				}
+				else
+				{
+					i++;
+				}
+
+				DrawSyntaxSegment(line, start, i - start, textPos, colour);
+			}
+
+			if (commentStart >= 0)
+				DrawSyntaxSegment(line, commentStart, line.Length - commentStart, textPos, new Color(0.49f, 0.72f, 0.54f));
+		}
+
+		void DrawSyntaxSegment(string line, int start, int length, Vector2 textPos, Color colour)
+		{
+			if (length <= 0) return;
+			float x = textPos.x + PrefixWidth(line, start);
+			UI.DrawText(
+				line.Substring(start, length),
+				activeTheme.font,
+				activeTheme.fontSize,
+				new Vector2(x, textPos.y),
+				Anchor.TextCentreLeft,
+				colour);
 		}
 
 		void DrawSelectionForLine(int lineIndex, Bounds2D row, float textX)
