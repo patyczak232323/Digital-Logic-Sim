@@ -191,7 +191,7 @@ namespace DLS.Graphics
 				bounds.CentreLeft + Vector2.right * 0.9f,
 				Anchor.TextCentreLeft,
 				Color.white);
-			UI.DrawLine(bounds.BottomLeft, bounds.BottomRight, 0.07f, ColHelper.MakeCol255(72, 108, 233));
+			UI.DrawLine(bounds.BottomLeft, bounds.BottomRight, 0.07f, theme.MainMenuButtonTheme.buttonCols.hover);
 			UI.OverridePreviousBounds(bounds);
 		}
 
