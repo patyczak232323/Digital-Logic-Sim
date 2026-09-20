@@ -1424,7 +1424,8 @@ namespace DLS.RHDL
 						int cost = a[i - 1] == b[j - 1] ? 0 : 1;
 						current[j] = Math.Min(Math.Min(current[j - 1] + 1, previous[j] + 1), previous[j - 1] + cost);
 					}
-					(int[] tmp, previous) = (previous, current);
+					int[] tmp = previous;
+					previous = current;
 					current = tmp;
 				}
 				return previous[b.Length];
