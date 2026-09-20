@@ -543,6 +543,12 @@ namespace DLS.Simulation
 				Assert(result.Success,
 					sourcePath + " failed: " + string.Join(" | ", result.Diagnostics.Select(d => d.ToString())));
 				Assert(result.Description != null, sourcePath + " returned no chip description");
+
+				// This test validates RHDL compilation/execution, not the cache builder.
+				// Keep the large 21-bit RW8_ALU8 from queueing a 2,097,152-entry
+				// background FULL LUT that can starve the dedicated cache regression.
+				result.Description.CacheMode = ChipCacheMode.Normal;
+
 				descriptions.Add(result.Description);
 				core = result.Description;
 			}
