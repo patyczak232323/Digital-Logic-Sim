@@ -10,15 +10,23 @@ namespace DLS.RHDL
 	public sealed class RhdlDiagnostic
 	{
 		public readonly int Line;
+		public readonly int Column;
 		public readonly string Message;
 
-		public RhdlDiagnostic(int line, string message)
+		public RhdlDiagnostic(int line, string message) : this(line, 0, message) { }
+
+		public RhdlDiagnostic(int line, int column, string message)
 		{
 			Line = line;
+			Column = column;
 			Message = message;
 		}
 
-		public override string ToString() => Line > 0 ? $"line {Line}: {Message}" : Message;
+		public override string ToString()
+		{
+			if (Line <= 0) return Message;
+			return Column > 0 ? $"line {Line}, col {Column}: {Message}" : $"line {Line}: {Message}";
+		}
 	}
 
 	public sealed class RhdlCompileResult
@@ -117,6 +125,23 @@ namespace DLS.RHDL
 		}
 
 		public static RhdlCompileResult Compile(string source, ChipLibrary library)
+		{
+			RhdlLowerResult lowered = RhdlV3Lowerer.Lower(source, library);
+			if (!lowered.Success) return new RhdlCompileResult(null, lowered.Diagnostics);
+
+			RhdlCompileResult legacy = CompileLegacy(lowered.Source, library);
+			if (legacy.Diagnostics.Length == 0) return legacy;
+
+			List<RhdlDiagnostic> mapped = new();
+			foreach (RhdlDiagnostic diagnostic in legacy.Diagnostics)
+			{
+				int line = lowered.MapGeneratedLine(diagnostic.Line);
+				mapped.Add(new RhdlDiagnostic(line, diagnostic.Column, diagnostic.Message));
+			}
+			return new RhdlCompileResult(legacy.Description, mapped);
+		}
+
+		static RhdlCompileResult CompileLegacy(string source, ChipLibrary library)
 		{
 			List<RhdlDiagnostic> diagnostics = new();
 			List<PortDecl> ports = new();
