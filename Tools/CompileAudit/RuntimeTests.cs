@@ -105,6 +105,35 @@ namespace DLS.Simulation
 			Assert(result.Description.SubChips.Length == 5, "RHDL NAND count mismatch");
 			Assert(result.Description.Wires.Length == 12, "RHDL wire count mismatch");
 			Assert(result.Description.SubChips.Select(s => s.ID).Distinct().Count() == 5, "RHDL subchip IDs are not unique");
+
+			Simulator.Reset();
+			DeterministicSimulator.Reset();
+			SimChip root = Simulator.BuildSimChip(result.Description, library);
+			DevPinInstance[] inputs =
+			{
+				new DevPinInstance(),
+				new DevPinInstance()
+			};
+			inputs[0].Pin.Address = new PinAddress(result.Description.InputPins[0].ID, 0);
+			inputs[1].Pin.Address = new PinAddress(result.Description.InputPins[1].ID, 0);
+
+			for (uint a = 0; a <= 1; a++)
+			{
+				for (uint b = 0; b <= 1; b++)
+				{
+					inputs[0].Pin.PlayerInputState = a;
+					inputs[1].Pin.PlayerInputState = b;
+					DeterministicSimulator.RunSimulationStep(root, inputs, new SimAudio());
+
+					uint sum = Bit(root.OutputPins[0].State);
+					uint carry = Bit(root.OutputPins[1].State);
+					Assert(sum == (a ^ b), $"RHDL HalfAdder sum mismatch for {a}{b}: {sum}");
+					Assert(carry == (a & b), $"RHDL HalfAdder carry mismatch for {a}{b}: {carry}");
+				}
+			}
+
+			DeterministicSimulator.Reset();
+			Simulator.Reset();
 		}
 
 		static void TestFeedbackNandLatch()
