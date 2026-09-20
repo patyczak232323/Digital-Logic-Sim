@@ -1,0 +1,9 @@
+// Rewired-8: 16-bit register represented as two 8-bit halves.
+chip RW8_REG16 {
+  input D_LO: 8, D_HI: 8
+  input WE, CLK, RESET
+  output Q_LO: 8, Q_HI: 8
+
+  RW8_REG8 lo(D=D_LO, WE=WE, CLK=CLK, RESET=RESET, Q=Q_LO)
+  RW8_REG8 hi(D=D_HI, WE=WE, CLK=CLK, RESET=RESET, Q=Q_HI)
+}
