@@ -23,8 +23,19 @@ namespace DLS.Graphics
 			bool major = false,
 			string rightText = null)
 		{
-			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
 			float height = major ? 2.7f : SectionHeaderHeight;
+			return DrawSectionHeader(title, topLeft, width, height, major, rightText);
+		}
+
+		public static Bounds2D DrawSectionHeader(
+			string title,
+			Vector2 topLeft,
+			float width,
+			float height,
+			bool major,
+			string rightText = null)
+		{
+			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
 			Color bg = ColHelper.Darken(theme.MenuPanelCol, major ? 0.02f : 0.035f);
 
 			UI.DrawPanel(topLeft, new Vector2(width, height), bg, Anchor.TopLeft);
