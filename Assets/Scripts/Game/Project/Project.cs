@@ -144,7 +144,7 @@ namespace DLS.Game
 
 			if (UIDrawer.ActiveMenu == UIDrawer.MenuType.None)
 			{
-				Simulator.UpdateKeyboardInputFromMainThread();
+				RewiredEngine.UpdateKeyboardInputFromMainThread();
 			}
 
 			inputPins = editModeChip.GetInputPins();
@@ -318,7 +318,7 @@ namespace DLS.Game
 					SaveFromDescription(descNew);
 				}
 
-				SimChip simChip = Simulator.BuildSimChip(devChip.LastSavedDescription, chipLibrary);
+				SimChip simChip = RewiredEngine.BuildChip(devChip.LastSavedDescription, chipLibrary);
 				devChip.SetSimChip(simChip);
 				SetNewActiveDevChip(devChip);
 			}
@@ -691,16 +691,16 @@ namespace DLS.Game
 
 			while (simThreadActive)
 			{
-				Simulator.ApplyModifications();
+				RewiredEngine.ApplyPendingModifications();
 
 				// Power-on/topology settling is not a simulation tick and must also run
 				// while the user has the simulator paused. No clock edge or sequential
 				// component is advanced by EnsureInitialized().
-				Simulator.stepsPerClockTransition = stepsPerClockTransition;
+				RewiredEngine.StepsPerClockTransition = stepsPerClockTransition;
 				SimChip initChip = rootSimChip;
 				if (initChip != null)
 				{
-					Simulator.EnsureInitialized(initChip, inputPins, audioState.simAudio);
+					RewiredEngine.EnsureInitialized(initChip, inputPins, audioState.simAudio);
 				}
 
 				ProcessReplayControlCommand(initChip);
@@ -717,7 +717,7 @@ namespace DLS.Game
 					if (debug_logSimTime)
 					{
 						double elapsedMs = stopwatchTotal.ElapsedTicks * (1000.0 / Stopwatch.Frequency);
-						int frame = Simulator.simulationFrame;
+						int frame = RewiredEngine.SimulationFrame;
 						if (frame > 0) UnityEngine.Debug.Log($"Avg sim step time: {elapsedMs / frame} ms NumSteps: {frame} secs: {elapsedMs / 1000.0:0.00}");
 					}
 				}
@@ -726,7 +726,7 @@ namespace DLS.Game
 				// Also handle advancing a single step
 				if (simPaused && !advanceSingleSimStep)
 				{
-					Simulator.UpdateInPausedState();
+					RewiredEngine.UpdatePaused();
 					stopwatchTotal.Stop();
 					Thread.Sleep(10);
 					continue;
@@ -744,11 +744,11 @@ namespace DLS.Game
 				if (!stopwatchTotal.IsRunning) stopwatchTotal.Start();
 
 				// ---- Run sim ----
-				Simulator.stepsPerClockTransition = stepsPerClockTransition;
+				RewiredEngine.StepsPerClockTransition = stepsPerClockTransition;
 				SimChip simChip = rootSimChip;
 				if (simChip == null) continue; // Could potentially be null for a frame when switching between chips
-				Simulator.SetInspectionChip(ViewedSimChip);
-				Simulator.RunSimulationStep(simChip, inputPins, audioState.simAudio);
+				RewiredEngine.SetInspectionChip(ViewedSimChip);
+				RewiredEngine.RunStep(simChip, inputPins, audioState.simAudio);
 
 				// ---- Wait some amount of time (if needed) to try to hit the target ticks per second ----
 				while (true)
@@ -794,10 +794,10 @@ namespace DLS.Game
 
 		void Debug_RunMainThreadSimStep()
 		{
-			Simulator.stepsPerClockTransition = stepsPerClockTransition;
-			Simulator.ApplyModifications();
-			Simulator.SetInspectionChip(ViewedSimChip);
-			Simulator.RunSimulationStep(rootSimChip, inputPins, audioState.simAudio);
+			RewiredEngine.StepsPerClockTransition = stepsPerClockTransition;
+			RewiredEngine.ApplyPendingModifications();
+			RewiredEngine.SetInspectionChip(ViewedSimChip);
+			RewiredEngine.RunStep(rootSimChip, inputPins, audioState.simAudio);
 			ViewedChip.UpdateStateFromSim(ViewedSimChip, !CanEditViewedChip);
 		}
 
