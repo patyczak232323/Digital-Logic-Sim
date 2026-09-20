@@ -5,6 +5,7 @@ using DLS.Description;
 using DLS.Game;
 using DLS.Simulation;
 using Seb.Helpers;
+using Seb.Types;
 using Seb.Vis;
 using Seb.Vis.UI;
 using UnityEngine;
