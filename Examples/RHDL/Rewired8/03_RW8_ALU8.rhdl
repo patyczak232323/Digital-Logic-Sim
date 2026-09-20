@@ -1,0 +1,87 @@
+// Rewired-8 ALU for opcodes 0x10-0x1F.
+// A is Rd. B is Rs or the sign-extended immediate selected by the core.
+// C follows RW8 borrow semantics for subtraction: C=1 means borrow.
+chip RW8_ALU8 {
+  input A: 8, B: 8
+  input OP: 4
+  input CIN
+
+  output R: 8
+  output Z, C, N, V
+
+  wire add0: 8
+  wire adc: 8
+  wire sub: 8
+  wire sbc_b: 8
+  wire sbc: 8
+  wire andv: 8
+  wire orv: 8
+  wire xorv: 8
+  wire notv: 8
+  wire negv: 8
+  wire incv: 8
+  wire decv: 8
+  wire result: 8
+
+  wire add_c
+  wire adc_c0
+  wire adc_c1
+  wire adc_c
+  wire sub_c
+  wire sbc_b_c
+  wire sbc_c
+  wire neg_c
+  wire inc_c
+  wire dec_c
+
+  wire add_v
+  wire adc_v
+  wire sub_v
+  wire sbc_v
+  wire neg_v
+  wire inc_v
+  wire dec_v
+
+  add0 = A + B
+  adc = add0 + (CIN ? 0x01 : 0x00)
+  sub = A - B
+  sbc_b = B + (CIN ? 0x01 : 0x00)
+  sbc = A - sbc_b
+
+  andv = A & B
+  orv = A | B
+  xorv = A ^ B
+  notv = !A
+  negv = 0x00 - A
+  incv = A + 0x01
+  decv = A - 0x01
+
+  add_c = add0 < A
+  adc_c0 = add0 < A
+  adc_c1 = adc < add0
+  adc_c = adc_c0 | adc_c1
+  sub_c = A < B
+  sbc_b_c = sbc_b < B
+  sbc_c = sbc_b_c | (A < sbc_b)
+  neg_c = 0x00 < A
+  inc_c = incv < A
+  dec_c = A == 0x00
+
+  add_v = !(A[7] ^ B[7]) & (add0[7] ^ A[7])
+  adc_v = !(A[7] ^ B[7]) & (adc[7] ^ A[7])
+  sub_v = (A[7] ^ B[7]) & (sub[7] ^ A[7])
+  sbc_v = (A[7] ^ B[7]) & (sbc[7] ^ A[7])
+  neg_v = A == 0x80
+  inc_v = A == 0x7F
+  dec_v = A == 0x80
+
+  result = OP == 0x0 ? add0 : OP == 0x1 ? adc : OP == 0x2 ? sub : OP == 0x3 ? sbc : OP == 0x4 ? sub : OP == 0x5 ? andv : OP == 0x6 ? orv : OP == 0x7 ? xorv : OP == 0x8 ? notv : OP == 0x9 ? negv : OP == 0xA ? incv : OP == 0xB ? decv : OP == 0xC ? add0 : OP == 0xD ? sub : OP == 0xE ? sub : andv
+
+  R = result
+  Z = result == 0x00
+  N = result[7]
+
+  C = OP == 0x0 ? add_c : OP == 0x1 ? adc_c : OP == 0x2 ? sub_c : OP == 0x3 ? sbc_c : OP == 0x4 ? sub_c : OP == 0x5 ? 0 : OP == 0x6 ? 0 : OP == 0x7 ? 0 : OP == 0x8 ? 0 : OP == 0x9 ? neg_c : OP == 0xA ? inc_c : OP == 0xB ? dec_c : OP == 0xC ? add_c : OP == 0xD ? sub_c : OP == 0xE ? sub_c : 0
+
+  V = OP == 0x0 ? add_v : OP == 0x1 ? adc_v : OP == 0x2 ? sub_v : OP == 0x3 ? sbc_v : OP == 0x4 ? sub_v : OP == 0x5 ? 0 : OP == 0x6 ? 0 : OP == 0x7 ? 0 : OP == 0x8 ? 0 : OP == 0x9 ? neg_v : OP == 0xA ? inc_v : OP == 0xB ? dec_v : OP == 0xC ? add_v : OP == 0xD ? sub_v : OP == 0xE ? sub_v : 0
+}
