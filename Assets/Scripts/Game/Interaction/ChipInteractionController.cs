@@ -182,6 +182,25 @@ namespace DLS.Game
 			if (HasControl) devPin.ToggleState(bitIndex);
 		}
 
+		public void MirrorSubChips(IEnumerable<SubChipInstance> subchips, bool horizontal)
+		{
+			if (!HasControl || IsPlacingOrMovingElementOrCreatingWire) return;
+
+			List<SubChipInstance> mirrorTargets = subchips
+				.Where(s => s != null && !s.IsBus)
+				.Distinct()
+				.ToList();
+
+			if (mirrorTargets.Count == 0) return;
+
+			ActiveDevChip.UndoController.RecordMirrorSubChips(mirrorTargets, horizontal);
+			foreach (SubChipInstance subchip in mirrorTargets)
+			{
+				if (horizontal) subchip.MirrorHorizontal();
+				else subchip.MirrorVertical();
+			}
+		}
+
 		void HandleKeyboardInput()
 		{
 			// Ignore shortcuts if don't have control
@@ -205,6 +224,15 @@ namespace DLS.Game
 				{
 					DuplicateSelectedElements();
 				}
+			}
+
+			if (KeyboardShortcuts.MirrorHorizontalShortcutTriggered)
+			{
+				MirrorSubChips(SelectedElements.OfType<SubChipInstance>(), true);
+			}
+			if (KeyboardShortcuts.MirrorVerticalShortcutTriggered)
+			{
+				MirrorSubChips(SelectedElements.OfType<SubChipInstance>(), false);
 			}
 
 			if (KeyboardShortcuts.DeleteShortcutTriggered)
