@@ -389,6 +389,8 @@ namespace DLS.Graphics
 			Bounds2D bounds = Bounds2D.CreateEmpty();
 
 			Vector2 posLocal = display.Desc.Position;
+			if (rootChip.MirrorX) posLocal.x = -posLocal.x;
+			if (rootChip.MirrorY) posLocal.y = -posLocal.y;
 			Vector2 posWorld = posParent + posLocal * parentScale;
 			float scaleWorld = display.Desc.Scale * parentScale;
 
@@ -873,7 +875,7 @@ namespace DLS.Graphics
 		static void DrawMultiBitPin(PinInstance pin)
 		{
 			Vector2 pinPos = pin.GetWorldPos();
-			Vector2 pinSelectionBoundsPos = pinPos + Vector2.right * ((pin.IsSourcePin ? 1 : -1) * 0.02f);
+			Vector2 pinSelectionBoundsPos = pinPos + pin.ForwardDir * 0.02f;
 			const float pinWidth = PinRadius * 2 * 0.95f;
 			float pinHeight = SubChipInstance.PinHeightFromBitCount(pin.bitCount);
 			Vector2 pinSize = new(pinWidth, pinHeight);
