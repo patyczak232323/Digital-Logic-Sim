@@ -39,14 +39,14 @@ chip RW8_REGFILE8 {
   we6 = WE & RD2 & RD1 & !RD0
   we7 = WE & RD2 & RD1 & RD0
 
-  RW8_REG8 r0(D=D, WE=we0, CLK=CLK, RESET=RESET, Q=q0)
-  RW8_REG8 r1(D=D, WE=we1, CLK=CLK, RESET=RESET, Q=q1)
-  RW8_REG8 r2(D=D, WE=we2, CLK=CLK, RESET=RESET, Q=q2)
-  RW8_REG8 r3(D=D, WE=we3, CLK=CLK, RESET=RESET, Q=q3)
-  RW8_REG8 r4(D=D, WE=we4, CLK=CLK, RESET=RESET, Q=q4)
-  RW8_REG8 r5(D=D, WE=we5, CLK=CLK, RESET=RESET, Q=q5)
-  RW8_REG8 r6(D=D, WE=we6, CLK=CLK, RESET=RESET, Q=q6)
-  RW8_REG8 r7(D=D, WE=we7, CLK=CLK, RESET=RESET, Q=q7)
+  RW8_REG8 cell0(D=D, WE=we0, CLK=CLK, RESET=RESET, Q=q0)
+  RW8_REG8 cell1(D=D, WE=we1, CLK=CLK, RESET=RESET, Q=q1)
+  RW8_REG8 cell2(D=D, WE=we2, CLK=CLK, RESET=RESET, Q=q2)
+  RW8_REG8 cell3(D=D, WE=we3, CLK=CLK, RESET=RESET, Q=q3)
+  RW8_REG8 cell4(D=D, WE=we4, CLK=CLK, RESET=RESET, Q=q4)
+  RW8_REG8 cell5(D=D, WE=we5, CLK=CLK, RESET=RESET, Q=q5)
+  RW8_REG8 cell6(D=D, WE=we6, CLK=CLK, RESET=RESET, Q=q6)
+  RW8_REG8 cell7(D=D, WE=we7, CLK=CLK, RESET=RESET, Q=q7)
 
   A = RA2 ? (RA1 ? (RA0 ? q7 : q6) : (RA0 ? q5 : q4)) : (RA1 ? (RA0 ? q3 : q2) : (RA0 ? q1 : q0))
   B = RB2 ? (RB1 ? (RB0 ? q7 : q6) : (RB0 ? q5 : q4)) : (RB1 ? (RB0 ? q3 : q2) : (RB0 ? q1 : q0))
