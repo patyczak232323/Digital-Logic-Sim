@@ -23,11 +23,25 @@ Supported signal widths are currently **1, 4 and 8 bits**.
 input enable
 input A: 8
 input B[8]
-output Y: 8
-wire temp: 8
+output Y
+wire temp
 ```
 
 `A: 8` and `A[8]` both declare an 8-bit signal.
+
+Inputs without a width default to 1 bit. Outputs and wires may omit the width when it can be inferred from an assignment or structural connection:
+
+```text
+input A: 8
+input B: 8
+output Y
+wire sum
+
+sum = A + B
+Y = sum
+```
+
+Here both `sum` and `Y` become 8-bit automatically. Comparisons infer to 1 bit, and slices infer to the slice width.
 
 Do not use `A[7:0]` in a declaration. Ranges are expression slices:
 
