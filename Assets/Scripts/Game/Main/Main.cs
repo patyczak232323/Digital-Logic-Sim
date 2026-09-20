@@ -51,6 +51,7 @@ namespace DLS.Game
 
 		public static void SaveAndApplyAppSettings(AppSettings newSettings)
 		{
+			newSettings = AppSettings.Normalize(newSettings);
 			// Save new settings
 			ActiveAppSettings = newSettings;
 			Saver.SaveAppSettings(newSettings);
