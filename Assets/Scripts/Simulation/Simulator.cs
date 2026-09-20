@@ -9,7 +9,7 @@ using Random = System.Random;
 
 namespace DLS.Simulation
 {
-	public static class Simulator
+	internal static class Simulator
 	{
 		const int Address8BitMask = 0xFF;
 
