@@ -21,6 +21,7 @@ namespace DLS.Simulation
 			Run("RHDL readable logic synthesis", TestRhdlReadableLogicSynthesis);
 			Run("RHDL v0.3 buses, arithmetic, slices and mux", TestRhdlV3BusExpressions);
 			Run("RHDL v0.3 operators, constants and named ports", TestRhdlV3OperatorsAndNamedPorts);
+			Run("Rewired-8 RHDL source pack compiles", TestRewired8RhdlPackCompilation);
 			Run("feedback NAND latch", TestFeedbackNandLatch);
 			Run("feedback unchanged-input zero sweep", TestFeedbackZeroSweep);
 			Run("feedback state materialization", TestFeedbackMaterialization);
@@ -437,6 +438,120 @@ namespace DLS.Simulation
 
 			DeterministicSimulator.Reset();
 			Simulator.Reset();
+		}
+
+		static void TestRewired8RhdlPackCompilation()
+		{
+			PinDescription P(string name, int id, PinBitCount bits = PinBitCount.Bit1) =>
+				new(name, id, new UnityEngine.Vector2(), bits, PinColour.Red, PinValueDisplayMode.Off);
+
+			ChipDescription Builtin(
+				string name,
+				ChipType type,
+				PinDescription[] inputs,
+				PinDescription[] outputs) =>
+				new()
+				{
+					Name = name,
+					ChipType = type,
+					InputPins = inputs ?? Array.Empty<PinDescription>(),
+					OutputPins = outputs ?? Array.Empty<PinDescription>(),
+					SubChips = Array.Empty<SubChipDescription>(),
+					Wires = Array.Empty<WireDescription>(),
+					Displays = Array.Empty<DisplayDescription>()
+				};
+
+			ChipDescription nand = Builtin(
+				"NAND",
+				ChipType.Nand,
+				new[] { P("IN B", 0), P("IN A", 1) },
+				new[] { P("OUT", 2) });
+
+			ChipDescription ram = Builtin(
+				"dev.RAM-8",
+				ChipType.dev_Ram_8Bit,
+				new[]
+				{
+					P("ADDRESS", 0, PinBitCount.Bit8),
+					P("DATA", 1, PinBitCount.Bit8),
+					P("WRITE", 2),
+					P("RESET", 3),
+					P("CLOCK", 4)
+				},
+				new[] { P("OUT", 5, PinBitCount.Bit8) });
+
+			ChipDescription split8 = Builtin(
+				"8-1BIT",
+				ChipType.Split_8To1Bit,
+				new[] { P("IN", 0, PinBitCount.Bit8) },
+				Enumerable.Range(0, 8).Select(i => P("OUT " + (char)('H' - i), 1 + i)).ToArray());
+
+			ChipDescription split4 = Builtin(
+				"4-1BIT",
+				ChipType.Split_4To1Bit,
+				new[] { P("IN", 0, PinBitCount.Bit4) },
+				Enumerable.Range(0, 4).Select(i => P("OUT " + (char)('D' - i), 1 + i)).ToArray());
+
+			ChipDescription merge8 = Builtin(
+				"1-8BIT",
+				ChipType.Merge_1To8Bit,
+				Enumerable.Range(0, 8).Select(i => P("IN " + (char)('H' - i), i)).ToArray(),
+				new[] { P("OUT", 8, PinBitCount.Bit8) });
+
+			ChipDescription merge4 = Builtin(
+				"1-4BIT",
+				ChipType.Merge_1To4Bit,
+				Enumerable.Range(0, 4).Select(i => P("IN " + (char)('D' - i), i)).ToArray(),
+				new[] { P("OUT", 4, PinBitCount.Bit4) });
+
+			ChipDescription Bus(string name, ChipType type, PinBitCount bits) =>
+				Builtin(
+					name,
+					type,
+					new[] { P(name + " (Hidden)", 0, bits) },
+					new[] { P(name, 1, bits) });
+
+			List<ChipDescription> descriptions = new()
+			{
+				nand,
+				ram,
+				split8,
+				split4,
+				merge8,
+				merge4,
+				Bus("BUS-1", ChipType.Bus_1Bit, PinBitCount.Bit1),
+				Bus("BUS-4", ChipType.Bus_4Bit, PinBitCount.Bit4),
+				Bus("BUS-8", ChipType.Bus_8Bit, PinBitCount.Bit8)
+			};
+
+			string[] sources =
+			{
+				"Examples/RHDL/Rewired8/00_RW8_REG8.rhdl",
+				"Examples/RHDL/Rewired8/01_RW8_REG16.rhdl",
+				"Examples/RHDL/Rewired8/02_RW8_REGFILE8.rhdl",
+				"Examples/RHDL/Rewired8/03_RW8_ALU8.rhdl",
+				"Examples/RHDL/Rewired8/04_RW8_SHIFTBIT8.rhdl",
+				"Examples/RHDL/Rewired8/05_RW8_CORE.rhdl"
+			};
+
+			ChipDescription core = null;
+			foreach (string sourcePath in sources)
+			{
+				Assert(File.Exists(sourcePath), "Missing RHDL source: " + sourcePath);
+				ChipLibrary library = new(descriptions.ToArray());
+				RhdlCompileResult result = RhdlCompiler.Compile(File.ReadAllText(sourcePath), library);
+				Assert(result.Success,
+					sourcePath + " failed: " + string.Join(" | ", result.Diagnostics.Select(d => d.ToString())));
+				Assert(result.Description != null, sourcePath + " returned no chip description");
+				descriptions.Add(result.Description);
+				core = result.Description;
+			}
+
+			Assert(core != null && core.Name == "RW8_CORE", "Rewired-8 source pack did not finish at RW8_CORE");
+			Assert(core.InputPins.Any(p => p.Name == "IMEM_HI" && p.BitCount == PinBitCount.Bit8), "RW8_CORE missing IMEM_HI");
+			Assert(core.OutputPins.Any(p => p.Name == "DMEM_ADDR_HI" && p.BitCount == PinBitCount.Bit8), "RW8_CORE missing 16-bit data address high byte");
+			Assert(core.OutputPins.Any(p => p.Name == "HALTED"), "RW8_CORE missing HALTED output");
+			Assert(core.SubChips.Length > 100, "RW8_CORE unexpectedly small; high-level logic was not lowered");
 		}
 
 		static void TestFeedbackNandLatch()
