@@ -129,10 +129,10 @@ namespace DLS.Graphics
 					: "Accel: no profiler sample";
 				DrawInfoRow(ref pos, accelerationText, SimulationProfiler.Enabled ? textCol : dim);
 
-				string convergence = DeterministicSimulator.LastSettleConverged
+				string convergence = RewiredEngine.Diagnostics.SettleConverged
 					? "Convergence: OK"
-					: "FAILED: " + DeterministicSimulator.LastNonConvergenceDetails;
-				DrawInfoRow(ref pos, convergence, DeterministicSimulator.LastSettleConverged ? dim : Color.yellow);
+					: "FAILED: " + RewiredEngine.Diagnostics.NonConvergenceDetails;
+				DrawInfoRow(ref pos, convergence, RewiredEngine.Diagnostics.SettleConverged ? dim : Color.yellow);
 
 				pos.y -= 0.5f;
 				UI.DrawText("HOT CHIPS", theme.FontBold, theme.FontSizeRegular, pos + Vector2.right * textPadX, Anchor.TextCentreLeft, textCol);
@@ -327,7 +327,7 @@ namespace DLS.Graphics
 				float zY = bounds.Bottom + 2.1f;
 
 				int startFrame = samples[start].Frame;
-				int endFrame = Math.Max(samples[^1].Frame, DLS.Simulation.Simulator.simulationFrame);
+				int endFrame = Math.Max(samples[^1].Frame, RewiredEngine.SimulationFrame);
 				int frameSpan = Math.Max(1, endFrame - startFrame);
 
 				float XForFrame(int frame) =>
