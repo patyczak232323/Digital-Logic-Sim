@@ -1,0 +1,62 @@
+// Rewired-8: R0-R7, two asynchronous read ports and one clocked write port.
+// Register addresses are three individual bits because RHDL v0.3 buses are 1/4/8-bit.
+chip RW8_REGFILE8 {
+  input D: 8
+  input WE
+  input RD0, RD1, RD2
+  input RA0, RA1, RA2
+  input RB0, RB1, RB2
+  input CLK, RESET
+
+  output A: 8, B: 8
+  output R0: 8, R1: 8, R2: 8, R3: 8
+  output R4: 8, R5: 8, R6: 8, R7: 8
+
+  wire q0: 8
+  wire q1: 8
+  wire q2: 8
+  wire q3: 8
+  wire q4: 8
+  wire q5: 8
+  wire q6: 8
+  wire q7: 8
+
+  wire we0
+  wire we1
+  wire we2
+  wire we3
+  wire we4
+  wire we5
+  wire we6
+  wire we7
+
+  we0 = WE & !RD2 & !RD1 & !RD0
+  we1 = WE & !RD2 & !RD1 & RD0
+  we2 = WE & !RD2 & RD1 & !RD0
+  we3 = WE & !RD2 & RD1 & RD0
+  we4 = WE & RD2 & !RD1 & !RD0
+  we5 = WE & RD2 & !RD1 & RD0
+  we6 = WE & RD2 & RD1 & !RD0
+  we7 = WE & RD2 & RD1 & RD0
+
+  RW8_REG8 r0(D=D, WE=we0, CLK=CLK, RESET=RESET, Q=q0)
+  RW8_REG8 r1(D=D, WE=we1, CLK=CLK, RESET=RESET, Q=q1)
+  RW8_REG8 r2(D=D, WE=we2, CLK=CLK, RESET=RESET, Q=q2)
+  RW8_REG8 r3(D=D, WE=we3, CLK=CLK, RESET=RESET, Q=q3)
+  RW8_REG8 r4(D=D, WE=we4, CLK=CLK, RESET=RESET, Q=q4)
+  RW8_REG8 r5(D=D, WE=we5, CLK=CLK, RESET=RESET, Q=q5)
+  RW8_REG8 r6(D=D, WE=we6, CLK=CLK, RESET=RESET, Q=q6)
+  RW8_REG8 r7(D=D, WE=we7, CLK=CLK, RESET=RESET, Q=q7)
+
+  A = RA2 ? (RA1 ? (RA0 ? q7 : q6) : (RA0 ? q5 : q4)) : (RA1 ? (RA0 ? q3 : q2) : (RA0 ? q1 : q0))
+  B = RB2 ? (RB1 ? (RB0 ? q7 : q6) : (RB0 ? q5 : q4)) : (RB1 ? (RB0 ? q3 : q2) : (RB0 ? q1 : q0))
+
+  R0 = q0
+  R1 = q1
+  R2 = q2
+  R3 = q3
+  R4 = q4
+  R5 = q5
+  R6 = q6
+  R7 = q7
+}
