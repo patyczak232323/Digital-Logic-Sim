@@ -497,18 +497,31 @@ namespace DLS.RHDL
 		{
 			expression = null;
 			error = null;
-			List<ExprToken> tokens = TokenizeExpression(text, out error);
-			if (tokens == null) return false;
+			string localError = null;
+
+			List<ExprToken> tokens = TokenizeExpression(text, out localError);
+			if (tokens == null)
+			{
+				error = localError;
+				return false;
+			}
 
 			int index = 0;
 			expression = ParseOr();
-			if (expression == null) return false;
+			if (expression == null)
+			{
+				error = localError;
+				return false;
+			}
+
 			if (index != tokens.Count)
 			{
 				error = $"Unexpected token '{tokens[index].Text}' in expression.";
 				expression = null;
 				return false;
 			}
+
+			error = localError;
 			return true;
 
 			ExprNode ParseOr()
@@ -516,10 +529,9 @@ namespace DLS.RHDL
 				ExprNode left = ParseXor();
 				while (left != null && Match("OR", "|"))
 				{
-					string op = "OR";
 					ExprNode right = ParseXor();
 					if (right == null) return null;
-					left = new BinaryExpr(op, left, right);
+					left = new BinaryExpr("OR", left, right);
 				}
 				return left;
 			}
@@ -555,7 +567,7 @@ namespace DLS.RHDL
 					ExprNode value = ParseUnary();
 					if (value == null)
 					{
-						error = "Expected expression after NOT.";
+						localError = "Expected expression after NOT.";
 						return null;
 					}
 					return new UnaryExpr("NOT", value);
@@ -571,7 +583,7 @@ namespace DLS.RHDL
 					if (inner == null) return null;
 					if (!Match(")"))
 					{
-						error = "Missing ')' in expression.";
+						localError = "Missing ')' in expression.";
 						return null;
 					}
 					return inner;
@@ -579,14 +591,14 @@ namespace DLS.RHDL
 
 				if (index >= tokens.Count)
 				{
-					error = "Expected signal name or expression.";
+					localError = "Expected signal name or expression.";
 					return null;
 				}
 
 				string token = tokens[index].Text;
 				if (token is ")" or "&" or "|" or "^")
 				{
-					error = $"Unexpected token '{token}'.";
+					localError = $"Unexpected token '{token}'.";
 					return null;
 				}
 
