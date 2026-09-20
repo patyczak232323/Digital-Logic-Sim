@@ -410,7 +410,10 @@ namespace DLS.RHDL
 						continue;
 					}
 
-					diagnostics.Add(new RhdlDiagnostic(lineNo, $"Unrecognized statement: {line}"));
+					string firstWord = line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? line;
+					string hint = Suggestion(firstWord, new[] { "input", "output", "wire", "connect", "param", "use" });
+					diagnostics.Add(new RhdlDiagnostic(lineNo,
+						$"Unrecognized statement: {line}. Expected a declaration, chip instance, connect statement, or TARGET = expression.{hint}"));
 				}
 			}
 
@@ -483,7 +486,7 @@ namespace DLS.RHDL
 					string widthText = token.Substring(colon + 1).Trim();
 					if (!TryResolveWidth(widthText, out width))
 					{
-						error = $"Unsupported width '{widthText}'. RHDL supports 1, 4 and 8 bits.";
+						error = $"Unsupported width '{widthText}'. Declare buses as NAME: 4, NAME: 8, NAME[4] or NAME[8]. Ranges such as [7:0] are only used when slicing expressions.";
 						return false;
 					}
 				}
@@ -499,7 +502,7 @@ namespace DLS.RHDL
 					string widthText = token.Substring(bracket + 1, close - bracket - 1).Trim();
 					if (!TryResolveWidth(widthText, out width))
 					{
-						error = $"Unsupported width '{widthText}'. RHDL supports 1, 4 and 8 bits.";
+						error = $"Unsupported width '{widthText}'. Declare buses as NAME: 4, NAME: 8, NAME[4] or NAME[8]. Ranges such as [7:0] are only used when slicing expressions.";
 						return false;
 					}
 				}
@@ -638,7 +641,8 @@ namespace DLS.RHDL
 				instance.Description = ResolveChipType(instance.TypeName);
 				if (instance.Description == null)
 				{
-					diagnostics.Add(new RhdlDiagnostic(instance.Line, $"Unknown chip type '{instance.TypeName}'."));
+					string hint = Suggestion(instance.TypeName, library.allChips.Select(c => c.Name));
+					diagnostics.Add(new RhdlDiagnostic(instance.Line, $"Unknown chip type '{instance.TypeName}'.{hint}"));
 					return;
 				}
 				if (ChipDescription.NameMatch(instance.Description.Name, chipName))
@@ -668,8 +672,11 @@ namespace DLS.RHDL
 
 						if (!input.HasValue && !output.HasValue)
 						{
+							IEnumerable<string> pins = (instance.Description.InputPins ?? Array.Empty<PinDescription>()).Select(p => p.Name)
+								.Concat((instance.Description.OutputPins ?? Array.Empty<PinDescription>()).Select(p => p.Name));
+							string hint = Suggestion(binding.Pin, pins);
 							diagnostics.Add(new RhdlDiagnostic(binding.Line,
-								$"Chip '{instance.Description.Name}' has no pin '{binding.Pin}'."));
+								$"Chip '{instance.Description.Name}' has no pin '{binding.Pin}'.{hint}"));
 							continue;
 						}
 
@@ -1318,7 +1325,8 @@ namespace DLS.RHDL
 					string key = Normalize(text);
 					if (!signalByName.TryGetValue(key, out SignalDecl signal))
 					{
-						diagnostics.Add(new RhdlDiagnostic(line, $"Unknown signal '{text}'."));
+						string hint = Suggestion(text, signals.Select(s => s.Name));
+						diagnostics.Add(new RhdlDiagnostic(line, $"Unknown signal '{text}'.{hint}"));
 						return false;
 					}
 
@@ -1353,7 +1361,8 @@ namespace DLS.RHDL
 				string pin = text.Substring(dot + 1).Trim();
 				if (!instanceByName.TryGetValue(Normalize(owner), out InstanceDecl instance) || instance.Description == null)
 				{
-					diagnostics.Add(new RhdlDiagnostic(line, $"Unknown instance '{owner}'."));
+					string hint = Suggestion(owner, instances.Where(i => !i.Generated).Select(i => i.Name));
+					diagnostics.Add(new RhdlDiagnostic(line, $"Unknown instance '{owner}'.{hint}"));
 					return false;
 				}
 
@@ -1361,8 +1370,10 @@ namespace DLS.RHDL
 				if (!found.HasValue)
 				{
 					string direction = asSource ? "output" : "input";
+					PinDescription[] availablePins = asSource ? instance.Description.OutputPins : instance.Description.InputPins;
+					string hint = Suggestion(pin, (availablePins ?? Array.Empty<PinDescription>()).Select(p => p.Name));
 					diagnostics.Add(new RhdlDiagnostic(line,
-						$"Chip '{instance.Description.Name}' has no {direction} pin '{pin}'."));
+						$"Chip '{instance.Description.Name}' has no {direction} pin '{pin}'.{hint}"));
 					return false;
 				}
 
@@ -1378,6 +1389,45 @@ namespace DLS.RHDL
 				foreach (PinDescription pin in pins)
 					if (Normalize(pin.Name) == normalized) return pin;
 				return null;
+			}
+
+			static string Suggestion(string value, IEnumerable<string> candidates)
+			{
+				if (string.IsNullOrWhiteSpace(value) || candidates == null) return string.Empty;
+				string best = null;
+				int bestDistance = int.MaxValue;
+				foreach (string candidate in candidates.Where(c => !string.IsNullOrWhiteSpace(c)).Distinct(StringComparer.OrdinalIgnoreCase))
+				{
+					int distance = EditDistance(Normalize(value), Normalize(candidate));
+					if (distance < bestDistance)
+					{
+						bestDistance = distance;
+						best = candidate;
+					}
+				}
+				int threshold = Math.Max(1, Math.Min(3, value.Length / 3 + 1));
+				return best != null && bestDistance <= threshold ? $" Did you mean '{best}'?" : string.Empty;
+			}
+
+			static int EditDistance(string a, string b)
+			{
+				a ??= string.Empty;
+				b ??= string.Empty;
+				int[] previous = new int[b.Length + 1];
+				int[] current = new int[b.Length + 1];
+				for (int j = 0; j <= b.Length; j++) previous[j] = j;
+				for (int i = 1; i <= a.Length; i++)
+				{
+					current[0] = i;
+					for (int j = 1; j <= b.Length; j++)
+					{
+						int cost = a[i - 1] == b[j - 1] ? 0 : 1;
+						current[j] = Math.Min(Math.Min(current[j - 1] + 1, previous[j] + 1), previous[j - 1] + cost);
+					}
+					(int[] tmp, previous) = (previous, current);
+					current = tmp;
+				}
+				return previous[b.Length];
 			}
 
 			bool TryParseExpression(string text, int line, out ExprNode expression)
