@@ -168,7 +168,7 @@ namespace DLS.Game
 		// Ensure static stuff gets properly reset (on account of domain-reloading being disabled in editor)
 		static void ResetStatics()
 		{
-			Simulator.Reset();
+			RewiredEngine.Reset();
 			UIDrawer.Reset();
 			InteractionState.Reset();
 			CameraController.Reset();
