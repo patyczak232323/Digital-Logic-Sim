@@ -27,6 +27,7 @@ namespace DLS.Graphics
 		static RhdlCompileResult latestResult;
 		static string statusText = "Ready.";
 		static bool statusSuccess;
+		static bool buildAttempted;
 		static int lastBuildSubChipCount;
 		static int lastBuildWireCount;
 		static string requestedSourceChipName;
@@ -48,12 +49,18 @@ namespace DLS.Graphics
 				source = RhdlSourceStore.LoadChipSource(project.description.ProjectName, requestedSourceChipName);
 			}
 			if (string.IsNullOrWhiteSpace(source)) source = RhdlSourceStore.LoadDraft(project.description.ProjectName);
-			if (string.IsNullOrWhiteSpace(source)) source = DefaultExample;
+			bool loadedTemplate = string.IsNullOrWhiteSpace(source);
+			if (loadedTemplate) source = StarterTemplate;
 			requestedSourceChipName = null;
 			SetEditorSource(source);
-			statusText = "Ready. Edit source and press BUILD.";
+			if (loadedTemplate) CodeEditor.MarkDirty();
+			statusText = loadedTemplate
+				? "New RHDL chip template. Rename it and start coding."
+				: "Ready. Edit source and press BUILD.";
 			statusSuccess = false;
+			buildAttempted = false;
 			latestResult = null;
+			CodeEditor.SetDiagnosticLines(Array.Empty<int>());
 		}
 
 		public static void DrawMenu()
@@ -80,7 +87,14 @@ namespace DLS.Graphics
 			Vector2 sourceTop = contentTop;
 			Vector2 infoTop = contentTop + Vector2.right * (LeftWidth + Gap);
 
-			Bounds2D sourceHeader = RewiredUI.DrawSectionHeader("SOURCE", sourceTop, LeftWidth);
+			string sourceInfo = $"Ln {CodeEditor.CaretLine}, Col {CodeEditor.CaretColumn}  /  {CodeEditor.LineCount} lines" +
+			                    (CodeEditor.IsDirty ? "  /  MODIFIED" : string.Empty);
+			Bounds2D sourceHeader = RewiredUI.DrawSectionHeader(
+				CodeEditor.IsDirty ? "SOURCE *" : "SOURCE",
+				sourceTop,
+				LeftWidth,
+				false,
+				sourceInfo);
 			Vector2 sourceBodyTop = sourceHeader.BottomLeft;
 			Vector2 sourceSize = new(LeftWidth, 39.5f);
 			RewiredUI.DrawCard(sourceBodyTop, sourceSize);
@@ -103,8 +117,7 @@ namespace DLS.Graphics
 			if ((editorCommand & RhdlEditorCommand.Save) != 0)
 			{
 				SaveDraft(project);
-				statusText = "Draft saved.  Ctrl+S";
-				statusSuccess = true;
+				statusText = "Draft saved.";
 			}
 			if ((editorCommand & RhdlEditorCommand.Build) != 0)
 			{
@@ -128,7 +141,6 @@ namespace DLS.Graphics
 			{
 				SaveDraft(project);
 				statusText = "Draft saved.";
-				statusSuccess = true;
 			}
 			else if (action == 1)
 			{
@@ -152,10 +164,15 @@ namespace DLS.Graphics
 
 			RewiredUI.DrawCard(cursor, new Vector2(RightWidth, 10.4f), true);
 			Bounds2D statusCard = UI.PrevBounds;
-			Color statusCol = statusSuccess ? new Color(0.62f, 0.9f, 0.68f) : RewiredUI.SecondaryText;
+			Color statusCol = !buildAttempted
+				? RewiredUI.SecondaryText
+				: statusSuccess
+					? new Color(0.62f, 0.9f, 0.68f)
+					: new Color(1f, 0.48f, 0.48f);
+			string statusLabel = !buildAttempted ? "STATUS" : statusSuccess ? "BUILD: OK" : "BUILD: ERRORS";
 
 			RewiredUI.DrawLabel(
-				statusSuccess ? "BUILD STATUS: OK" : "BUILD STATUS",
+				statusLabel,
 				statusCard.TopLeft + new Vector2(0.8f, -1.0f),
 				true,
 				0.66f,
@@ -178,7 +195,7 @@ namespace DLS.Graphics
 				statusCol);
 
 			cursor = statusCard.BottomLeft + Vector2.down * 0.6f;
-			Bounds2D syntaxHeader = RewiredUI.DrawSectionHeader("RHDL v0.3 SYNTAX", cursor, RightWidth);
+			Bounds2D syntaxHeader = RewiredUI.DrawSectionHeader("RHDL v0.3 QUICK REFERENCE", cursor, RightWidth);
 			cursor = syntaxHeader.BottomLeft;
 
 			RewiredUI.DrawCard(cursor, new Vector2(RightWidth, 20.5f));
@@ -200,7 +217,9 @@ namespace DLS.Graphics
 				"Named ports: NAND n(IN_A=a, IN_B=b, OUT=y)\n\n" +
 				"{} auto-pairs; TAB/ENTER inside {} expands block\n" +
 				"TAB / SHIFT+TAB indent\n" +
-				"CTRL+S save  CTRL+SHIFT+B build";
+				"CTRL+Z/Y undo/redo   CTRL+/ comment\n" +
+				"CTRL+D duplicate line   HOME smart-home\n" +
+				"CTRL+S save   CTRL+B build";
 
 			UI.DrawText(
 				help,
@@ -211,37 +230,56 @@ namespace DLS.Graphics
 				RewiredUI.SecondaryText);
 
 			cursor = syntaxCard.BottomLeft + Vector2.down * 0.6f;
-			if (UI.Button(
-				"LOAD RHDL v0.3 EXAMPLE",
+			int templateAction = UI.HorizontalButtonGroup(
+				new[] { "NEW CHIP", "LOAD EXAMPLE" },
 				theme.MainMenuButtonTheme,
 				cursor,
-				new Vector2(RightWidth, DrawSettings.ButtonHeight),
-				true,
-				false,
-				false,
-				Anchor.TopLeft))
+				RightWidth,
+				DrawSettings.DefaultButtonSpacing,
+				0,
+				Anchor.TopLeft);
+			if (templateAction == 0)
+			{
+				SetEditorSource(StarterTemplate);
+				CodeEditor.MarkDirty();
+				CodeEditor.SetDiagnosticLines(Array.Empty<int>());
+				latestResult = null;
+				buildAttempted = false;
+				statusSuccess = false;
+				statusText = "New chip template loaded.";
+			}
+			else if (templateAction == 1)
 			{
 				SetEditorSource(DefaultExample);
-				statusText = "Example loaded. Press BUILD & OPEN.";
+				CodeEditor.MarkDirty();
+				CodeEditor.SetDiagnosticLines(Array.Empty<int>());
+				latestResult = null;
+				buildAttempted = false;
 				statusSuccess = false;
+				statusText = "Example loaded. Press BUILD & OPEN.";
 			}
 		}
 
 		static void Build(Project project, bool openAfterBuild)
 		{
 			string source = GetEditorSource();
-			RhdlSourceStore.SaveDraft(project.description.ProjectName, source);
+			SaveDraft(project);
+			buildAttempted = true;
 
 			latestResult = RhdlCompiler.Compile(source, project.chipLibrary);
 			if (!latestResult.Success)
 			{
 				statusSuccess = false;
+				CodeEditor.SetDiagnosticLines(latestResult.Diagnostics.Select(d => d.Line));
+				RhdlDiagnostic first = latestResult.Diagnostics.FirstOrDefault(d => d.Line > 0);
+				if (first != null) CodeEditor.GoTo(first.Line, first.Column > 0 ? first.Column : 1);
+
 				StringBuilder message = new();
-				RhdlDiagnostic[] diagnostics = latestResult.Diagnostics.Take(5).ToArray();
+				RhdlDiagnostic[] diagnostics = latestResult.Diagnostics.Take(3).ToArray();
 				for (int i = 0; i < diagnostics.Length; i++)
 				{
 					if (i > 0) message.Append('\n');
-					message.Append(diagnostics[i]);
+					message.Append(CompactDiagnostic(diagnostics[i]));
 				}
 				if (latestResult.Diagnostics.Length > diagnostics.Length)
 					message.Append($"\n+ {latestResult.Diagnostics.Length - diagnostics.Length} more error(s)");
@@ -277,6 +315,8 @@ namespace DLS.Graphics
 			lastBuildWireCount = description.Wires?.Length ?? 0;
 			statusText = existed ? "Rebuilt existing RHDL chip." : "Generated and saved new RHDL chip.";
 			statusSuccess = true;
+			CodeEditor.SetDiagnosticLines(Array.Empty<int>());
+			CodeEditor.MarkSaved();
 
 			if (openAfterBuild)
 			{
@@ -285,12 +325,36 @@ namespace DLS.Graphics
 			}
 		}
 
-		static void SaveDraft(Project project) =>
+		static void SaveDraft(Project project)
+		{
 			RhdlSourceStore.SaveDraft(project.description.ProjectName, GetEditorSource());
+			CodeEditor.MarkSaved();
+		}
+
+		static string CompactDiagnostic(RhdlDiagnostic diagnostic)
+		{
+			string location = diagnostic.Line > 0
+				? diagnostic.Column > 0 ? $"L{diagnostic.Line}:{diagnostic.Column}" : $"L{diagnostic.Line}"
+				: "RHDL";
+			string message = diagnostic.Message ?? string.Empty;
+			const int max = 58;
+			if (message.Length > max) message = message.Substring(0, max - 3) + "...";
+			return location + "  " + message;
+		}
 
 		static string GetEditorSource() => CodeEditor.Text;
 
 		static void SetEditorSource(string source) => CodeEditor.SetText(source);
+
+		public const string StarterTemplate =
+@"// Define a chip, its ports, then describe the logic.
+chip MyChip {
+  input A
+  input B
+  output Y
+
+  Y = A & B
+}";
 
 		public const string DefaultExample =
 @"// RHDL v0.3 example: 8-bit arithmetic + mux
