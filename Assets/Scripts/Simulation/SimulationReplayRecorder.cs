@@ -81,7 +81,7 @@ namespace DLS.Simulation
 
 			List<ChipState> states = new();
 			CaptureRecursive(root, states);
-			return new SimulationStateSnapshot(Simulator.simulationFrame, states.ToArray());
+			return new SimulationStateSnapshot(RewiredEngine.SimulationFrame, states.ToArray());
 		}
 
 		static void CaptureRecursive(SimChip chip, List<ChipState> states)
@@ -243,7 +243,7 @@ namespace DLS.Simulation
 
 				if (initialState == null)
 				{
-					DeterministicSimulator.MaterializeStateForSnapshot(root);
+					RewiredEngine.MaterializeStateForSnapshot(root);
 					initialState = SimulationStateSnapshot.Capture(root);
 				}
 
@@ -311,13 +311,13 @@ namespace DLS.Simulation
 
 			try
 			{
-				DeterministicSimulator.PrepareForSnapshotRestore(root);
+				RewiredEngine.PrepareForSnapshotRestore(root);
 				if (!recording.InitialState.Restore(root, out string restoreFailure))
 				{
 					return new SimulationReplayResult(false, 0, -1, restoreFailure);
 				}
 
-				Simulator.simulationFrame = recording.StartFrame;
+				RewiredEngine.RestoreSimulationFrame(recording.StartFrame);
 
 				for (int frameIndex = 0; frameIndex < replayCount; frameIndex++)
 				{
@@ -333,7 +333,7 @@ namespace DLS.Simulation
 					}
 
 					SimKeyboardHelper.SetReplayInputState(frame.HeldKeys);
-					DeterministicSimulator.RunSimulationStep(root, inputPins, audioState);
+					RewiredEngine.RunStep(root, inputPins, audioState);
 
 					uint[] expected = frame.ExpectedRootOutputs ?? Array.Empty<uint>();
 					if (expected.Length != root.OutputPins.Length)
