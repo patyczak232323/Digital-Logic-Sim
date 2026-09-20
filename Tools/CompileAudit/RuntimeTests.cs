@@ -593,6 +593,21 @@ namespace DLS.Simulation
 				new ChipLibrary());
 			Assert(!analysis.CanCache, "seven-segment display must never be treated as a pure cacheable primitive");
 
+			ChipCacheAnalysis surfacedCustom = CombinationalChipCacheManager.Analyze(
+				new ChipDescription
+				{
+					Name = "CUSTOM_DISPLAY_SURFACE_GUARD",
+					ChipType = ChipType.Custom,
+					InputPins = Array.Empty<PinDescription>(),
+					OutputPins = Array.Empty<PinDescription>(),
+					SubChips = Array.Empty<SubChipDescription>(),
+					Wires = Array.Empty<WireDescription>(),
+					Displays = new[] { new DisplayDescription() }
+				},
+				new ChipLibrary());
+			Assert(!surfacedCustom.CanCache,
+				"custom chip exposing a display surface must stay live instead of collapsing to LUT/JIT");
+
 			DeterministicSimulator.Reset();
 			Simulator.Reset();
 		}
