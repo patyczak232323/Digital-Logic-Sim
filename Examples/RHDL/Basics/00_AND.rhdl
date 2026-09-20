@@ -1,0 +1,7 @@
+// Minimal RHDL example.
+chip And2 {
+  input A, B
+  output Y
+
+  Y = A & B
+}
