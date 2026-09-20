@@ -12,9 +12,9 @@ namespace DLS.Graphics
 {
 	public static class SimulationDiagnosticsMenu
 	{
-		const float menuWidth = 104f;
+		const float menuWidth = 86f;
 		const float columnGap = 1.2f;
-		const float leftColumnWidth = 45f;
+		const float leftColumnWidth = 36f;
 		const float rightColumnWidth = menuWidth - leftColumnWidth - columnGap;
 		const float headerHeight = 3.4f;
 		const float sectionHeaderHeight = 2.15f;
@@ -106,7 +106,7 @@ namespace DLS.Graphics
 					? "PAUSED"
 					: "RUNNING";
 
-			string rightText = $"FRAME {RewiredEngine.SimulationFrame:N0}   |   {state}";
+			string rightText = $"FRAME {RewiredEngine.SimulationFrame}   |   {state}";
 			UI.DrawText(
 				rightText,
 				theme.FontBold,
@@ -150,7 +150,7 @@ namespace DLS.Graphics
 				theme,
 				line,
 				"FRAME / DELTA",
-				$"{diag.SimulationFrame:N0}  /  {diag.DeltaCycles:N0}",
+				$"{diag.SimulationFrame}  /  {diag.DeltaCycles}",
 				secondary,
 				leftColumnWidth - innerPad * 2f);
 			line.y -= lineStep;
@@ -159,7 +159,7 @@ namespace DLS.Graphics
 				theme,
 				line,
 				"WORK",
-				$"gates {diag.GateEvaluations:N0}   signals {diag.SignalPropagations:N0}   targets {diag.TargetResolutions:N0}",
+				$"gates {diag.GateEvaluations}   signals {diag.SignalPropagations}   targets {diag.TargetResolutions}",
 				secondary,
 				leftColumnWidth - innerPad * 2f);
 			line.y -= lineStep;
@@ -168,7 +168,7 @@ namespace DLS.Graphics
 				theme,
 				line,
 				"ACCELERATION",
-				$"LUT {diag.CacheHits:N0}   JIT {diag.JitHits:N0}   FB {diag.FeedbackJitHits:N0}",
+				$"LUT {diag.CacheHits}   JIT {diag.JitHits}   FB {diag.FeedbackJitHits}",
 				secondary,
 				leftColumnWidth - innerPad * 2f);
 
@@ -249,7 +249,7 @@ namespace DLS.Graphics
 
 			SimulationStepProfile last = SimulationProfiler.LastStep;
 			string profileText = last.Frame > 0
-				? $"Last profile: {last.StepMilliseconds:0.###} ms   |   gates {last.GateEvaluations:N0}   |   delta {last.DeltaCycles:N0}"
+				? $"Last profile: {last.StepMilliseconds:0.###} ms   |   gates {last.GateEvaluations}   |   delta {last.DeltaCycles}"
 				: "Profiler has no sample yet.";
 
 			UI.DrawText(
@@ -293,7 +293,7 @@ namespace DLS.Graphics
 				{
 					SimulationHotChip chip = hot[i];
 					string left = $"{i + 1}.  {chip.Path}";
-					string right = $"{chip.ExecutionPath}   {chip.AverageMicroseconds:0.###} us   {chip.Evaluations:N0} eval";
+					string right = $"{chip.ExecutionPath}   {chip.AverageMicroseconds:0.###} us   {chip.Evaluations} eval";
 
 					UI.DrawText(
 						left,
@@ -367,7 +367,7 @@ namespace DLS.Graphics
 			string status = project == null
 				? "No active project."
 				: recording
-					? $"Recording {project.ReplayRecordedFrames:N0} frames..."
+					? $"Recording {project.ReplayRecordedFrames} frames..."
 					: project.ReplayStatus;
 
 			UI.DrawText(
@@ -503,7 +503,7 @@ namespace DLS.Graphics
 				Color.white);
 
 			UI.DrawText(
-				$"{probe.BitCount}b   NOW {latest}   TRANSITIONS {probe.SampleCount:N0}",
+				$"{probe.BitCount}b   NOW {latest}   TRANSITIONS {probe.SampleCount}",
 				theme.FontRegular,
 				theme.FontSizeRegular * 0.55f,
 				bounds.TopRight + new Vector2(-3.25f, -0.8f),
