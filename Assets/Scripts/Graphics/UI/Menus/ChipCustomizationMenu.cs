@@ -304,7 +304,21 @@ namespace DLS.Graphics
 					string timing = buildMs > 0.01 ? $" | build {buildMs:0.0} ms" : string.Empty;
 					return $"RAM: {entries:N0}/{target:N0} | {CombinationalChipCacheManager.FormatBytes(bytes)}{timing}";
 				}
-				if (target > 0) return $"RAM: building {entries:N0}/{target:N0} (background)";
+
+				if (target > 0)
+				{
+					if (CombinationalChipCacheManager.TryGetRuntimePersistenceInfo(
+						    saved,
+						    out _,
+						    out _,
+						    out string runtimeStatus) &&
+					    runtimeStatus == "QUEUED")
+					{
+						return $"RAM: queued {entries:N0}/{target:N0} (background)";
+					}
+
+					return $"RAM: building {entries:N0}/{target:N0} (background)";
+				}
 			}
 
 			long estimated = CombinationalChipCacheManager.GetEstimatedMemoryBytes(
