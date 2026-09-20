@@ -357,15 +357,9 @@ namespace DLS.RHDL
 					Array.Empty<OutputPinColourInfo>(),
 					null)).ToArray();
 
-			WireDescription[] wires = connections.Select(connection => new WireDescription
-			{
-				SourcePinAddress = connection.Source.Address,
-				TargetPinAddress = connection.Target.Address,
-				ConnectionType = WireConnectionType.ToPins,
-				ConnectedWireIndex = -1,
-				ConnectedWireSegmentIndex = -1,
-				Points = new Vector2[2]
-			}).ToArray();
+			// RHDL-generated schematics use an orthogonal "block" routing style.
+			// The logical endpoints are unchanged; only visual bend points are added.
+			WireDescription[] wires = BuildBlockWires(connections, instances, inputPins, outputPins);
 
 			Vector2 chipSize = SubChipInstance.CalculateMinChipSize(inputPins, outputPins, chipName);
 			chipSize.x = Mathf.Max(chipSize.x, 1.5f);
@@ -849,52 +843,306 @@ namespace DLS.RHDL
 		{
 			if (instances.Count == 0) return;
 
-			Dictionary<string, InstanceDecl> byName = instances.ToDictionary(i => Normalize(i.Name), StringComparer.OrdinalIgnoreCase);
-			Dictionary<InstanceDecl, List<InstanceDecl>> outgoing = instances.ToDictionary(i => i, _ => new List<InstanceDecl>());
-			Dictionary<InstanceDecl, int> indegree = instances.ToDictionary(i => i, _ => 0);
+			// BLOCK layout:
+			//   1. determine a left-to-right dependency level,
+			//   2. keep related component classes together,
+			//   3. use neighbour barycentres to reduce wire crossings,
+			//   4. space rows/columns using the real chip dimensions.
+			Dictionary<string, InstanceDecl> byName =
+				instances.ToDictionary(i => Normalize(i.Name), StringComparer.OrdinalIgnoreCase);
+
+			Dictionary<InstanceDecl, List<InstanceDecl>> outgoing =
+				instances.ToDictionary(i => i, _ => new List<InstanceDecl>());
+			Dictionary<InstanceDecl, List<InstanceDecl>> incoming =
+				instances.ToDictionary(i => i, _ => new List<InstanceDecl>());
+			Dictionary<InstanceDecl, int> indegree =
+				instances.ToDictionary(i => i, _ => 0);
 
 			foreach (ConnectionDecl connection in connections)
 			{
-				if (string.IsNullOrEmpty(connection.SourceInstance) || string.IsNullOrEmpty(connection.TargetInstance)) continue;
-				InstanceDecl source = byName[Normalize(connection.SourceInstance)];
-				InstanceDecl target = byName[Normalize(connection.TargetInstance)];
+				if (string.IsNullOrEmpty(connection.SourceInstance) ||
+				    string.IsNullOrEmpty(connection.TargetInstance))
+					continue;
+
+				if (!byName.TryGetValue(Normalize(connection.SourceInstance), out InstanceDecl source) ||
+				    !byName.TryGetValue(Normalize(connection.TargetInstance), out InstanceDecl target))
+					continue;
+
 				if (source == target || outgoing[source].Contains(target)) continue;
 				outgoing[source].Add(target);
+				incoming[target].Add(source);
 				indegree[target]++;
 			}
 
-			Queue<InstanceDecl> queue = new(instances.Where(i => indegree[i] == 0));
+			foreach (InstanceDecl instance in instances) instance.Level = 0;
+
+			Queue<InstanceDecl> queue = new(
+				instances
+					.Where(i => indegree[i] == 0)
+					.OrderBy(LayoutClass)
+					.ThenBy(i => i.Line)
+					.ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase));
+
 			HashSet<InstanceDecl> visited = new();
 			while (queue.Count > 0)
 			{
 				InstanceDecl current = queue.Dequeue();
 				visited.Add(current);
+
 				foreach (InstanceDecl next in outgoing[current])
 				{
-					next.Level = Mathf.Max(next.Level, current.Level + 1);
+					next.Level = Math.Max(next.Level, current.Level + 1);
 					indegree[next]--;
 					if (indegree[next] == 0) queue.Enqueue(next);
 				}
 			}
 
-			// Cyclic networks are legal in Rewired. Keep unresolved SCC members in
-			// their declaration-level column instead of endlessly increasing depth.
-			foreach (InstanceDecl instance in instances)
+			// Feedback/stateful SCCs are legal. Put unresolved members close to
+			// their connected forward graph rather than collapsing everything on
+			// the exact same point.
+			foreach (InstanceDecl instance in instances.Where(i => !visited.Contains(i)))
 			{
-				if (!visited.Contains(instance)) instance.Level = 0;
+				int neighbourLevel = 0;
+				foreach (InstanceDecl parent in incoming[instance])
+					neighbourLevel = Math.Max(neighbourLevel, parent.Level + 1);
+				instance.Level = neighbourLevel;
 			}
 
-			foreach (IGrouping<int, InstanceDecl> group in instances.GroupBy(i => i.Level).OrderBy(g => g.Key))
+			int maxLevel = instances.Max(i => i.Level);
+			Dictionary<InstanceDecl, float> order =
+				instances.ToDictionary(i => i, i => (float)i.Line);
+
+			// A few Sugiyama-style barycentre sweeps are enough for generated
+			// schematics and are much cheaper than a general graph-layout solver.
+			for (int pass = 0; pass < 4; pass++)
 			{
-				InstanceDecl[] column = group.ToArray();
-				float x = -2.5f + group.Key * 4.0f;
-				float totalHeight = (column.Length - 1) * 2.0f;
-				for (int i = 0; i < column.Length; i++)
+				bool forward = (pass & 1) == 0;
+				IEnumerable<int> levels = forward
+					? Enumerable.Range(0, maxLevel + 1)
+					: Enumerable.Range(0, maxLevel + 1).Reverse();
+
+				foreach (int level in levels)
 				{
-					float y = totalHeight / 2f - i * 2.0f;
-					column[i].Position = Snap(new Vector2(x, y));
+					List<InstanceDecl> column = instances.Where(i => i.Level == level).ToList();
+					foreach (InstanceDecl instance in column)
+					{
+						List<InstanceDecl> neighbours = forward ? incoming[instance] : outgoing[instance];
+						if (neighbours.Count > 0)
+							order[instance] = neighbours.Average(n => order[n]);
+					}
+
+					int slot = 0;
+					foreach (InstanceDecl instance in column
+						.OrderBy(LayoutClass)
+						.ThenBy(i => order[i])
+						.ThenBy(i => i.Line)
+						.ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase))
+					{
+						order[instance] = slot++;
+					}
 				}
 			}
+
+			// Dynamic X positions prevent large memory/custom blocks from colliding
+			// with the next logic column.
+			Dictionary<int, float> columnWidth = new();
+			for (int level = 0; level <= maxLevel; level++)
+			{
+				float width = 2.0f;
+				foreach (InstanceDecl instance in instances.Where(i => i.Level == level))
+					width = Math.Max(width, Math.Max(2.0f, instance.Description.Size.x));
+				columnWidth[level] = width;
+			}
+
+			Dictionary<int, float> columnX = new();
+			float cursorX = 0f;
+			for (int level = 0; level <= maxLevel; level++)
+			{
+				float width = columnWidth[level];
+				if (level == 0)
+					cursorX = 0f;
+				else
+					cursorX += columnWidth[level - 1] * 0.5f + 3.0f + width * 0.5f;
+				columnX[level] = cursorX;
+			}
+
+			// Centre the full layout around X=0 so generated chips open naturally
+			// in the editor rather than drifting endlessly to the right.
+			float xCentre = (columnX[0] + columnX[maxLevel]) * 0.5f;
+
+			foreach (int level in Enumerable.Range(0, maxLevel + 1))
+			{
+				InstanceDecl[] column = instances
+					.Where(i => i.Level == level)
+					.OrderBy(LayoutClass)
+					.ThenBy(i => order[i])
+					.ThenBy(i => i.Line)
+					.ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+					.ToArray();
+
+				if (column.Length == 0) continue;
+
+				float totalHeight = 0f;
+				int previousClass = -1;
+				for (int i = 0; i < column.Length; i++)
+				{
+					int cls = LayoutClass(column[i]);
+					if (i > 0)
+						totalHeight += cls == previousClass ? 1.25f : 2.5f;
+					totalHeight += Math.Max(1.5f, column[i].Description.Size.y);
+					previousClass = cls;
+				}
+
+				float y = totalHeight * 0.5f;
+				previousClass = -1;
+				for (int i = 0; i < column.Length; i++)
+				{
+					InstanceDecl instance = column[i];
+					int cls = LayoutClass(instance);
+					float height = Math.Max(1.5f, instance.Description.Size.y);
+
+					if (i > 0)
+						y -= cls == previousClass ? 1.25f : 2.5f;
+
+					y -= height * 0.5f;
+					instance.Position = Snap(new Vector2(columnX[level] - xCentre, y));
+					y -= height * 0.5f;
+					previousClass = cls;
+				}
+			}
+		}
+
+		static int LayoutClass(InstanceDecl instance)
+		{
+			// Stable coarse grouping makes generated designs read as blocks rather
+			// than as an arbitrary list of primitive gates.
+			ChipType type = instance.Description.ChipType;
+			if (type == ChipType.Rom_256x16 || type == ChipType.dev_Ram_8Bit) return 0;
+			if (type == ChipType.Custom) return 1;
+
+			string name = instance.Name ?? string.Empty;
+			if (name.StartsWith("__rhdl_", StringComparison.OrdinalIgnoreCase)) return 2;
+
+			string typeName = instance.Description.Name ?? string.Empty;
+			if (typeName.StartsWith("BUS", StringComparison.OrdinalIgnoreCase) ||
+			    typeName.Contains("BIT"))
+				return 3;
+
+			return 2;
+		}
+
+		static WireDescription[] BuildBlockWires(
+			List<ConnectionDecl> connections,
+			List<InstanceDecl> instances,
+			PinDescription[] inputPins,
+			PinDescription[] outputPins)
+		{
+			Dictionary<int, InstanceDecl> instanceById = instances.ToDictionary(i => i.ID);
+			Dictionary<int, PinDescription> rootPins = inputPins
+				.Concat(outputPins)
+				.ToDictionary(p => p.ID);
+
+			float top = 3f;
+			foreach (InstanceDecl instance in instances)
+				top = Math.Max(top, instance.Position.y + Math.Max(1.5f, instance.Description.Size.y) * 0.5f + 2f);
+			foreach (PinDescription pin in inputPins.Concat(outputPins))
+				top = Math.Max(top, pin.Position.y + 2f);
+
+			WireDescription[] result = new WireDescription[connections.Count];
+			int feedbackLane = 0;
+			int sameColumnLane = 0;
+
+			for (int i = 0; i < connections.Count; i++)
+			{
+				ConnectionDecl connection = connections[i];
+				Vector2 source = EndpointPosition(connection.Source.Address, instanceById, rootPins);
+				Vector2 target = EndpointPosition(connection.Target.Address, instanceById, rootPins);
+
+				Vector2[] points;
+				float dx = target.x - source.x;
+
+				if (dx > 1.0f)
+				{
+					// Normal left-to-right route: horizontal -> vertical -> horizontal.
+					float midX = SnapScalar((source.x + target.x) * 0.5f);
+					points = new[]
+					{
+						Vector2.zero,
+						Snap(new Vector2(midX, source.y)),
+						Snap(new Vector2(midX, target.y)),
+						Vector2.zero
+					};
+				}
+				else if (Math.Abs(dx) <= 1.0f)
+				{
+					// Same-column connection gets a small side channel.
+					float sideX = Math.Max(source.x, target.x) + 2.0f + (sameColumnLane++ % 4) * 0.5f;
+					points = new[]
+					{
+						Vector2.zero,
+						Snap(new Vector2(sideX, source.y)),
+						Snap(new Vector2(sideX, target.y)),
+						Vector2.zero
+					};
+				}
+				else
+				{
+					// Feedback/back-edge: route above the block diagram so it cannot
+					// cut diagonally through the datapath.
+					float laneY = top + (feedbackLane++ * 0.75f);
+					float sourceEscapeX = source.x + 1.5f;
+					float targetEscapeX = target.x - 1.5f;
+					points = new[]
+					{
+						Vector2.zero,
+						Snap(new Vector2(sourceEscapeX, source.y)),
+						Snap(new Vector2(sourceEscapeX, laneY)),
+						Snap(new Vector2(targetEscapeX, laneY)),
+						Snap(new Vector2(targetEscapeX, target.y)),
+						Vector2.zero
+					};
+				}
+
+				result[i] = new WireDescription
+				{
+					SourcePinAddress = connection.Source.Address,
+					TargetPinAddress = connection.Target.Address,
+					ConnectionType = WireConnectionType.ToPins,
+					ConnectedWireIndex = -1,
+					ConnectedWireSegmentIndex = -1,
+					Points = points
+				};
+			}
+
+			return result;
+		}
+
+		static Vector2 EndpointPosition(
+			PinAddress address,
+			Dictionary<int, InstanceDecl> instanceById,
+			Dictionary<int, PinDescription> rootPins)
+		{
+			if (rootPins.TryGetValue(address.PinOwnerID, out PinDescription root))
+				return root.Position;
+
+			if (!instanceById.TryGetValue(address.PinOwnerID, out InstanceDecl instance))
+				return Vector2.zero;
+
+			foreach (PinDescription pin in instance.Description.InputPins.Concat(instance.Description.OutputPins))
+			{
+				if (pin.ID != address.PinID) continue;
+				return new Vector2(
+					instance.Position.x + pin.Position.x,
+					instance.Position.y + pin.Position.y);
+			}
+
+			return instance.Position;
+		}
+
+		static float SnapScalar(float value)
+		{
+			float grid = DLS.Graphics.DrawSettings.GridSize;
+			return Mathf.Round(value / grid) * grid;
 		}
 
 		static PinDescription[] CreateRootPins(List<PortDecl> ports, List<InstanceDecl> instances, bool left)
