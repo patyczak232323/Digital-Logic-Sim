@@ -95,7 +95,7 @@ namespace DLS.Game
 		}
 
 		public int LinkedBusPairID => IsBus ? (int)InternalData[0] : -1;
-		public bool BusIsFlipped => IsBus && InternalData.Length > 1 && InternalData[1] == 1;
+		public bool BusIsFlipped => IsBus && InternalData != null && InternalData.Length > 1 && InternalData[1] == 1;
 		public bool HorizontalPinsFlipped => MirrorX ^ BusIsFlipped;
 		public Vector2 Size => Description.Size;
 		public Vector2 Position { get; set; }
