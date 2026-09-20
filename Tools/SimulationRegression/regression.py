@@ -580,8 +580,12 @@ def test_source_integration_static() -> None:
 
     assert "sourceIndices.Length" not in solver, "stale jagged-adjacency reference breaks the CSR build"
 
-    assert "RandomBool()" not in solver
-    # Randomized ordering is intentionally restricted to the one-time power-on
+    # RandomBool is allowed only in the legacy-compatible multi-driver path.
+    # Single-driver propagation (the hot path) must remain free of RNG work.
+    assert solver.count("Simulator.RandomBool()") == 1
+    assert "ResolveDrivenState(" in solver
+    assert "Simulator.RandomBool() ? orState : andState" in solver
+    # Randomized scheduling itself remains restricted to the one-time power-on
     # settle used to choose a stable state for symmetric feedback circuits.
     assert solver.count("Simulator.rng.Next(") == 1
     assert "int slot = Simulator.rng.Next(dirtyChips.Count);" in solver
