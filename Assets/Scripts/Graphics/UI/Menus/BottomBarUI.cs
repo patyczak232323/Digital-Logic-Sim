@@ -15,6 +15,7 @@ namespace DLS.Graphics
 		const float padY = 0.3f;
 		const float buttonSpacing = 0.25f;
 		const float buttonHeight = barHeight - padY * 2;
+		const string defaultOtherChipsCollectionName = "OTHER";
 
 		static readonly string[] menuButtonNames =
 		{
@@ -314,6 +315,13 @@ namespace DLS.Graphics
 
 
 			DrawCollectionsPopup();
+
+			if (IsStandaloneBarDropTarget())
+			{
+				Bounds2D barBoundsUI = new(Vector2.zero, new Vector2(UI.Width, barHeight));
+				DrawDropTargetOutline(barBoundsUI);
+			}
+
 			DrawChipCategoryDragGhost();
 			FinalizeChipCategoryDrag(project);
 		}
@@ -460,6 +468,10 @@ namespace DLS.Graphics
 				{
 					MoveChipToCollection(project, chipName, target, sourceWasStandaloneStar);
 				}
+				else if (sourceWasPopup && IsStandaloneBarDropTarget())
+				{
+					ExtractChipToStandaloneBar(project, chipName);
+				}
 			}
 			else
 			{
@@ -476,6 +488,70 @@ namespace DLS.Graphics
 			}
 
 			ClearChipCategoryDrag();
+		}
+
+		static bool IsStandaloneBarDropTarget()
+		{
+			return pendingChipDragFromCollectionPopup &&
+			       IsChipCategoryDragActive() &&
+			       chipDragDropTarget == null &&
+			       MouseIsOverBar();
+		}
+
+		static void ExtractChipToStandaloneBar(Project project, string chipName)
+		{
+			ChipCollection other = GetOrCreateDefaultCollection(project);
+			bool modified = false;
+
+			// A standalone bottom-bar chip still belongs to the library's OTHER
+			// collection so the invariant "every chip belongs to a collection"
+			// remains intact.
+			foreach (ChipCollection collection in project.description.ChipCollections)
+			{
+				if (collection == other) continue;
+
+				for (int i = collection.Chips.Count - 1; i >= 0; i--)
+				{
+					if (ChipDescription.NameMatch(collection.Chips[i], chipName))
+					{
+						collection.Chips.RemoveAt(i);
+						modified = true;
+					}
+				}
+			}
+
+			bool inOther = other.Chips.Exists(name => ChipDescription.NameMatch(name, chipName));
+			if (!inOther)
+			{
+				other.Chips.Add(chipName);
+				modified = true;
+			}
+
+			if (!project.description.IsStarred(chipName, false))
+			{
+				project.SetStarred(chipName, true, false, autoSave: false);
+				modified = true;
+			}
+
+			if (modified) project.SaveCurrentProjectDescription();
+
+			activeCollection = null;
+			closeActiveCollectionMultiModeExit = false;
+		}
+
+		static ChipCollection GetOrCreateDefaultCollection(Project project)
+		{
+			foreach (ChipCollection collection in project.description.ChipCollections)
+			{
+				if (ChipDescription.NameMatch(collection.Name, defaultOtherChipsCollectionName))
+				{
+					return collection;
+				}
+			}
+
+			ChipCollection created = new(defaultOtherChipsCollectionName);
+			project.description.ChipCollections.Add(created);
+			return created;
 		}
 
 		static void MoveChipToCollection(Project project, string chipName, ChipCollection target, bool removeStandaloneStar)
@@ -535,9 +611,11 @@ namespace DLS.Graphics
 			if (!IsChipCategoryDragActive()) return;
 
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
-			string text = chipDragDropTarget == null
-				? pendingChipDragName
-				: $"{pendingChipDragName}  ->  {chipDragDropTarget.Name}";
+			string text = chipDragDropTarget != null
+				? $"{pendingChipDragName}  ->  {chipDragDropTarget.Name}"
+				: IsStandaloneBarDropTarget()
+					? $"{pendingChipDragName}  ->  STARRED"
+					: pendingChipDragName;
 
 			Vector2 textSize = UI.CalculateTextSize(text, theme.FontSizeRegular * 0.8f, theme.FontBold);
 			Vector2 size = textSize + new Vector2(1.6f, 1.0f);
