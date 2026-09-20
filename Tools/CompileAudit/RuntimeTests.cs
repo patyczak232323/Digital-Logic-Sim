@@ -197,6 +197,28 @@ namespace DLS.Simulation
 				}
 			}
 
+			string typoSource =
+@"chip TypoDemo {
+  input alpha
+  output y
+  y = alhpa
+}";
+			RhdlCompileResult typo = RhdlCompiler.Compile(typoSource, library);
+			Assert(!typo.Success, "RHDL typo sample should fail");
+			Assert(typo.Diagnostics.Any(d => d.Message.Contains("Did you mean 'alpha'?")),
+				"RHDL typo diagnostic did not suggest the nearest signal");
+
+			string chipTypoSource =
+@"chip ChipTypo {
+  input a, b
+  output y
+  NANND n(IN_A=a, IN_B=b, OUT=y)
+}";
+			RhdlCompileResult chipTypo = RhdlCompiler.Compile(chipTypoSource, library);
+			Assert(!chipTypo.Success, "Unknown chip typo sample should fail");
+			Assert(chipTypo.Diagnostics.Any(d => d.Message.Contains("Did you mean 'NAND'?")),
+				"RHDL chip-type diagnostic did not suggest NAND");
+
 			DeterministicSimulator.Reset();
 			Simulator.Reset();
 		}
