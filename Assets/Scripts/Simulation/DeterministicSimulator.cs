@@ -556,9 +556,12 @@ namespace DLS.Simulation
 				chip.FeedbackExecutor.Ready &&
 				!chip.FeedbackExecutor.Disabled;
 
+			bool hasVisibleDisplaySurface = (chip.Description?.Displays?.Length ?? 0) > 0;
+
 			bool acceleratedCustom =
 				allowMemoCache &&
 				chip.ChipType == ChipType.Custom &&
+				!hasVisibleDisplaySurface &&
 				!inspectionPath.Contains(chip) &&
 				!SimulationWaveformRecorder.ContainsProbeInSubtree(chip) &&
 				((chip.MemoCache != null && chip.MemoCache.Ready) ||
