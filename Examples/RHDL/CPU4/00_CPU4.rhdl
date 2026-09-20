@@ -1,0 +1,274 @@
+// CPU4: complete beginner-friendly 4-bit computer in one RHDL source.
+//
+// Architecture:
+//   - 4-bit accumulator A
+//   - 4-bit program counter PC (16 program addresses)
+//   - 16 x 4-bit logical data RAM (backed by dev.RAM-8)
+//   - 8-bit instruction: [ opcode:4 ][ operand:4 ]
+//   - Z flag is derived directly from A
+//   - OUT instruction latches A into a visible 4-bit output register
+//   - one instruction executes on each rising CLK edge
+//
+// The stock ROM is 256x16. CPU4 uses only addresses 0..15 and the low byte
+// (ROM pin OUT A) for its 8-bit instruction. In the ROM editor, enter words
+// such as 0x0013 for "LDI 3".
+chip CPU4 {
+  input CLK, RESET
+
+  output ACC: 4
+  output PC: 4
+  output OUT_PORT: 4
+  output Z
+  output HALTED
+
+  // Useful debug outputs.
+  output INSTR: 8
+  output OPCODE: 4
+  output OPERAND: 4
+  output MEM_DATA: 4
+
+  // -----------------------------------------------------------------------
+  // Architectural state: PC, accumulator, output register and halt latch.
+  // RHDL currently has 1/4/8-bit buses, while dev.RAM-8 stores 8-bit bytes.
+  // The low nibble is the real register; the high nibble is always zero.
+  // -----------------------------------------------------------------------
+
+  wire pc_q: 4
+  wire pc_d: 4
+  wire pc_raw: 8
+  wire pc_d8: 8
+  wire pc_we
+
+  pc_d8 = {0x0, pc_d}
+  dev.RAM-8 pc_reg(
+    ADDRESS=0x00,
+    DATA=pc_d8,
+    WRITE=pc_we,
+    RESET=RESET,
+    CLOCK=CLK,
+    OUT=pc_raw
+  )
+  pc_q = pc_raw[3:0]
+
+  wire acc_q: 4
+  wire acc_d: 4
+  wire acc_raw: 8
+  wire acc_d8: 8
+  wire acc_we
+
+  acc_d8 = {0x0, acc_d}
+  dev.RAM-8 acc_reg(
+    ADDRESS=0x00,
+    DATA=acc_d8,
+    WRITE=acc_we,
+    RESET=RESET,
+    CLOCK=CLK,
+    OUT=acc_raw
+  )
+  acc_q = acc_raw[3:0]
+
+  wire out_q: 4
+  wire out_raw: 8
+  wire out_d8: 8
+  wire out_we
+
+  out_d8 = {0x0, acc_q}
+  dev.RAM-8 out_reg(
+    ADDRESS=0x00,
+    DATA=out_d8,
+    WRITE=out_we,
+    RESET=RESET,
+    CLOCK=CLK,
+    OUT=out_raw
+  )
+  out_q = out_raw[3:0]
+
+  // A one-bit HALT latch implemented with the low bit of another byte cell.
+  wire halt_raw: 8
+  wire halt_data: 8
+  wire halt_we
+  wire halted
+
+  halt_data = 0x01
+  dev.RAM-8 halt_reg(
+    ADDRESS=0x00,
+    DATA=halt_data,
+    WRITE=halt_we,
+    RESET=RESET,
+    CLOCK=CLK,
+    OUT=halt_raw
+  )
+  halted = halt_raw[0]
+
+  // -----------------------------------------------------------------------
+  // Program ROM.
+  // ROM25616 resolves to the stock "ROM 256x16" chip through RHDL's
+  // normalized chip-name matching. OUT_A is the low byte, OUT_B the high.
+  // -----------------------------------------------------------------------
+
+  wire rom_addr: 8
+  wire instruction: 8
+  wire rom_high_unused: 8
+
+  rom_addr = {0x0, pc_q}
+  ROM25616 program_rom(
+    ADDRESS=rom_addr,
+    OUT_A=instruction,
+    OUT_B=rom_high_unused
+  )
+
+  wire opcode: 4
+  wire operand: 4
+
+  opcode = instruction[7:4]
+  operand = instruction[3:0]
+
+  // -----------------------------------------------------------------------
+  // Data RAM: only addresses 0..15 and the low nibble are architecturally
+  // visible, giving a logical 16 x 4-bit memory.
+  // -----------------------------------------------------------------------
+
+  wire ram_addr: 8
+  wire ram_in: 8
+  wire ram_raw: 8
+  wire ram_q: 4
+  wire ram_write
+
+  ram_addr = {0x0, operand}
+  ram_in = {0x0, acc_q}
+
+  dev.RAM-8 data_ram(
+    ADDRESS=ram_addr,
+    DATA=ram_in,
+    WRITE=ram_write,
+    RESET=RESET,
+    CLOCK=CLK,
+    OUT=ram_raw
+  )
+  ram_q = ram_raw[3:0]
+
+  // -----------------------------------------------------------------------
+  // Instruction decoder.
+  //
+  // 0 NOP       8 XOR [addr]
+  // 1 LDI #imm  9 JMP addr
+  // 2 LDA addr  A JZ  addr
+  // 3 STA addr  B JNZ addr
+  // 4 ADD addr  C NOT
+  // 5 SUB addr  D INC
+  // 6 AND addr  E OUT
+  // 7 OR  addr  F HLT
+  // -----------------------------------------------------------------------
+
+  wire i_nop
+  wire i_ldi
+  wire i_lda
+  wire i_sta
+  wire i_add
+  wire i_sub
+  wire i_and
+  wire i_or
+  wire i_xor
+  wire i_jmp
+  wire i_jz
+  wire i_jnz
+  wire i_not
+  wire i_inc
+  wire i_out
+  wire i_hlt
+
+  i_nop = opcode == 0x0
+  i_ldi = opcode == 0x1
+  i_lda = opcode == 0x2
+  i_sta = opcode == 0x3
+  i_add = opcode == 0x4
+  i_sub = opcode == 0x5
+  i_and = opcode == 0x6
+  i_or = opcode == 0x7
+  i_xor = opcode == 0x8
+  i_jmp = opcode == 0x9
+  i_jz = opcode == 0xA
+  i_jnz = opcode == 0xB
+  i_not = opcode == 0xC
+  i_inc = opcode == 0xD
+  i_out = opcode == 0xE
+  i_hlt = opcode == 0xF
+
+  // -----------------------------------------------------------------------
+  // ALU / accumulator writeback.
+  // -----------------------------------------------------------------------
+
+  wire add_v: 4
+  wire sub_v: 4
+  wire and_v: 4
+  wire or_v: 4
+  wire xor_v: 4
+  wire not_v: 4
+  wire inc_v: 4
+
+  add_v = acc_q + ram_q
+  sub_v = acc_q - ram_q
+  and_v = acc_q & ram_q
+  or_v = acc_q | ram_q
+  xor_v = acc_q ^ ram_q
+  not_v = !acc_q
+  inc_v = acc_q + 0x1
+
+  acc_d =
+    i_ldi ? operand :
+    i_lda ? ram_q :
+    i_add ? add_v :
+    i_sub ? sub_v :
+    i_and ? and_v :
+    i_or ? or_v :
+    i_xor ? xor_v :
+    i_not ? not_v :
+    i_inc ? inc_v :
+    acc_q
+
+  wire running
+  wire acc_instruction
+  wire zero
+
+  running = !halted
+  zero = acc_q == 0x0
+
+  acc_instruction =
+    i_ldi | i_lda | i_add | i_sub |
+    i_and | i_or | i_xor | i_not | i_inc
+
+  acc_we = running & acc_instruction
+  ram_write = running & i_sta
+  out_we = running & i_out
+  halt_we = running & i_hlt
+
+  // -----------------------------------------------------------------------
+  // Program counter.
+  // A branch replaces the normal PC+1 value. HLT keeps PC on the HLT word.
+  // -----------------------------------------------------------------------
+
+  wire pc_inc: 4
+  wire take_branch
+  wire branch_target: 4
+
+  pc_inc = pc_q + 0x1
+  take_branch = i_jmp | (i_jz & zero) | (i_jnz & !zero)
+  branch_target = operand
+  pc_d = take_branch ? branch_target : pc_inc
+  pc_we = running & !i_hlt
+
+  // -----------------------------------------------------------------------
+  // External/debug outputs.
+  // -----------------------------------------------------------------------
+
+  ACC = acc_q
+  PC = pc_q
+  OUT_PORT = out_q
+  Z = zero
+  HALTED = halted
+
+  INSTR = instruction
+  OPCODE = opcode
+  OPERAND = operand
+  MEM_DATA = ram_q
+}
