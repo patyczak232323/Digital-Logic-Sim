@@ -1,0 +1,52 @@
+// Rewired-8 shift/bit execution block for opcodes 0x20-0x2B.
+// Flag write policy is selected in RW8_CORE; this block only produces candidates.
+chip RW8_SHIFTBIT8 {
+  input A: 8
+  input OP: 4
+  input OLD_C
+  input BIT0, BIT1, BIT2
+
+  output R: 8
+  output Z_RESULT
+  output N_RESULT
+  output C_SHIFT
+  output BIT_ZERO
+
+  wire shl: 8
+  wire shr: 8
+  wire sar: 8
+  wire rol: 8
+  wire ror: 8
+  wire rcl: 8
+  wire rcr: 8
+  wire swap: 8
+  wire mask: 8
+  wire tested: 8
+  wire bset: 8
+  wire bclr: 8
+  wire btgl: 8
+  wire result: 8
+
+  shl = A << 1
+  shr = A >> 1
+  sar = {A[7], A[7], A[6], A[5], A[4], A[3], A[2], A[1]}
+  rol = {A[6], A[5], A[4], A[3], A[2], A[1], A[0], A[7]}
+  ror = {A[0], A[7], A[6], A[5], A[4], A[3], A[2], A[1]}
+  rcl = {A[6], A[5], A[4], A[3], A[2], A[1], A[0], OLD_C}
+  rcr = {OLD_C, A[7], A[6], A[5], A[4], A[3], A[2], A[1]}
+  swap = {A[3:0], A[7:4]}
+
+  mask = BIT2 ? (BIT1 ? (BIT0 ? 0x80 : 0x40) : (BIT0 ? 0x20 : 0x10)) : (BIT1 ? (BIT0 ? 0x08 : 0x04) : (BIT0 ? 0x02 : 0x01))
+  tested = A & mask
+  bset = A | mask
+  bclr = A & !mask
+  btgl = A ^ mask
+
+  result = OP == 0x0 ? shl : OP == 0x1 ? shr : OP == 0x2 ? sar : OP == 0x3 ? rol : OP == 0x4 ? ror : OP == 0x5 ? rcl : OP == 0x6 ? rcr : OP == 0x7 ? swap : OP == 0x9 ? bset : OP == 0xA ? bclr : OP == 0xB ? btgl : A
+
+  R = result
+  Z_RESULT = result == 0x00
+  N_RESULT = result[7]
+  C_SHIFT = OP == 0x0 ? A[7] : OP == 0x1 ? A[0] : OP == 0x2 ? A[0] : OP == 0x3 ? A[7] : OP == 0x4 ? A[0] : OP == 0x5 ? A[7] : OP == 0x6 ? A[0] : OLD_C
+  BIT_ZERO = tested == 0x00
+}
