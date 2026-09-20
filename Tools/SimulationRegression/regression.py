@@ -553,7 +553,8 @@ def test_source_integration_static() -> None:
 
     required_solver_tokens = (
         "SettleCombinational",
-        "PrimeInitialCombinationalState",
+        "PowerOnAsynchronousSettle",
+        "FullDeterministicResettle",
         "maxDeltaCycles",
         "ResolveDrivenState",
         "AdvanceSequentialComponents",
