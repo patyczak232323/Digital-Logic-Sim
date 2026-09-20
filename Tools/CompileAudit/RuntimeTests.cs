@@ -552,6 +552,87 @@ namespace DLS.Simulation
 			Assert(core.OutputPins.Any(p => p.Name == "DMEM_ADDR_HI" && p.BitCount == PinBitCount.Bit8), "RW8_CORE missing 16-bit data address high byte");
 			Assert(core.OutputPins.Any(p => p.Name == "HALTED"), "RW8_CORE missing HALTED output");
 			Assert(core.SubChips.Length > 100, "RW8_CORE unexpectedly small; high-level logic was not lowered");
+
+			// Execute a minimal real program through the generated CPU:
+			//   LDI0 R1,5
+			//   LDI0 R2,3
+			//   ADD  R1,R2
+			//   HALT
+			ChipLibrary finalLibrary = new(descriptions.ToArray());
+			Simulator.Reset();
+			DeterministicSimulator.Reset();
+			SimChip root = Simulator.BuildSimChip(core, finalLibrary);
+
+			DevPinInstance[] inputs = new DevPinInstance[core.InputPins.Length];
+			Dictionary<string, int> inputIndex = new(StringComparer.OrdinalIgnoreCase);
+			for (int i = 0; i < core.InputPins.Length; i++)
+			{
+				inputs[i] = new DevPinInstance();
+				inputs[i].Pin.Address = new PinAddress(core.InputPins[i].ID, 0);
+				inputIndex[core.InputPins[i].Name] = i;
+			}
+
+			Dictionary<string, int> outputIndex = new(StringComparer.OrdinalIgnoreCase);
+			for (int i = 0; i < core.OutputPins.Length; i++)
+				outputIndex[core.OutputPins[i].Name] = i;
+
+			ushort EncodeR(int opcode, int rd, int rs, int aux = 0) =>
+				(ushort)(((opcode & 0x3F) << 10) | ((rd & 7) << 7) | ((rs & 7) << 4) | (aux & 0xF));
+
+			ushort EncodeI(int opcode, int rd, int imm7) =>
+				(ushort)(((opcode & 0x3F) << 10) | ((rd & 7) << 7) | (imm7 & 0x7F));
+
+			ushort[] program =
+			{
+				EncodeI(0x02, 1, 5),
+				EncodeI(0x02, 2, 3),
+				EncodeR(0x10, 1, 2),
+				(ushort)(0x3F << 10)
+			};
+
+			void SetInput(string name, uint value) =>
+				inputs[inputIndex[name]].Pin.PlayerInputState = value;
+
+			uint ReadOutput(string name, uint mask = 0xFFu) =>
+				PinState.GetBitStates(root.OutputPins[outputIndex[name]].State) & mask;
+
+			void DriveInstructionForCurrentPc()
+			{
+				int pc = (int)((ReadOutput("DBG_PC_HI") << 8) | ReadOutput("DBG_PC_LO"));
+				ushort word = pc >= 0 && pc < program.Length ? program[pc] : (ushort)(0x3F << 10);
+				SetInput("IMEM_HI", (uint)(word >> 8));
+				SetInput("IMEM_LO", (uint)(word & 0xFF));
+				SetInput("DMEM_IN", 0);
+			}
+
+			void Step(uint clock, uint reset)
+			{
+				DriveInstructionForCurrentPc();
+				SetInput("CLK", clock);
+				SetInput("RESET", reset);
+				DeterministicSimulator.RunSimulationStep(root, inputs, new SimAudio());
+			}
+
+			// Synchronous reset needs a real rising edge.
+			Step(0, 1);
+			Step(1, 1);
+			Step(0, 1);
+			Step(0, 0);
+
+			for (int edge = 0; edge < 12 && ReadOutput("HALTED", 1) == 0; edge++)
+			{
+				Step(1, 0);
+				Step(0, 0);
+			}
+
+			Assert(ReadOutput("HALTED", 1) == 1, "RW8_CORE did not reach HALT");
+			Assert(ReadOutput("DBG_R1") == 8, $"RW8_CORE R1 expected 8, got {ReadOutput("DBG_R1")}");
+			Assert(ReadOutput("DBG_R2") == 3, $"RW8_CORE R2 expected 3, got {ReadOutput("DBG_R2")}");
+			Assert(ReadOutput("DBG_PC_HI") == 0 && ReadOutput("DBG_PC_LO") == 4,
+				$"RW8_CORE PC expected 0004 after HALT fetch, got {ReadOutput("DBG_PC_HI"):X2}{ReadOutput("DBG_PC_LO"):X2}");
+
+			DeterministicSimulator.Reset();
+			Simulator.Reset();
 		}
 
 		static void TestFeedbackNandLatch()
