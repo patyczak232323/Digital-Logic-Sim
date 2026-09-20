@@ -348,6 +348,7 @@ namespace DLS.Graphics
 			using (UI.BeginBoundsScope(true))
 			{
 				Draw.ID backgroundPanelID = UI.ReservePanel();
+				Bounds2D settingsHeader = RewiredUI.DrawSectionHeader("SETTINGS", new Vector2(labelOriginLeft, pos.y + 6f), regionWidth, true);
 
 				// -- Resolution --
 				bool resEnabled = EditedAppSettings.fullscreenMode == FullScreenMode.Windowed;
@@ -380,7 +381,7 @@ namespace DLS.Graphics
 				}
 
 				// Background panel
-				UI.ModifyPanel(backgroundPanelID, UI.GetCurrentBoundsScope().Centre, UI.GetCurrentBoundsScope().Size + Vector2.one * 3, ColHelper.MakeCol255(37, 37, 43));
+				UI.ModifyPanel(backgroundPanelID, UI.GetCurrentBoundsScope().Centre, UI.GetCurrentBoundsScope().Size + Vector2.one * 3, RewiredUI.SurfaceRaised);
 			}
 
 			Vector2 buttonPos = UI.PrevBounds.BottomLeft + Vector2.down * DrawSettings.VerticalButtonSpacing;
@@ -403,7 +404,7 @@ namespace DLS.Graphics
 		{
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
 
-			UI.DrawText("KEYBINDINGS", theme.FontBold, theme.FontSizeRegular * 1.35f, UI.CentreTop + Vector2.down * 5, Anchor.Centre, Color.white);
+			RewiredUI.DrawSectionHeader("KEYBINDINGS", UI.CentreTop + new Vector2(-36f, -3.5f), 72f, true);
 			UI.DrawText(
 				"Click a binding, then press a key combination. Backspace/Delete clears it.",
 				theme.FontRegular,
@@ -467,7 +468,7 @@ namespace DLS.Graphics
 			{
 				ShortcutAction action = configurableShortcutActions[i];
 				Color rowCol = i % 2 == 0 ? ColHelper.MakeCol255(38) : ColHelper.MakeCol255(43);
-				UI.DrawPanel(topLeft, new Vector2(width, rowHeight), rowCol, Anchor.TopLeft);
+				UI.DrawPanel(topLeft, new Vector2(width, rowHeight), RewiredUI.Surface, Anchor.TopLeft);
 				Bounds2D rowBounds = UI.PrevBounds;
 
 				UI.DrawText(
@@ -662,7 +663,7 @@ namespace DLS.Graphics
 
 			Vector2 panelCentre = UI.Centre + Vector2.up * 1;
 			Vector2 panelSize = new(76, 36);
-			UI.DrawPanel(panelCentre, panelSize, ColHelper.MakeCol255(37, 37, 43), Anchor.Centre);
+			UI.DrawPanel(panelCentre, panelSize, RewiredUI.SurfaceRaised, Anchor.Centre);
 
 			Vector2 pos = panelCentre + new Vector2(0, 13);
 			UI.DrawText("REWIRED", FontType.Born2bSporty, 8f, pos, Anchor.Centre, Color.white);
@@ -696,7 +697,7 @@ namespace DLS.Graphics
 		static void DrawVersionInfo()
 		{
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
-			UI.DrawPanel(UI.BottomLeft, new Vector2(UI.Width, 4), ColHelper.MakeCol255(37, 37, 43), Anchor.BottomLeft);
+			UI.DrawPanel(UI.BottomLeft, new Vector2(UI.Width, 4), RewiredUI.SurfaceRaised, Anchor.BottomLeft);
 
 			float pad = 1;
 			Color col = new(1, 1, 1, 0.5f);
