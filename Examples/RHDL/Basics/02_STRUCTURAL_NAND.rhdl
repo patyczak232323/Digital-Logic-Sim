@@ -1,0 +1,10 @@
+// Structural RHDL using an existing builtin chip.
+chip StructuralNand {
+  input A, B
+  output Y
+
+  NAND n
+  connect A -> n.IN_A
+  connect B -> n.IN_B
+  connect n.OUT -> Y
+}
