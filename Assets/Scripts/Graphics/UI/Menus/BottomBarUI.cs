@@ -48,6 +48,14 @@ namespace DLS.Graphics
 		static Vector2 collectionPopupBottomLeft;
 		static Bounds2D barBounds_ScreenSpace;
 
+		// Bottom-bar chip -> collection drag/drop.
+		const float chipDragThresholdPixels = 8f;
+		static string pendingChipDragName;
+		static Vector2 pendingChipDragStartScreen;
+		static bool pendingChipDragFromCollectionPopup;
+		static bool pendingChipDragFromStandaloneStar;
+		static ChipCollection chipDragDropTarget;
+
 		static bool MenuButtonsAndShortcutsEnabled => Project.ActiveProject.CanEditViewedChip;
 
 		public static void DrawUI(Project project)
@@ -170,6 +178,7 @@ namespace DLS.Graphics
 
 		static void DrawBottomBar(Project project)
 		{
+			chipDragDropTarget = null;
 			Bounds2D bounds_UISpace = new(Vector2.zero, new Vector2(UI.Width, barHeight));
 			barBounds_ScreenSpace = UI.UIToScreenSpace(bounds_UISpace);
 
@@ -256,7 +265,16 @@ namespace DLS.Graphics
 
 					bool canAdd = starred.IsCollection || project.ViewedChip.CanAddSubchip(buttonName);
 
-					if (UI.Button(buttonName, buttonTheme, buttonPos, buttonSize, chipButtonsEnabled && canAdd, true, false, Anchor.BottomLeft, textOffsetX: textOffsetX, ignoreInputs: ignoreInputs))
+					bool pressed = UI.Button(buttonName, buttonTheme, buttonPos, buttonSize, chipButtonsEnabled && canAdd, true, false, Anchor.BottomLeft, textOffsetX: textOffsetX, ignoreInputs: ignoreInputs);
+					Bounds2D starredBounds = UI.PrevBounds;
+
+					if (starred.IsCollection && IsChipCategoryDragActive() && UI.MouseInsideBounds(starredBounds))
+					{
+						chipDragDropTarget = GetChipCollectionByName(starred.Name);
+						DrawDropTargetOutline(starredBounds);
+					}
+
+					if (pressed)
 					{
 						if (starred.IsCollection)
 						{
@@ -270,7 +288,7 @@ namespace DLS.Graphics
 							// Open collection in popup
 							else
 							{
-								collectionPopupBottomLeft = new Vector2(UI.PrevBounds.Left, barHeight);
+								collectionPopupBottomLeft = new Vector2(starredBounds.Left, barHeight);
 								activeCollection = newActiveCollection == activeCollection ? null : newActiveCollection;
 								collectionInteractFrame = Time.frameCount;
 								closeActiveCollectionMultiModeExit = false;
@@ -278,11 +296,10 @@ namespace DLS.Graphics
 						}
 						else
 						{
-							project.controller.StartPlacing(project.chipLibrary.GetChipDescription(starred.Name));
-							activeCollection = null;
+							BeginChipCategoryDrag(starred.Name, fromCollectionPopup: false, fromStandaloneStar: true);
 						}
 					}
-					else if (isRightClick && UI.MouseInsideBounds(UI.PrevBounds))
+					else if (isRightClick && UI.MouseInsideBounds(starredBounds))
 					{
 						ContextMenu.OpenBottomBarContextMenu(starred.Name, starred.IsCollection, false);
 					}
@@ -297,6 +314,8 @@ namespace DLS.Graphics
 
 
 			DrawCollectionsPopup();
+			DrawChipCategoryDragGhost();
+			FinalizeChipCategoryDrag(project);
 		}
 
 
@@ -360,17 +379,9 @@ namespace DLS.Graphics
 			{
 				if (pressedIndex != -1)
 				{
-					project.controller.StartPlacing(project.chipLibrary.GetChipDescription(activeCollection.Chips[pressedIndex]));
-					if (KeyboardShortcuts.MultiModeHeld)
-					{
-						closeActiveCollectionMultiModeExit = true;
-					}
-					else
-					{
-						activeCollection = null;
-					}
+					BeginChipCategoryDrag(activeCollection.Chips[pressedIndex], fromCollectionPopup: true, fromStandaloneStar: false);
 				}
-				else if (KeyboardShortcuts.CancelShortcutTriggered || (InputHelper.IsAnyMouseButtonDownThisFrame_IgnoreConsumed() && Time.frameCount != collectionInteractFrame) || UIDrawer.ActiveMenu != UIDrawer.MenuType.None)
+				else if (KeyboardShortcuts.CancelShortcutTriggered || (InputHelper.IsAnyMouseButtonDownThisFrame_IgnoreConsumed() && Time.frameCount != collectionInteractFrame && pendingChipDragName == null) || UIDrawer.ActiveMenu != UIDrawer.MenuType.None)
 				{
 					activeCollection = null;
 				}
@@ -405,6 +416,150 @@ namespace DLS.Graphics
 			}
 
 			return pressedIndex;
+		}
+
+		static void BeginChipCategoryDrag(string chipName, bool fromCollectionPopup, bool fromStandaloneStar)
+		{
+			if (string.IsNullOrWhiteSpace(chipName)) return;
+
+			pendingChipDragName = chipName;
+			pendingChipDragStartScreen = InputHelper.MousePos;
+			pendingChipDragFromCollectionPopup = fromCollectionPopup;
+			pendingChipDragFromStandaloneStar = fromStandaloneStar;
+			chipDragDropTarget = null;
+		}
+
+		static bool IsChipCategoryDragActive()
+		{
+			if (pendingChipDragName == null) return false;
+			Vector2 delta = InputHelper.MousePos - pendingChipDragStartScreen;
+			return delta.sqrMagnitude >= chipDragThresholdPixels * chipDragThresholdPixels;
+		}
+
+		static void FinalizeChipCategoryDrag(Project project)
+		{
+			if (pendingChipDragName == null) return;
+
+			if (KeyboardShortcuts.CancelShortcutTriggered)
+			{
+				ClearChipCategoryDrag();
+				return;
+			}
+
+			if (!InputHelper.IsMouseUpThisFrame(MouseButton.Left)) return;
+
+			bool wasDrag = IsChipCategoryDragActive();
+			string chipName = pendingChipDragName;
+			bool sourceWasPopup = pendingChipDragFromCollectionPopup;
+			bool sourceWasStandaloneStar = pendingChipDragFromStandaloneStar;
+			ChipCollection target = chipDragDropTarget;
+
+			if (wasDrag)
+			{
+				if (target != null)
+				{
+					MoveChipToCollection(project, chipName, target, sourceWasStandaloneStar);
+				}
+			}
+			else
+			{
+				project.controller.StartPlacing(project.chipLibrary.GetChipDescription(chipName));
+
+				if (sourceWasPopup && KeyboardShortcuts.MultiModeHeld)
+				{
+					closeActiveCollectionMultiModeExit = true;
+				}
+				else
+				{
+					activeCollection = null;
+				}
+			}
+
+			ClearChipCategoryDrag();
+		}
+
+		static void MoveChipToCollection(Project project, string chipName, ChipCollection target, bool removeStandaloneStar)
+		{
+			bool modified = false;
+
+			foreach (ChipCollection collection in project.description.ChipCollections)
+			{
+				if (collection == target) continue;
+
+				for (int i = collection.Chips.Count - 1; i >= 0; i--)
+				{
+					if (ChipDescription.NameMatch(collection.Chips[i], chipName))
+					{
+						collection.Chips.RemoveAt(i);
+						modified = true;
+					}
+				}
+			}
+
+			bool alreadyInTarget = target.Chips.Exists(name => ChipDescription.NameMatch(name, chipName));
+			if (!alreadyInTarget)
+			{
+				target.Chips.Add(chipName);
+				modified = true;
+			}
+
+			if (removeStandaloneStar && project.description.IsStarred(chipName, false))
+			{
+				project.SetStarred(chipName, false, false, autoSave: false);
+				modified = true;
+			}
+
+			if (modified)
+			{
+				project.SaveCurrentProjectDescription();
+			}
+
+			activeCollection = target;
+			collectionInteractFrame = Time.frameCount;
+			closeActiveCollectionMultiModeExit = false;
+		}
+
+		static void DrawDropTargetOutline(Bounds2D bounds)
+		{
+			Color col = DrawSettings.ActiveUITheme.ChipLibraryCollectionToggleOn.buttonCols.normal;
+			const float thickness = 0.09f;
+			UI.DrawLine(bounds.BottomLeft, bounds.TopLeft, thickness, col);
+			UI.DrawLine(bounds.TopLeft, bounds.TopRight, thickness, col);
+			UI.DrawLine(bounds.TopRight, bounds.BottomRight, thickness, col);
+			UI.DrawLine(bounds.BottomRight, bounds.BottomLeft, thickness, col);
+			UI.OverridePreviousBounds(bounds);
+		}
+
+		static void DrawChipCategoryDragGhost()
+		{
+			if (!IsChipCategoryDragActive()) return;
+
+			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
+			string text = chipDragDropTarget == null
+				? pendingChipDragName
+				: $"{pendingChipDragName}  ->  {chipDragDropTarget.Name}";
+
+			Vector2 textSize = UI.CalculateTextSize(text, theme.FontSizeRegular * 0.8f, theme.FontBold);
+			Vector2 size = textSize + new Vector2(1.6f, 1.0f);
+			Vector2 pos = UI.ScreenToUISpace(InputHelper.MousePos) + new Vector2(0.8f, 1.2f);
+
+			UI.DrawPanel(pos, size, theme.MenuPanelCol, Anchor.BottomLeft);
+			Bounds2D bounds = UI.PrevBounds;
+			UI.DrawText(
+				text,
+				theme.FontBold,
+				theme.FontSizeRegular * 0.8f,
+				bounds.CentreLeft + Vector2.right * 0.8f,
+				Anchor.TextCentreLeft,
+				Color.white);
+		}
+
+		static void ClearChipCategoryDrag()
+		{
+			pendingChipDragName = null;
+			pendingChipDragFromCollectionPopup = false;
+			pendingChipDragFromStandaloneStar = false;
+			chipDragDropTarget = null;
 		}
 
 		static ChipCollection GetChipCollectionByName(string name)
@@ -476,6 +631,7 @@ namespace DLS.Graphics
 			chipBarTotalWidthLastFrame = 0;
 			isDraggingChipBar = false;
 			activeCollection = null;
+			ClearChipCategoryDrag();
 		}
 	}
 }
