@@ -651,7 +651,7 @@ namespace DLS.Simulation
 			{
 				Name = name,
 				ChipType = ChipType.Custom,
-				CacheMode = ChipCacheMode.Full,
+				CacheMode = ChipCacheMode.Cached,
 				InputPins = inputs.ToArray(),
 				OutputPins = new[] { Pin(outputPinId, PinBitCount.Bit1) },
 				SubChips = Array.Empty<SubChipDescription>(),
