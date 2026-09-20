@@ -581,7 +581,10 @@ def test_source_integration_static() -> None:
     assert "sourceIndices.Length" not in solver, "stale jagged-adjacency reference breaks the CSR build"
 
     assert "RandomBool()" not in solver
-    assert "rng.Next" not in solver
+    # Randomized ordering is intentionally restricted to the one-time power-on
+    # settle used to choose a stable state for symmetric feedback circuits.
+    assert solver.count("Simulator.rng.Next(") == 1
+    assert "int slot = Simulator.rng.Next(dirtyChips.Count);" in solver
     assert "HashSet<SimPin>" not in solver
     assert "HashSet<SimChip>" not in solver
     assert "Dictionary<SimPin, SimPin[]>" not in solver
