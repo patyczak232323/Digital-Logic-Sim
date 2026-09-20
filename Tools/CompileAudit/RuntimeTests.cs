@@ -17,7 +17,8 @@ namespace DLS.Simulation
 
 		static void Main()
 		{
-			Run("RHDL HalfAdder compilation", TestRhdlHalfAdderCompilation);
+			Run("RHDL structural HalfAdder compilation", TestRhdlHalfAdderCompilation);
+			Run("RHDL readable logic synthesis", TestRhdlReadableLogicSynthesis);
 			Run("feedback NAND latch", TestFeedbackNandLatch);
 			Run("feedback unchanged-input zero sweep", TestFeedbackZeroSweep);
 			Run("feedback state materialization", TestFeedbackMaterialization);
@@ -129,6 +130,67 @@ namespace DLS.Simulation
 					uint carry = Bit(root.OutputPins[1].State);
 					Assert(sum == (a ^ b), $"RHDL HalfAdder sum mismatch for {a}{b}: {sum}");
 					Assert(carry == (a & b), $"RHDL HalfAdder carry mismatch for {a}{b}: {carry}");
+				}
+			}
+
+			DeterministicSimulator.Reset();
+			Simulator.Reset();
+		}
+
+
+		static void TestRhdlReadableLogicSynthesis()
+		{
+			PinDescription PinNamed(string name, int id) =>
+				new(name, id, new UnityEngine.Vector2(), PinBitCount.Bit1, PinColour.Red, PinValueDisplayMode.Off);
+
+			ChipDescription nand = new()
+			{
+				Name = "NAND",
+				ChipType = ChipType.Nand,
+				InputPins = new[] { PinNamed("IN B", 0), PinNamed("IN A", 1) },
+				OutputPins = new[] { PinNamed("OUT", 2) },
+				SubChips = Array.Empty<SubChipDescription>(),
+				Wires = Array.Empty<WireDescription>(),
+				Displays = Array.Empty<DisplayDescription>()
+			};
+
+			ChipLibrary library = new(nand);
+			string source =
+@"chip HalfAdderReadable {
+  input a, b
+  output sum, carry
+
+  sum = a XOR b
+  carry = a AND b
+}";
+
+			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
+			Assert(result.Success, "Readable RHDL compile failed: " + string.Join(" | ", result.Diagnostics.Select(d => d.ToString())));
+			Assert(result.Description != null, "Readable RHDL returned no description");
+			Assert(result.Description.SubChips.Length == 6,
+				$"Readable HalfAdder should synthesize to 6 NAND gates, got {result.Description.SubChips.Length}");
+			Assert(result.Description.Wires.Length == 14,
+				$"Readable HalfAdder should synthesize to 14 wires, got {result.Description.Wires.Length}");
+
+			Simulator.Reset();
+			DeterministicSimulator.Reset();
+			SimChip root = Simulator.BuildSimChip(result.Description, library);
+			DevPinInstance[] inputs = { new DevPinInstance(), new DevPinInstance() };
+			inputs[0].Pin.Address = new PinAddress(result.Description.InputPins[0].ID, 0);
+			inputs[1].Pin.Address = new PinAddress(result.Description.InputPins[1].ID, 0);
+
+			for (uint a = 0; a <= 1; a++)
+			{
+				for (uint b = 0; b <= 1; b++)
+				{
+					inputs[0].Pin.PlayerInputState = a;
+					inputs[1].Pin.PlayerInputState = b;
+					DeterministicSimulator.RunSimulationStep(root, inputs, new SimAudio());
+
+					Assert(Bit(root.OutputPins[0].State) == (a ^ b),
+						$"Readable RHDL XOR mismatch for {a}{b}");
+					Assert(Bit(root.OutputPins[1].State) == (a & b),
+						$"Readable RHDL AND mismatch for {a}{b}");
 				}
 			}
 
