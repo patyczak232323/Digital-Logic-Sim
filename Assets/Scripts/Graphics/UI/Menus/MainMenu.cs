@@ -73,7 +73,7 @@ namespace DLS.Graphics
 		static int selectedProjectIndex;
 
 		static readonly string authorString = "Rewired by: @patyczak232323";
-		static readonly string versionString = $"Rewired v{Application.version}";
+		static readonly string versionString = $"Rewired v{Main.RewiredVersion} ({Main.RewiredLastUpdatedString})";
 		static string SelectedProjectName => allProjectDescriptions[selectedProjectIndex].ProjectName;
 
 		static string FormatButtonString(string s) => capitalize ? s.ToUpper() : s;
@@ -90,16 +90,16 @@ namespace DLS.Graphics
 			UI.DrawFullscreenPanel(ColHelper.MakeCol255(47, 47, 53));
 			const string title = "REWIRED";
 			const string subtitle = "DIGITAL LOGIC SIMULATOR";
-			const float titleFontSize = 15.5f;
-			const float subtitleFontSize = 3.2f;
-			const float titleHeight = 25;
+			const float titleFontSize = 18.0f;
+			const float subtitleFontSize = 3.5f;
+			const float titleHeight = 24.5f;
 			const float shaddowOffset = -0.33f;
 			Color shadowCol = ColHelper.MakeCol255(87, 94, 230);
 			Color subtitleCol = new(1, 1, 1, 0.55f);
 
 			UI.DrawText(title, FontType.Born2bSporty, titleFontSize, UI.Centre + Vector2.up * (titleHeight + shaddowOffset), Anchor.CentreTop, shadowCol);
 			UI.DrawText(title, FontType.Born2bSporty, titleFontSize, UI.Centre + Vector2.up * titleHeight, Anchor.CentreTop, Color.white);
-			UI.DrawText(subtitle, FontType.Born2bSporty, subtitleFontSize, UI.Centre + Vector2.up * 15.5f, Anchor.CentreTop, subtitleCol);
+			UI.DrawText(subtitle, FontType.Born2bSporty, subtitleFontSize, UI.Centre + Vector2.up * 14.0f, Anchor.CentreTop, subtitleCol);
 			DrawVersionInfo();
 
 			switch (activeMenuScreen)
@@ -484,7 +484,7 @@ namespace DLS.Graphics
 			pos += Vector2.down * 5;
 			UI.DrawText("Independent digital logic simulator", uiTheme.FontRegular, uiTheme.FontSizeRegular, pos, Anchor.Centre, Color.white);
 			pos += Vector2.down * 3;
-			UI.DrawText($"Version {Application.version}", uiTheme.FontRegular, uiTheme.FontSizeRegular, pos, Anchor.Centre, new Color(1, 1, 1, 0.7f));
+			UI.DrawText($"Version {Main.RewiredVersion} ({Main.RewiredLastUpdatedString})", uiTheme.FontRegular, uiTheme.FontSizeRegular, pos, Anchor.Centre, new Color(1, 1, 1, 0.7f));
 
 			pos += Vector2.down * 5;
 			UI.DrawText("Rewired project and simulation engine: @patyczak232323", uiTheme.FontRegular, uiTheme.FontSizeRegular, pos, Anchor.Centre, Color.white);
