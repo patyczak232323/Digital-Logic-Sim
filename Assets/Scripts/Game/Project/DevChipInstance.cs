@@ -41,7 +41,7 @@ namespace DLS.Game
 		public void RebuildSimulation()
 		{
 			ChipDescription desc = DescriptionCreator.CreateChipDescription(this);
-			SimChip simChip = Simulator.BuildSimChip(desc, Project.ActiveProject.chipLibrary);
+			SimChip simChip = RewiredEngine.BuildChip(desc, Project.ActiveProject.chipLibrary);
 			SetSimChip(simChip);
 		}
 
@@ -220,7 +220,7 @@ namespace DLS.Game
 			AddElement(subChip);
 			if (!isLoading)
 			{
-				Simulator.AddSubChip(SimChip, subChip.Description, Project.ActiveProject.chipLibrary, subChip.ID, subChip.InternalData);
+				RewiredEngine.AddSubChip(SimChip, subChip.Description, Project.ActiveProject.chipLibrary, subChip.ID, subChip.InternalData);
 			}
 		}
 
@@ -229,7 +229,7 @@ namespace DLS.Game
 			AddElement(pin);
 			if (!isLoadingFromFile)
 			{
-				Simulator.AddPin(SimChip, pin.ID, pin.IsInputPin);
+				RewiredEngine.AddPin(SimChip, pin.ID, pin.IsInputPin);
 			}
 		}
 
@@ -241,7 +241,7 @@ namespace DLS.Game
 
 			if (!isLoading)
 			{
-				Simulator.AddConnection(SimChip, wire.SourcePin.Address, wire.TargetPin.Address);
+				RewiredEngine.AddConnection(SimChip, wire.SourcePin.Address, wire.TargetPin.Address);
 			}
 		}
 
@@ -263,7 +263,7 @@ namespace DLS.Game
 		{
 			DeleteWiresAttachedToPin(devPin.Pin);
 			RemoveElement(devPin);
-			Simulator.RemovePin(SimChip, devPin.ID);
+			RewiredEngine.RemovePin(SimChip, devPin.ID);
 		}
 
 		public void DeleteWire(WireInstance wireToDelete)
@@ -274,7 +274,7 @@ namespace DLS.Game
 			// Remove from simulation
 			if (hasSimChip)
 			{
-				Simulator.RemoveConnection(SimChip, wireToDelete.SourcePin.Address, wireToDelete.TargetPin.Address);
+				RewiredEngine.RemoveConnection(SimChip, wireToDelete.SourcePin.Address, wireToDelete.TargetPin.Address);
 			}
 
 			// If deleting bus line, automatically delete all other connecting wires
@@ -367,7 +367,7 @@ namespace DLS.Game
 			DeleteWiresAttachedToElement(subChip.ID);
 			RemoveElement(subChip);
 
-			if (hasSimChip) Simulator.RemoveSubChip(SimChip, subChip.ID);
+			if (hasSimChip) RewiredEngine.RemoveSubChip(SimChip, subChip.ID);
 		}
 
 		// Delete subchip with given id (if it exists)
