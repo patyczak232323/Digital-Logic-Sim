@@ -117,9 +117,7 @@ namespace DLS.Graphics
 
 		static void DrawPanelHeader(string text, Vector2 topLeft, float width)
 		{
-			Color textCol = ColHelper.MakeCol("#3CD168");
-			Color bgCol = ColHelper.MakeCol("#1D1D1D");
-			MenuHelper.DrawLeftAlignTextWithBackground(text, topLeft, new Vector2(width, 2.3f), Anchor.TopLeft, textCol, bgCol, true);
+			RewiredUI.DrawSectionHeader(text, topLeft, width);
 		}
 
 		static void DrawStarredPanel(Vector2 topLeft, Vector2 size)
