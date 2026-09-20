@@ -1,0 +1,543 @@
+// Rewired-8 CPU core for RW8 ISA v1, written for RHDL v0.3.
+//
+// External interfaces:
+//   IMEM_* : Harvard instruction memory, 16-bit word split into HI/LO bytes.
+//   DMEM_* : 64 KiB byte-addressed data memory, 16-bit address split HI/LO.
+//
+// Sequencing:
+//   state 0 = FETCH  (IR <- IMEM[PC], PC <- PC+1)
+//   state 1 = EXEC
+//   state 2 = CALL second stack byte + branch
+//   state 3 = RET second stack byte + PC restore
+//   state 4 = HALT
+//
+// The already-canonical 6-bit opcode map is unchanged.
+// Current hardware conventions for details that had not been fixed earlier:
+//   - ADDI/SUBI/CMPI sign-extend imm7.
+//   - Relative target is the already-incremented PC + signed rel10.
+//   - Stack grows downward: PUSH/CALL pre-decrement, POP/RET post-increment.
+//   - Shift/rotate update Z,N,C and preserve V.
+//   - SWAP/BSET/BCLR/BTGL update Z,N and preserve C,V.
+//   - BTST updates Z only.
+chip RW8_CORE {
+  input CLK, RESET
+  input IMEM_HI: 8, IMEM_LO: 8
+  input DMEM_IN: 8
+
+  output IMEM_ADDR_HI: 8, IMEM_ADDR_LO: 8
+  output DMEM_ADDR_HI: 8, DMEM_ADDR_LO: 8
+  output DMEM_OUT: 8
+  output DMEM_WRITE, DMEM_READ
+  output HALTED
+  output FLAGS: 4
+  output STATE: 8
+
+  output DBG_PC_HI: 8, DBG_PC_LO: 8
+  output DBG_IR_HI: 8, DBG_IR_LO: 8
+  output DBG_X_HI: 8, DBG_X_LO: 8
+  output DBG_Y_HI: 8, DBG_Y_LO: 8
+  output DBG_SP_HI: 8, DBG_SP_LO: 8
+  output DBG_R0: 8, DBG_R1: 8, DBG_R2: 8, DBG_R3: 8
+  output DBG_R4: 8, DBG_R5: 8, DBG_R6: 8, DBG_R7: 8
+
+  // ---- Sequencer and architectural state ----
+  wire state_q: 8
+  wire state_d: 8
+  wire fetch
+  wire exec
+  wire call2
+  wire ret2
+  wire halted
+
+  fetch = state_q == 0x00
+  exec = state_q == 0x01
+  call2 = state_q == 0x02
+  ret2 = state_q == 0x03
+  halted = state_q == 0x04
+
+  RW8_REG8 state_reg(D=state_d, WE=1, CLK=CLK, RESET=RESET, Q=state_q)
+
+  wire ir_hi: 8
+  wire ir_lo: 8
+  RW8_REG8 irh(D=IMEM_HI, WE=fetch, CLK=CLK, RESET=RESET, Q=ir_hi)
+  RW8_REG8 irl(D=IMEM_LO, WE=fetch, CLK=CLK, RESET=RESET, Q=ir_lo)
+
+  wire pc_hi: 8
+  wire pc_lo: 8
+  wire pc_d_hi: 8
+  wire pc_d_lo: 8
+  wire pc_we
+  RW8_REG16 pc(D_LO=pc_d_lo, D_HI=pc_d_hi, WE=pc_we, CLK=CLK, RESET=RESET, Q_LO=pc_lo, Q_HI=pc_hi)
+
+  wire x_hi: 8
+  wire x_lo: 8
+  wire x_d_hi: 8
+  wire x_d_lo: 8
+  wire x_we
+  RW8_REG16 xreg(D_LO=x_d_lo, D_HI=x_d_hi, WE=x_we, CLK=CLK, RESET=RESET, Q_LO=x_lo, Q_HI=x_hi)
+
+  wire y_hi: 8
+  wire y_lo: 8
+  wire y_d_hi: 8
+  wire y_d_lo: 8
+  wire y_we
+  RW8_REG16 yreg(D_LO=y_d_lo, D_HI=y_d_hi, WE=y_we, CLK=CLK, RESET=RESET, Q_LO=y_lo, Q_HI=y_hi)
+
+  wire sp_hi: 8
+  wire sp_lo: 8
+  wire sp_d_hi: 8
+  wire sp_d_lo: 8
+  wire sp_we
+  RW8_REG16 spreg(D_LO=sp_d_lo, D_HI=sp_d_hi, WE=sp_we, CLK=CLK, RESET=RESET, Q_LO=sp_lo, Q_HI=sp_hi)
+
+  wire ret_lo_q: 8
+  wire ret_lo_we
+  RW8_REG8 retlo(D=DMEM_IN, WE=ret_lo_we, CLK=CLK, RESET=RESET, Q=ret_lo_q)
+
+  wire flags_q: 8
+  wire flags_d: 8
+  wire flags_we
+  RW8_REG8 flagsreg(D=flags_d, WE=flags_we, CLK=CLK, RESET=RESET, Q=flags_q)
+
+  wire flag_z
+  wire flag_c
+  wire flag_n
+  wire flag_v
+  flag_z = flags_q[0]
+  flag_c = flags_q[1]
+  flag_n = flags_q[2]
+  flag_v = flags_q[3]
+
+  // ---- Instruction fields ----
+  wire op4: 4
+  wire g0
+  wire g1
+  wire g2
+  wire g3
+
+  op4 = ir_hi[5:2]
+  g0 = !ir_hi[7] & !ir_hi[6]
+  g1 = !ir_hi[7] & ir_hi[6]
+  g2 = ir_hi[7] & !ir_hi[6]
+  g3 = ir_hi[7] & ir_hi[6]
+
+  wire rd0
+  wire rd1
+  wire rd2
+  wire rs0
+  wire rs1
+  wire rs2
+
+  rd2 = ir_hi[1]
+  rd1 = ir_hi[0]
+  rd0 = ir_lo[7]
+  rs2 = ir_lo[6]
+  rs1 = ir_lo[5]
+  rs0 = ir_lo[4]
+
+  wire imm7_se: 8
+  wire ldi0_value: 8
+  wire ldi1_value: 8
+  wire rel_off_hi: 8
+
+  imm7_se = {ir_lo[6], ir_lo[6], ir_lo[5], ir_lo[4], ir_lo[3], ir_lo[2], ir_lo[1], ir_lo[0]}
+  ldi0_value = {0, ir_lo[6], ir_lo[5], ir_lo[4], ir_lo[3], ir_lo[2], ir_lo[1], ir_lo[0]}
+  ldi1_value = {1, ir_lo[6], ir_lo[5], ir_lo[4], ir_lo[3], ir_lo[2], ir_lo[1], ir_lo[0]}
+  rel_off_hi = {ir_hi[1], ir_hi[1], ir_hi[1], ir_hi[1], ir_hi[1], ir_hi[1], ir_hi[1], ir_hi[0]}
+
+  // ---- Low four opcode decoder ----
+  wire o0
+  wire o1
+  wire o2
+  wire o3
+  wire o4
+  wire o5
+  wire o6
+  wire o7
+  wire o8
+  wire o9
+  wire oA
+  wire oB
+  wire oC
+  wire oD
+  wire oE
+  wire oF
+
+  o0 = op4 == 0x0
+  o1 = op4 == 0x1
+  o2 = op4 == 0x2
+  o3 = op4 == 0x3
+  o4 = op4 == 0x4
+  o5 = op4 == 0x5
+  o6 = op4 == 0x6
+  o7 = op4 == 0x7
+  o8 = op4 == 0x8
+  o9 = op4 == 0x9
+  oA = op4 == 0xA
+  oB = op4 == 0xB
+  oC = op4 == 0xC
+  oD = op4 == 0xD
+  oE = op4 == 0xE
+  oF = op4 == 0xF
+
+  // ---- 0x00-0x0F data / memory ----
+  wire i_NOP
+  wire i_MOV
+  wire i_LDI0
+  wire i_LDI1
+  wire i_LDX
+  wire i_STX
+  wire i_LDY
+  wire i_STY
+  wire i_LDXP
+  wire i_STXP
+  wire i_LDYP
+  wire i_STYP
+  wire i_SETXL
+  wire i_SETXH
+  wire i_SETYL
+  wire i_SETYH
+
+  i_NOP = g0 & o0
+  i_MOV = g0 & o1
+  i_LDI0 = g0 & o2
+  i_LDI1 = g0 & o3
+  i_LDX = g0 & o4
+  i_STX = g0 & o5
+  i_LDY = g0 & o6
+  i_STY = g0 & o7
+  i_LDXP = g0 & o8
+  i_STXP = g0 & o9
+  i_LDYP = g0 & oA
+  i_STYP = g0 & oB
+  i_SETXL = g0 & oC
+  i_SETXH = g0 & oD
+  i_SETYL = g0 & oE
+  i_SETYH = g0 & oF
+
+  // ---- 0x10-0x1F ALU ----
+  wire i_ADD
+  wire i_ADC
+  wire i_SUB
+  wire i_SBC
+  wire i_CMP
+  wire i_AND
+  wire i_OR
+  wire i_XOR
+  wire i_NOT
+  wire i_NEG
+  wire i_INC
+  wire i_DEC
+  wire i_ADDI
+  wire i_SUBI
+  wire i_CMPI
+  wire i_TEST
+
+  i_ADD = g1 & o0
+  i_ADC = g1 & o1
+  i_SUB = g1 & o2
+  i_SBC = g1 & o3
+  i_CMP = g1 & o4
+  i_AND = g1 & o5
+  i_OR = g1 & o6
+  i_XOR = g1 & o7
+  i_NOT = g1 & o8
+  i_NEG = g1 & o9
+  i_INC = g1 & oA
+  i_DEC = g1 & oB
+  i_ADDI = g1 & oC
+  i_SUBI = g1 & oD
+  i_CMPI = g1 & oE
+  i_TEST = g1 & oF
+
+  // ---- 0x20-0x2F shift / bit / stack ----
+  wire i_SHL
+  wire i_SHR
+  wire i_SAR
+  wire i_ROL
+  wire i_ROR
+  wire i_RCL
+  wire i_RCR
+  wire i_SWAP
+  wire i_BTST
+  wire i_BSET
+  wire i_BCLR
+  wire i_BTGL
+  wire i_CLC
+  wire i_SEC
+  wire i_PUSH
+  wire i_POP
+
+  i_SHL = g2 & o0
+  i_SHR = g2 & o1
+  i_SAR = g2 & o2
+  i_ROL = g2 & o3
+  i_ROR = g2 & o4
+  i_RCL = g2 & o5
+  i_RCR = g2 & o6
+  i_SWAP = g2 & o7
+  i_BTST = g2 & o8
+  i_BSET = g2 & o9
+  i_BCLR = g2 & oA
+  i_BTGL = g2 & oB
+  i_CLC = g2 & oC
+  i_SEC = g2 & oD
+  i_PUSH = g2 & oE
+  i_POP = g2 & oF
+
+  // ---- 0x30-0x3F control flow ----
+  wire i_JMP
+  wire i_JZ
+  wire i_JNZ
+  wire i_JC
+  wire i_JNC
+  wire i_JN
+  wire i_JNN
+  wire i_JV
+  wire i_JNV
+  wire i_JLT
+  wire i_JGE
+  wire i_CALL
+  wire i_RET
+  wire i_JMPX
+  wire i_CALLX
+  wire i_HALT
+
+  i_JMP = g3 & o0
+  i_JZ = g3 & o1
+  i_JNZ = g3 & o2
+  i_JC = g3 & o3
+  i_JNC = g3 & o4
+  i_JN = g3 & o5
+  i_JNN = g3 & o6
+  i_JV = g3 & o7
+  i_JNV = g3 & o8
+  i_JLT = g3 & o9
+  i_JGE = g3 & oA
+  i_CALL = g3 & oB
+  i_RET = g3 & oC
+  i_JMPX = g3 & oD
+  i_CALLX = g3 & oE
+  i_HALT = g3 & oF
+
+  // ---- Register file ----
+  wire reg_a: 8
+  wire reg_b: 8
+  wire reg_wb: 8
+  wire reg_we
+  wire r0q: 8
+  wire r1q: 8
+  wire r2q: 8
+  wire r3q: 8
+  wire r4q: 8
+  wire r5q: 8
+  wire r6q: 8
+  wire r7q: 8
+
+  RW8_REGFILE8 regs(D=reg_wb, WE=reg_we, RD0=rd0, RD1=rd1, RD2=rd2, RA0=rd0, RA1=rd1, RA2=rd2, RB0=rs0, RB1=rs1, RB2=rs2, CLK=CLK, RESET=RESET, A=reg_a, B=reg_b, R0=r0q, R1=r1q, R2=r2q, R3=r3q, R4=r4q, R5=r5q, R6=r6q, R7=r7q)
+
+  // ---- ALU and shift/bit units ----
+  wire alu_b: 8
+  wire alu_r: 8
+  wire alu_z
+  wire alu_c
+  wire alu_n
+  wire alu_v
+
+  alu_b = (i_ADDI | i_SUBI | i_CMPI) ? imm7_se : reg_b
+  RW8_ALU8 alu(A=reg_a, B=alu_b, OP=op4, CIN=flag_c, R=alu_r, Z=alu_z, C=alu_c, N=alu_n, V=alu_v)
+
+  wire shift_r: 8
+  wire shift_z
+  wire shift_n
+  wire shift_c
+  wire bit_zero
+  RW8_SHIFTBIT8 shiftbit(A=reg_a, OP=op4, OLD_C=flag_c, BIT0=rs0, BIT1=rs1, BIT2=rs2, R=shift_r, Z_RESULT=shift_z, N_RESULT=shift_n, C_SHIFT=shift_c, BIT_ZERO=bit_zero)
+
+  // ---- Register writeback ----
+  wire data_reg_write
+  wire alu_reg_write
+  wire shift_reg_write
+  wire data_wb: 8
+  wire shift_wb: 8
+
+  data_reg_write = i_MOV | i_LDI0 | i_LDI1 | i_LDX | i_LDY | i_LDXP | i_LDYP
+  alu_reg_write = g1 & !i_CMP & !i_CMPI & !i_TEST
+  shift_reg_write = i_SHL | i_SHR | i_SAR | i_ROL | i_ROR | i_RCL | i_RCR | i_SWAP | i_BSET | i_BCLR | i_BTGL | i_POP
+
+  data_wb = i_MOV ? reg_b : i_LDI0 ? ldi0_value : i_LDI1 ? ldi1_value : (i_LDX | i_LDY | i_LDXP | i_LDYP) ? DMEM_IN : 0x00
+  shift_wb = i_POP ? DMEM_IN : shift_r
+  reg_wb = g0 ? data_wb : g1 ? alu_r : g2 ? shift_wb : 0x00
+  reg_we = exec & (data_reg_write | alu_reg_write | shift_reg_write)
+
+  // ---- X / Y increments and writes ----
+  wire x_inc_lo: 8
+  wire x_inc_hi: 8
+  wire x_inc_c
+  wire y_inc_lo: 8
+  wire y_inc_hi: 8
+  wire y_inc_c
+  wire x_auto
+  wire y_auto
+
+  x_inc_lo = x_lo + 0x01
+  x_inc_c = x_inc_lo < x_lo
+  x_inc_hi = x_hi + (x_inc_c ? 0x01 : 0x00)
+  y_inc_lo = y_lo + 0x01
+  y_inc_c = y_inc_lo < y_lo
+  y_inc_hi = y_hi + (y_inc_c ? 0x01 : 0x00)
+
+  x_auto = exec & (i_LDXP | i_STXP)
+  y_auto = exec & (i_LDYP | i_STYP)
+
+  x_we = x_auto | (exec & (i_SETXL | i_SETXH))
+  y_we = y_auto | (exec & (i_SETYL | i_SETYH))
+
+  x_d_lo = (exec & i_SETXL) ? reg_b : x_auto ? x_inc_lo : x_lo
+  x_d_hi = (exec & i_SETXH) ? reg_b : x_auto ? x_inc_hi : x_hi
+  y_d_lo = (exec & i_SETYL) ? reg_b : y_auto ? y_inc_lo : y_lo
+  y_d_hi = (exec & i_SETYH) ? reg_b : y_auto ? y_inc_hi : y_hi
+
+  // ---- Stack pointer arithmetic ----
+  wire sp_inc_lo: 8
+  wire sp_inc_hi: 8
+  wire sp_inc_c
+  wire sp_dec_lo: 8
+  wire sp_dec_hi: 8
+  wire sp_dec_b
+  wire sp_dec_event
+  wire sp_inc_event
+
+  sp_inc_lo = sp_lo + 0x01
+  sp_inc_c = sp_inc_lo < sp_lo
+  sp_inc_hi = sp_hi + (sp_inc_c ? 0x01 : 0x00)
+
+  sp_dec_lo = sp_lo - 0x01
+  sp_dec_b = sp_lo == 0x00
+  sp_dec_hi = sp_hi - (sp_dec_b ? 0x01 : 0x00)
+
+  sp_dec_event = (exec & i_PUSH) | (exec & (i_CALL | i_CALLX)) | call2
+  sp_inc_event = (exec & i_POP) | (exec & i_RET) | ret2
+  sp_we = sp_dec_event | sp_inc_event
+  sp_d_lo = sp_dec_event ? sp_dec_lo : sp_inc_lo
+  sp_d_hi = sp_dec_event ? sp_dec_hi : sp_inc_hi
+
+  ret_lo_we = exec & i_RET
+
+  // ---- Data-memory interface ----
+  wire x_mem
+  wire y_mem
+  wire load_mem
+  wire store_mem
+  wire stack_write
+  wire stack_read
+  wire dmem_addr_lo_i: 8
+  wire dmem_addr_hi_i: 8
+  wire dmem_out_i: 8
+  wire dmem_write_i
+  wire dmem_read_i
+
+  x_mem = exec & (i_LDX | i_STX | i_LDXP | i_STXP)
+  y_mem = exec & (i_LDY | i_STY | i_LDYP | i_STYP)
+  load_mem = exec & (i_LDX | i_LDY | i_LDXP | i_LDYP)
+  store_mem = exec & (i_STX | i_STY | i_STXP | i_STYP)
+
+  stack_write = (exec & i_PUSH) | (exec & (i_CALL | i_CALLX)) | call2
+  stack_read = (exec & (i_POP | i_RET)) | ret2
+
+  dmem_addr_lo_i = stack_write ? sp_dec_lo : stack_read ? sp_lo : y_mem ? y_lo : x_mem ? x_lo : 0x00
+  dmem_addr_hi_i = stack_write ? sp_dec_hi : stack_read ? sp_hi : y_mem ? y_hi : x_mem ? x_hi : 0x00
+
+  dmem_out_i = call2 ? pc_lo : (exec & (i_CALL | i_CALLX)) ? pc_hi : (exec & i_PUSH) ? reg_b : store_mem ? reg_b : 0x00
+  dmem_write_i = store_mem | stack_write
+  dmem_read_i = load_mem | stack_read
+
+  // ---- PC increment and signed relative target ----
+  wire pc_inc_lo: 8
+  wire pc_inc_hi: 8
+  wire pc_inc_c
+  wire rel_lo: 8
+  wire rel_hi: 8
+  wire rel_c
+
+  pc_inc_lo = pc_lo + 0x01
+  pc_inc_c = pc_inc_lo < pc_lo
+  pc_inc_hi = pc_hi + (pc_inc_c ? 0x01 : 0x00)
+
+  rel_lo = pc_lo + ir_lo
+  rel_c = rel_lo < pc_lo
+  rel_hi = pc_hi + rel_off_hi + (rel_c ? 0x01 : 0x00)
+
+  // ---- Branch conditions ----
+  wire signed_less
+  wire take_rel
+  wire take_x
+
+  signed_less = flag_n ^ flag_v
+  take_rel = exec & (i_JMP | (i_JZ & flag_z) | (i_JNZ & !flag_z) | (i_JC & flag_c) | (i_JNC & !flag_c) | (i_JN & flag_n) | (i_JNN & !flag_n) | (i_JV & flag_v) | (i_JNV & !flag_v) | (i_JLT & signed_less) | (i_JGE & !signed_less))
+  take_x = exec & i_JMPX
+
+  pc_we = fetch | take_rel | take_x | call2 | ret2
+  pc_d_lo = ret2 ? ret_lo_q : call2 ? (i_CALLX ? x_lo : rel_lo) : take_x ? x_lo : take_rel ? rel_lo : pc_inc_lo
+  pc_d_hi = ret2 ? DMEM_IN : call2 ? (i_CALLX ? x_hi : rel_hi) : take_x ? x_hi : take_rel ? rel_hi : pc_inc_hi
+
+  // ---- Flags ----
+  wire shift_zn_we
+  wire shift_n_we
+  wire shift_c_we
+  wire shift_any_flag_we
+  wire next_z
+  wire next_c
+  wire next_n
+  wire next_v
+
+  shift_zn_we = g2 & (o0 | o1 | o2 | o3 | o4 | o5 | o6 | o7 | o8 | o9 | oA | oB)
+  shift_n_we = g2 & (o0 | o1 | o2 | o3 | o4 | o5 | o6 | o7 | o9 | oA | oB)
+  shift_c_we = g2 & (o0 | o1 | o2 | o3 | o4 | o5 | o6)
+  shift_any_flag_we = g2 & (o0 | o1 | o2 | o3 | o4 | o5 | o6 | o7 | o8 | o9 | oA | oB | oC | oD)
+
+  next_z = g1 ? alu_z : (g2 & o8) ? bit_zero : shift_zn_we ? shift_z : flag_z
+  next_n = g1 ? alu_n : shift_n_we ? shift_n : flag_n
+  next_c = g1 ? alu_c : shift_c_we ? shift_c : i_CLC ? 0 : i_SEC ? 1 : flag_c
+  next_v = g1 ? alu_v : flag_v
+
+  flags_d = {0, 0, 0, 0, next_v, next_n, next_c, next_z}
+  flags_we = exec & (g1 | shift_any_flag_we)
+
+  // ---- Sequencer next state ----
+  state_d = fetch ? 0x01 : exec ? (i_HALT ? 0x04 : ((i_CALL | i_CALLX) ? 0x02 : (i_RET ? 0x03 : 0x00))) : call2 ? 0x00 : ret2 ? 0x00 : 0x04
+
+  // ---- External and debug outputs ----
+  IMEM_ADDR_LO = pc_lo
+  IMEM_ADDR_HI = pc_hi
+
+  DMEM_ADDR_LO = dmem_addr_lo_i
+  DMEM_ADDR_HI = dmem_addr_hi_i
+  DMEM_OUT = dmem_out_i
+  DMEM_WRITE = dmem_write_i
+  DMEM_READ = dmem_read_i
+
+  HALTED = halted
+  FLAGS = flags_q[3:0]
+  STATE = state_q
+
+  DBG_PC_LO = pc_lo
+  DBG_PC_HI = pc_hi
+  DBG_IR_LO = ir_lo
+  DBG_IR_HI = ir_hi
+  DBG_X_LO = x_lo
+  DBG_X_HI = x_hi
+  DBG_Y_LO = y_lo
+  DBG_Y_HI = y_hi
+  DBG_SP_LO = sp_lo
+  DBG_SP_HI = sp_hi
+
+  DBG_R0 = r0q
+  DBG_R1 = r1q
+  DBG_R2 = r2q
+  DBG_R3 = r3q
+  DBG_R4 = r4q
+  DBG_R5 = r5q
+  DBG_R6 = r6q
+  DBG_R7 = r7q
+}
