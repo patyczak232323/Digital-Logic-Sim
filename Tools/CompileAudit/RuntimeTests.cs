@@ -20,6 +20,7 @@ namespace DLS.Simulation
 			Run("RHDL structural HalfAdder compilation", TestRhdlHalfAdderCompilation);
 			Run("RHDL readable logic synthesis", TestRhdlReadableLogicSynthesis);
 			Run("RHDL v0.3 buses, arithmetic, slices and mux", TestRhdlV3BusExpressions);
+			Run("RHDL v0.3 operators, constants and named ports", TestRhdlV3OperatorsAndNamedPorts);
 			Run("feedback NAND latch", TestFeedbackNandLatch);
 			Run("feedback unchanged-input zero sweep", TestFeedbackZeroSweep);
 			Run("feedback state materialization", TestFeedbackMaterialization);
@@ -321,6 +322,118 @@ namespace DLS.Simulation
 			RunCase(0x12, 0x34, 0, 0x14, 0);
 			RunCase(0x12, 0x34, 1, 0x46, 0);
 			RunCase(0xA5, 0xA5, 0, 0xA5, 1);
+
+			DeterministicSimulator.Reset();
+			Simulator.Reset();
+		}
+
+		static void TestRhdlV3OperatorsAndNamedPorts()
+		{
+			PinDescription P(string name, int id, PinBitCount bits = PinBitCount.Bit1) =>
+				new(name, id, new UnityEngine.Vector2(), bits, PinColour.Red, PinValueDisplayMode.Off);
+
+			ChipDescription Builtin(
+				string name,
+				ChipType type,
+				PinDescription[] inputs,
+				PinDescription[] outputs) =>
+				new()
+				{
+					Name = name,
+					ChipType = type,
+					InputPins = inputs ?? Array.Empty<PinDescription>(),
+					OutputPins = outputs ?? Array.Empty<PinDescription>(),
+					SubChips = Array.Empty<SubChipDescription>(),
+					Wires = Array.Empty<WireDescription>(),
+					Displays = Array.Empty<DisplayDescription>()
+				};
+
+			ChipDescription nand = Builtin(
+				"NAND",
+				ChipType.Nand,
+				new[] { P("IN B", 0), P("IN A", 1) },
+				new[] { P("OUT", 2) });
+
+			ChipDescription split8 = Builtin(
+				"8-1BIT",
+				ChipType.Split_8To1Bit,
+				new[] { P("IN", 0, PinBitCount.Bit8) },
+				Enumerable.Range(0, 8)
+					.Select(i => P("OUT " + (char)('H' - i), 1 + i))
+					.ToArray());
+
+			ChipDescription merge8 = Builtin(
+				"1-8BIT",
+				ChipType.Merge_1To8Bit,
+				Enumerable.Range(0, 8)
+					.Select(i => P("IN " + (char)('H' - i), i))
+					.ToArray(),
+				new[] { P("OUT", 8, PinBitCount.Bit8) });
+
+			ChipLibrary library = new(nand, split8, merge8);
+
+			string source =
+@"chip V3Ops {
+  input A: 8, B: 8
+  input flag
+
+  output sub: 8
+  output shl: 8
+  output shr: 8
+  output neq, less, ge
+  output literal: 8
+  output nand_named
+
+  sub = A - B
+  shl = A << 1
+  shr = A >> 2
+  neq = A != B
+  less = A < B
+  ge = A >= B
+  literal = 0xA5
+
+  NAND named(IN_A=flag, IN_B=flag, OUT=nand_named)
+}";
+
+			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
+			Assert(result.Success,
+				"RHDL v0.3 operator compile failed: " + string.Join(" | ", result.Diagnostics.Select(d => d.ToString())));
+
+			Simulator.Reset();
+			DeterministicSimulator.Reset();
+			SimChip root = Simulator.BuildSimChip(result.Description, library);
+			DevPinInstance[] inputs =
+			{
+				new DevPinInstance(),
+				new DevPinInstance(),
+				new DevPinInstance()
+			};
+			for (int i = 0; i < inputs.Length; i++)
+				inputs[i].Pin.Address = new PinAddress(result.Description.InputPins[i].ID, 0);
+
+			void RunCase(uint a, uint b, uint flag)
+			{
+				inputs[0].Pin.PlayerInputState = a;
+				inputs[1].Pin.PlayerInputState = b;
+				inputs[2].Pin.PlayerInputState = flag;
+				DeterministicSimulator.RunSimulationStep(root, inputs, new SimAudio());
+
+				uint Out8(int index) => PinState.GetBitStates(root.OutputPins[index].State) & 0xFFu;
+				uint Out1(int index) => Bit(root.OutputPins[index].State);
+
+				Assert(Out8(0) == ((a - b) & 0xFFu), $"RHDL SUB mismatch for {a:X2}-{b:X2}");
+				Assert(Out8(1) == ((a << 1) & 0xFFu), $"RHDL SHL mismatch for {a:X2}");
+				Assert(Out8(2) == ((a >> 2) & 0xFFu), $"RHDL SHR mismatch for {a:X2}");
+				Assert(Out1(3) == (a != b ? 1u : 0u), "RHDL != mismatch");
+				Assert(Out1(4) == (a < b ? 1u : 0u), "RHDL < mismatch");
+				Assert(Out1(5) == (a >= b ? 1u : 0u), "RHDL >= mismatch");
+				Assert(Out8(6) == 0xA5u, "RHDL hex constant mismatch");
+				Assert(Out1(7) == (flag == 0 ? 1u : 0u), "RHDL named NAND binding mismatch");
+			}
+
+			RunCase(0x10, 0x03, 0);
+			RunCase(0x03, 0x10, 1);
+			RunCase(0xFF, 0xFF, 0);
 
 			DeterministicSimulator.Reset();
 			Simulator.Reset();
