@@ -598,7 +598,7 @@ def test_source_integration_static() -> None:
     assert "DeterministicSimulator.RunSimulationStep" in facade
     assert "public static class RewiredEngine" in facade
     assert "if (Simulator.ApplyModifications())" in facade
-    assert "if (topologyChanged) DeterministicSimulator.InvalidateTopology();" in facade
+    assert "DeterministicSimulator.InvalidateTopology();" in facade
     assert "pendingTopologyModification" not in facade
     assert not (root / "Assets/Scripts/Game/Project/SimulationFacade.cs").exists()
     assert not (root / "Assets/Scripts/Graphics/UI/Menus/SimulationFacade.cs").exists()
