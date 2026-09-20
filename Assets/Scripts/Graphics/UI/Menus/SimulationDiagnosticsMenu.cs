@@ -17,6 +17,7 @@ namespace DLS.Graphics
 		const float rowHeight = 2.8f;
 		const float spacing = 0.3f;
 		const float traceHeight = 7.1f;
+		const float textPadX = 0.8f;
 
 		static readonly string[] OffOn = { "OFF", "ON" };
 		static readonly UIHandle ID_Profiler = new("SIM_DIAG_Profiler");
@@ -45,7 +46,7 @@ namespace DLS.Graphics
 					"SIMULATION DIAGNOSTICS",
 					theme.FontBold,
 					theme.FontSizeRegular * 1.15f,
-					topLeft,
+					topLeft + Vector2.right * textPadX,
 					Anchor.TextCentreLeft,
 					textCol);
 
@@ -78,18 +79,13 @@ namespace DLS.Graphics
 
 			void DrawPerformanceColumn(ref Vector2 pos)
 			{
-				UI.DrawText("PERFORMANCE", theme.FontBold, theme.FontSizeRegular, pos, Anchor.TextCentreLeft, textCol);
+				UI.DrawText("PERFORMANCE", theme.FontBold, theme.FontSizeRegular, pos + Vector2.right * textPadX, Anchor.TextCentreLeft, textCol);
 				pos.y -= 2.2f;
 
-				int profilerMode = MenuHelper.LabeledOptionsWheel(
+				int profilerMode = DrawLabeledToggleRow(
 					"Hot-chip profiler",
-					textCol,
 					pos,
-					new Vector2(columnWidth, rowHeight),
-					ID_Profiler,
-					OffOn,
-					10,
-					true);
+					ID_Profiler);
 				SimulationProfiler.Enabled = profilerMode == 1;
 				pos.y -= rowHeight + spacing;
 
@@ -139,7 +135,7 @@ namespace DLS.Graphics
 				DrawInfoRow(ref pos, convergence, DeterministicSimulator.LastSettleConverged ? dim : Color.yellow);
 
 				pos.y -= 0.5f;
-				UI.DrawText("HOT CHIPS", theme.FontBold, theme.FontSizeRegular, pos, Anchor.TextCentreLeft, textCol);
+				UI.DrawText("HOT CHIPS", theme.FontBold, theme.FontSizeRegular, pos + Vector2.right * textPadX, Anchor.TextCentreLeft, textCol);
 				pos.y -= 2.1f;
 
 				SimulationHotChip[] hot = SimulationProfiler.GetHotChips(4);
@@ -164,7 +160,7 @@ namespace DLS.Graphics
 				}
 
 				pos.y -= 0.5f;
-				UI.DrawText("DETERMINISTIC REPLAY", theme.FontBold, theme.FontSizeRegular, pos, Anchor.TextCentreLeft, textCol);
+				UI.DrawText("DETERMINISTIC REPLAY", theme.FontBold, theme.FontSizeRegular, pos + Vector2.right * textPadX, Anchor.TextCentreLeft, textCol);
 				pos.y -= 2.1f;
 
 				Project project = Project.ActiveProject;
@@ -216,18 +212,13 @@ namespace DLS.Graphics
 
 			void DrawWaveformColumn(ref Vector2 pos)
 			{
-				UI.DrawText("LOGIC ANALYZER", theme.FontBold, theme.FontSizeRegular, pos, Anchor.TextCentreLeft, textCol);
+				UI.DrawText("LOGIC ANALYZER", theme.FontBold, theme.FontSizeRegular, pos + Vector2.right * textPadX, Anchor.TextCentreLeft, textCol);
 				pos.y -= 2.2f;
 
-				int waveformMode = MenuHelper.LabeledOptionsWheel(
+				int waveformMode = DrawLabeledToggleRow(
 					"Waveform capture",
-					textCol,
 					pos,
-					new Vector2(columnWidth, rowHeight),
-					ID_Waveform,
-					OffOn,
-					10,
-					true);
+					ID_Waveform);
 				SimulationWaveformRecorder.Enabled = waveformMode == 1;
 				pos.y -= rowHeight + spacing;
 
@@ -279,7 +270,7 @@ namespace DLS.Graphics
 					$"{probe.Name}  [{probe.BitCount}b]  now={latest}  transitions={probe.SampleCount}",
 					theme.FontRegular,
 					theme.FontSizeRegular * 0.88f,
-					traceBounds.TopLeft + new Vector2(0.8f, -0.8f),
+					traceBounds.TopLeft + new Vector2(textPadX, -0.8f),
 					Anchor.TextCentreLeft,
 					textCol);
 
@@ -389,9 +380,35 @@ namespace DLS.Graphics
 					history.ToString(),
 					theme.FontRegular,
 					theme.FontSizeRegular * 0.82f,
-					bounds.CentreLeft + new Vector2(0.8f, -1.0f),
+					bounds.CentreLeft + new Vector2(textPadX, -1.0f),
 					Anchor.TextCentreLeft,
 					textCol);
+			}
+
+			int DrawLabeledToggleRow(string label, Vector2 pos, UIHandle id)
+			{
+				Vector2 size = new(columnWidth, rowHeight);
+				UI.DrawPanel(pos, size, rowCol, Anchor.TopLeft);
+				Bounds2D bounds = UI.PrevBounds;
+
+				UI.DrawText(
+					label,
+					theme.FontRegular,
+					theme.FontSizeRegular,
+					bounds.CentreLeft + Vector2.right * textPadX,
+					Anchor.TextCentreLeft,
+					textCol);
+
+				int mode = UI.WheelSelector(
+					id,
+					OffOn,
+					bounds.CentreRight,
+					new Vector2(10, rowHeight),
+					theme.OptionsWheel,
+					Anchor.CentreRight);
+
+				UI.OverridePreviousBounds(bounds);
+				return mode;
 			}
 
 			void DrawInfoRow(ref Vector2 pos, string text, Color col)
@@ -404,7 +421,7 @@ namespace DLS.Graphics
 					col,
 					rowCol,
 					false,
-					0.8f);
+					textPadX);
 				pos = UI.PrevBounds.BottomLeft + Vector2.down * spacing;
 			}
 		}
