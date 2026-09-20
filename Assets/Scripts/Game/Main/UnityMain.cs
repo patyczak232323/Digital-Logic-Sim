@@ -9,6 +9,9 @@ namespace DLS.Game
 {
 	public class UnityMain : MonoBehaviour
 	{
+		// Keep the Unity render/UI loop from running flat-out on one CPU core.
+		// Simulation runs on its own thread, so this does not cap Rewired simulation SPS.
+		const int TargetRenderFrameRate = 60;
 		[Header("Dev Settings (editor only)")]
 		public bool openSaveDirectory;
 		public bool openInMainMenu;
@@ -62,6 +65,7 @@ namespace DLS.Game
 
 		void Awake()
 		{
+			ConfigureFramePacing();
 			instance = this;
 			audioUnity = FindFirstObjectByType<AudioUnity>();
 			ResetStatics();
@@ -75,6 +79,14 @@ namespace DLS.Game
 			if (openInMainMenu || !Application.isEditor) Main.LoadMainMenu();
 			else Main.CreateOrLoadProject(testProjectName, openA ? chipToOpenA : chipToOpenB);
 
+		}
+
+		static void ConfigureFramePacing()
+		{
+			// Explicit frame pacing is more predictable than relying on platform VSync,
+			// especially on Linux/Wayland where an uncapped player can otherwise busy-loop.
+			QualitySettings.vSyncCount = 0;
+			Application.targetFrameRate = TargetRenderFrameRate;
 		}
 
 		void Update()
