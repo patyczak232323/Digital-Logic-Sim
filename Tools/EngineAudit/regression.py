@@ -325,6 +325,37 @@ def test_feedback_state_ownership_uses_runtime_active_not_ready() -> None:
 
 
 
+def test_full_lut_worker_is_dedicated_cancellable_and_reports_progress() -> None:
+    cache = source("Assets/Scripts/Simulation/CombinationalChipCache.cs")
+    menu = source("Assets/Scripts/Graphics/UI/Menus/ChipCustomizationMenu.cs")
+
+    assert "static Task backgroundTail" not in cache
+    assert ".ContinueWith(" not in cache
+    assert "new Thread(BackgroundCacheWorkerLoop)" in cache
+    assert "Queue<BackgroundCacheWorkItem>" in cache
+    assert "previous.Cancel();" in cache
+    assert "Action<CancellationToken>" in cache
+
+    entry_count = extract_method(cache, "internal static int GetFullCacheEntryCount(")
+    assert "1L << inputBitCount" in entry_count
+    assert "checked((int)entries)" in entry_count
+
+    build = extract_method(cache, "void BuildFullLut(")
+    assert "token.ThrowIfCancellationRequested();" in build
+    assert "Interlocked.Exchange(ref completedEntries, completed);" in build
+    assert 'LogFullLut($"Progress {completed}/{targetEntryCount}: chip={chipName}")' in build
+    assert 'LogFullLut($"RAM build complete: chip={chipName} entries={targetEntryCount}")' in build
+
+    load_or_build = extract_method(cache, "void LoadOrBuildInBackground(")
+    assert 'LogFullLut($"Worker picked job: chip={chipName}")' in load_or_build
+    assert 'AbortBuild("superseded by a newer FULL LUT request")' in load_or_build
+
+    ram_line = extract_method(menu, "static string GetCacheRamLine()")
+    queued = ram_line.index('runtimeStatus == "QUEUED"')
+    building = ram_line.index('return $"RAM: building')
+    assert queued < building
+
+
 TESTS = (
     test_feedback_jit_is_dormant_until_after_first_normal_tick,
     test_feedback_jit_uses_two_delta_buffers,
@@ -346,6 +377,7 @@ TESTS = (
     test_replay_ui_requests_are_executed_on_simulation_thread,
     test_feedback_jit_skips_stable_unchanged_input_ticks,
     test_feedback_state_ownership_uses_runtime_active_not_ready,
+    test_full_lut_worker_is_dedicated_cancellable_and_reports_progress,
 )
 
 
