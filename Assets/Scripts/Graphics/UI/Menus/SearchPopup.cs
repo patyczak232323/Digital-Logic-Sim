@@ -41,6 +41,9 @@ namespace DLS.Graphics
 				float width = inputFieldSize.x;
 				Vector2 topLeft = new(UI.Centre.x - width / 2, height);
 
+				Bounds2D header = RewiredUI.DrawSectionHeader("FIND CHIP", topLeft, width, true);
+				topLeft = header.BottomLeft + Vector2.down * 0.65f;
+
 				// Draw search bar
 				UI.InputField(ID_SearchInput, inputTheme, topLeft, inputFieldSize, string.Empty, Anchor.TopLeft, inputFieldTextPad, searchStringValidator, true);
 				topLeft = UI.PrevBounds.BottomLeft + Vector2.down * 2;
