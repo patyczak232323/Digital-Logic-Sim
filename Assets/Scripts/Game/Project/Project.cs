@@ -751,6 +751,11 @@ namespace DLS.Game
 				RewiredEngine.RunStep(simChip, inputPins, audioState.simAudio);
 
 				// ---- Wait some amount of time (if needed) to try to hit the target ticks per second ----
+				//
+				// Do not busy-spin for normal simulation rates. At 1000 ticks/s the old
+				// SpinWait path burned almost the entire 1 ms tick budget on a CPU core,
+				// even for an empty circuit. Sleep for meaningful waits and only yield for
+				// the tiny sub-0.25 ms tail where sleeping would destroy high-rate pacing.
 				while (true)
 				{
 					double elapsedMs = stopwatch.ElapsedTicks * (1000.0 / Stopwatch.Frequency);
@@ -758,14 +763,13 @@ namespace DLS.Game
 
 					if (waitMs <= 0) break;
 
-					// Wait some cycles before checking timer again (todo: better approach?)
-					if (waitMs > 2)
+					if (waitMs >= 0.25)
 					{
-						Thread.Sleep(Math.Max(1, (int)waitMs - 1));
+						Thread.Sleep(TimeSpan.FromMilliseconds(waitMs));
 					}
 					else
 					{
-						Thread.SpinWait(10);
+						Thread.Yield();
 					}
 				}
 
