@@ -337,15 +337,15 @@ chip RW8_CORE {
   RW8_REGFILE8 regs(D=reg_wb, WE=reg_we, RD0=rd0, RD1=rd1, RD2=rd2, RA0=rd0, RA1=rd1, RA2=rd2, RB0=rs0, RB1=rs1, RB2=rs2, CLK=CLK, RESET=RESET, A=reg_a, B=reg_b, R0=r0q, R1=r1q, R2=r2q, R3=r3q, R4=r4q, R5=r5q, R6=r6q, R7=r7q)
 
   // ---- ALU and shift/bit units ----
-  wire alu_b: 8
+  wire alu_rhs: 8
   wire alu_r: 8
   wire alu_z
   wire alu_c
   wire alu_n
   wire alu_v
 
-  alu_b = (i_ADDI | i_SUBI | i_CMPI) ? imm7_se : reg_b
-  RW8_ALU8 alu(A=reg_a, B=alu_b, OP=op4, CIN=flag_c, R=alu_r, Z=alu_z, C=alu_c, N=alu_n, V=alu_v)
+  alu_rhs = (i_ADDI | i_SUBI | i_CMPI) ? imm7_se : reg_b
+  RW8_ALU8 alu(A=reg_a, B=alu_rhs, OP=op4, CIN=flag_c, R=alu_r, Z=alu_z, C=alu_c, N=alu_n, V=alu_v)
 
   wire shift_r: 8
   wire shift_z
