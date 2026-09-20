@@ -356,6 +356,27 @@ def test_full_lut_worker_is_dedicated_cancellable_and_reports_progress() -> None
     assert queued < building
 
 
+
+def test_editor_and_game_use_single_rewired_engine_gateway() -> None:
+    engine = source("Assets/Scripts/Simulation/RewiredEngine.cs")
+    backend = source("Assets/Scripts/Simulation/Simulator.cs")
+    solver = source("Assets/Scripts/Simulation/DeterministicSimulator.cs")
+
+    assert "public static class RewiredEngine" in engine
+    assert "internal static class Simulator" in backend
+    assert "internal static class DeterministicSimulator" in solver
+    assert "DeterministicSimulator.RunSimulationStep" in engine
+    assert "Simulator.BuildSimChip" in engine
+    assert "Simulator.ApplyModifications()" in engine
+
+    forbidden = ("DeterministicSimulator.", "DLS.Simulation.Simulator.")
+    for root_name in ("Assets/Scripts/Game", "Assets/Scripts/Graphics"):
+        for path in (ROOT / root_name).rglob("*.cs"):
+            text = path.read_text(encoding="utf-8")
+            for token in forbidden:
+                assert token not in text, f"{path} bypasses RewiredEngine via {token}"
+
+
 TESTS = (
     test_feedback_jit_is_dormant_until_after_first_normal_tick,
     test_feedback_jit_uses_two_delta_buffers,
@@ -378,6 +399,7 @@ TESTS = (
     test_feedback_jit_skips_stable_unchanged_input_ticks,
     test_feedback_state_ownership_uses_runtime_active_not_ready,
     test_full_lut_worker_is_dedicated_cancellable_and_reports_progress,
+    test_editor_and_game_use_single_rewired_engine_gateway,
 )
 
 
