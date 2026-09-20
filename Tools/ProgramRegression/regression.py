@@ -133,7 +133,9 @@ def test_csharp_integration_guards() -> None:
     assert deterministic.count("GetAddress8Bit(") >= 8
     assert "Math.Max(requiredStateLength, serializedStateLength)" in sim_chip
     assert "Simulator.rng.Next(0, 256)" in sim_chip
-    assert "Thread.Sleep(Math.Max(1, (int)waitMs - 1));" in project
+    assert "Thread.Sleep(TimeSpan.FromMilliseconds(waitMs));" in project
+    assert "Thread.Yield();" in project
+    assert "Thread.SpinWait(10);" not in project
     assert "!BottomBarUI.MouseIsOverBar()" in camera
     assert "public static bool ApplyModifications()" in simulator
     assert "while (modificationQueue.TryDequeue(out SimModifyCommand cmd))" in simulator
