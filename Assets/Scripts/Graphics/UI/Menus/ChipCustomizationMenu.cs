@@ -181,19 +181,7 @@ namespace DLS.Graphics
 
 		static void DrawSectionHeader(string text, Vector2 topLeft, float width, float height, DrawSettings.UIThemeDLS theme, bool major)
 		{
-			Color bg = ColHelper.Darken(theme.MenuPanelCol, major ? 0.055f : 0.035f);
-			UI.DrawPanel(topLeft, new Vector2(width, height), bg, Anchor.TopLeft);
-			Bounds2D bounds = UI.PrevBounds;
-			float fontScale = major ? 0.92f : 0.78f;
-			UI.DrawText(
-				text,
-				theme.FontBold,
-				theme.FontSizeRegular * fontScale,
-				bounds.CentreLeft + Vector2.right * 0.9f,
-				Anchor.TextCentreLeft,
-				Color.white);
-			UI.DrawLine(bounds.BottomLeft, bounds.BottomRight, 0.07f, theme.MainMenuButtonTheme.buttonCols.hover);
-			UI.OverridePreviousBounds(bounds);
+			RewiredUI.DrawSectionHeader(text, topLeft, width, major);
 		}
 
 		static void DrawFieldLabel(string text, Vector2 pos, DrawSettings.UIThemeDLS theme)
