@@ -1782,7 +1782,7 @@ namespace DLS.RHDL
 			{
 				string digits = clean.Substring(2);
 				if (digits.Length == 0 || digits.Any(c => c != '0' && c != '1')) return false;
-				foreach (char c in digits) value = (value << 1) | (ulong)(c - '0');
+				foreach (char c in digits) value = (value << 1) | (c == '1' ? 1UL : 0UL);
 				widthHint = digits.Length <= 1 ? 1 : digits.Length <= 4 ? 4 : digits.Length <= 8 ? 8 : digits.Length;
 				return true;
 			}
