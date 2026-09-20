@@ -320,7 +320,7 @@ namespace DLS.Graphics
 					if (entry.Text == menuDividerString)
 					{
 						pos.y += 0.5f * dirY;
-						UI.DrawPanel(pos, new Vector2(menuWidth, 0.15f), ColHelper.MakeCol(0.6f), Anchor.CentreLeft);
+						UI.DrawPanel(pos, new Vector2(menuWidth, 0.12f), RewiredUI.Accent * 0.7f, Anchor.CentreLeft);
 						pos.y += 0.5f * dirY;
 					}
 					else
