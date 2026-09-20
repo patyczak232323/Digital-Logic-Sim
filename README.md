@@ -1,66 +1,121 @@
-# Digital Logic Sim Rewired
+# Rewired
 
-**Digital Logic Sim Rewired** is an independently maintained fork of Sebastian Lague's Digital Logic Sim with a rebuilt simulation runtime focused on reliable large-scale digital circuits while keeping the familiar editor and project format.
+**Rewired** is an independent digital logic simulator project based on Sebastian Lague's [Digital Logic Sim](https://github.com/SebLague/Digital-Logic-Sim).
 
-The project is aimed especially at designs that are difficult for traditional gate-level simulators: deeply nested Custom Chips, feedback loops, latches, flip-flops, registers, counters, large fan-out networks and complete CPU-scale circuits.
+The project started from the Digital Logic Sim codebase and keeps much of its editor workflow, file format and visual language, but the simulation runtime is being redesigned around a different execution model. Rewired should therefore be treated as its **own simulator**, not as a drop-in replacement or a fully compatible "better version" of Digital Logic Sim.
 
-## Simulation engine
+## What Rewired is
 
-Rewired replaces the original runtime propagation model with an event-driven engine built around compiled netlist topology, dirty-gate scheduling and fixed-point settling.
+Rewired is focused on experimenting with a high-performance simulation engine for large digital circuits.
 
-Key goals of the engine are:
+The runtime uses ideas such as:
 
-- correct propagation through deeply nested Custom Chips
-- stable behaviour for feedback-heavy circuits such as latches and flip-flops
-- deterministic normal simulation after circuit initialization
-- isolated state for multiple instances of the same Custom Chip
-- efficient handling of large fan-out and CPU-scale designs
-- explicit convergence limits instead of silently leaving partially propagated state
-- preservation of the original Digital Logic Sim editor workflow and project format wherever possible
+- event-driven propagation
+- compiled netlist topology
+- dirty-gate scheduling
+- deterministic fixed-point settling
+- combinational JIT compilation
+- feedback JIT for supported cyclic gate networks
+- optional FULL LUT caching for suitable combinational Custom Chips
+- diagnostics, profiling, waveform capture and regression testing
 
-Feedback-based storage elements do not require arbitrary gate outputs to be randomized during normal operation. Circuit initialization is treated separately from normal deterministic simulation so that gate logic itself always remains logically correct.
+The goal is to make it practical to simulate large and deeply nested circuits while keeping circuit behaviour well-defined under the Rewired execution model.
 
-### Development branch (`main`)
+## Relationship to Digital Logic Sim
 
-Current `main` extends v0.2.0 with:
+Rewired is derived from Digital Logic Sim and still shares a significant amount of editor, project and UI code with the original project.
 
-- native feedback JIT for safe cyclic gate networks such as NAND-built latches, flip-flops and registers
-- deterministic fallback when a compiled feedback region fails to converge
-- state materialization before inspection or structural edits
-- opt-in hot-chip simulation profiler
-- opt-in ring-buffer waveform recorder backend
-- actionable non-convergence summaries with suspect chip/pin paths
-- isolated combinational Custom Chip test-vector runner
-- integrated `MENU -> SIM DIAGNOSTICS` panel with hot-chip profiling, raw benchmark, pin probes/logic analyzer and deterministic replay
-- CI regression checks, native runtime execution tests, whole-repo C# syntax audit and full 8-bit computer stress regressions
+However, the simulation engine is intentionally different.
 
-The released v0.2.0 binaries predate these development changes.
+Digital Logic Sim's original runtime processes gates and subchips in traversal order and allows ordering effects to influence some feedback circuits. Rewired instead attempts to propagate affected logic to a stable state using deterministic delta-cycle settling and additional acceleration paths.
 
-See `Docs/SIMULATION_DIAGNOSTICS.md` for usage and current engine diagnostics.
+That difference is important.
+
+A circuit that was designed around propagation order, race conditions or timing quirks of the original Digital Logic Sim engine may behave differently in Rewired even when the project loads successfully.
+
+Rewired is therefore **not intended to guarantee behavioural compatibility with Digital Logic Sim**.
+
+## Project compatibility
+
+Many Digital Logic Sim projects can still be opened because Rewired retains the familiar project structure and editor concepts.
+
+Compatibility should currently be understood as:
+
+- project/file-format compatibility: generally a goal
+- editor/workflow familiarity: generally a goal
+- exact simulation behaviour: **not guaranteed**
+- timing/order-dependent circuits: may behave differently
+- NAND-built latches, flip-flops, counters and gate-level memories: should be tested specifically
+- built-in stateful components such as Pulse, Clock, RAM and displays: actively tested, but differences can still exist
+
+Large existing computers are useful compatibility and stress tests, but Rewired does not define correctness as reproducing every race-condition or traversal-order side effect of the original engine.
+
+## Simulation model
+
+The normal Rewired step is broadly structured as:
+
+1. apply external and spontaneous inputs
+2. settle combinational propagation
+3. advance built-in sequential/stateful components
+4. settle resulting combinational changes
+5. update diagnostics and visible state
+
+Feedback networks can be handled by the deterministic solver or by supported acceleration paths. Initialization is treated separately so that storage elements can reach a usable starting state without making normal simulation depend on random gate evaluation.
+
+This model is one of the main architectural differences between Rewired and Digital Logic Sim.
+
+## Current development
+
+Current `main` includes work on:
+
+- deterministic event-driven simulation
+- deeply nested Custom Chip propagation
+- native combinational JIT
+- native feedback JIT for supported cyclic gate networks
+- persistent FULL LUT caching
+- state materialization when accelerated regions are inspected
+- simulation profiling and diagnostics
+- waveform recording
+- deterministic replay
+- non-convergence reporting
+- regression tests for latches, registers, counters, nested circuits and large netlists
+- compatibility tests for imported and stateful projects
+
+Rewired is still experimental. Complex circuits are expected to expose engine bugs and edge cases, and those projects are especially valuable for development.
+
+See `Docs/SIMULATION_DIAGNOSTICS.md` for current diagnostics and debugging tools.
+
+## Rewired-8
+
+**Rewired-8** is an 8-bit CPU being designed as a technology demo for the Rewired simulation engine.
+
+Its purpose is to exercise the engine with a complete computer designed specifically around Rewired's simulation semantics rather than around compatibility quirks of another simulator.
 
 ## Downloads
 
-Prebuilt releases are available for:
+Prebuilt releases currently use the existing Rewired package names:
 
 - **Windows x64:** `DLSRewired-Windows-x64.zip`
 - **Linux x86_64:** `DLSRewired-Linux-x86_64.zip`
 
-Latest release: **v0.2.0**
+Latest published release: **v0.2.0**
 
 https://github.com/patyczak232323/Digital-Logic-Sim/releases/tag/v0.2.0
 
-## Compatibility
-
-Existing Digital Logic Sim projects are intended to remain compatible. The editor, Custom Chip workflow and project format are kept as close to the original as practical while the simulation runtime is replaced underneath.
-
-The project is still under active development, so unusual circuits are worth reporting with a minimal reproducible project.
+Development on `main` is ahead of that release.
 
 ## Repository policy
 
-The canonical project is maintained by **@patyczak232323**. External contributors should use forks and pull requests. Direct write access to the canonical repository is not intended for third parties.
+The canonical project is maintained by **@patyczak232323**.
 
-## Credits and license
+External contributors should use forks and pull requests. Direct write access to the canonical repository is not intended for third parties.
 
-Based on [Sebastian Lague's Digital Logic Sim](https://github.com/SebLague/Digital-Logic-Sim).
+## Credits
+
+Rewired is based on [Sebastian Lague's Digital Logic Sim](https://github.com/SebLague/Digital-Logic-Sim).
+
+The original project provided the foundation for the editor, circuit format and much of the surrounding application code. Rewired's simulation runtime and related tooling are being developed separately from that foundation.
+
+## License
 
 Licensed under the MIT License. See `LICENSE`.
