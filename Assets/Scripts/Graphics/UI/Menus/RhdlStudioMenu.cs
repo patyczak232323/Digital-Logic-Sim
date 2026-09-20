@@ -76,7 +76,7 @@ namespace DLS.Graphics
 				topLeft,
 				WorkspaceWidth,
 				true,
-				"RHDL v0.1  /  STRUCTURAL");
+				"RHDL v0.2  /  LOGIC + STRUCTURAL");
 
 			Vector2 contentTop = mainHeader.BottomLeft + Vector2.down * 0.7f;
 			Vector2 sourceTop = contentTop;
@@ -100,6 +100,7 @@ namespace DLS.Graphics
 				DrawSourceLineCallback,
 				MaxSourceLines);
 
+			HandleEditorEnterKey();
 			DrawRightPanel(theme, infoTop, project);
 
 			Vector2 actionsTopLeft = sourceCard.BottomLeft + Vector2.down * 0.7f;
@@ -167,23 +168,23 @@ namespace DLS.Graphics
 				statusCol);
 
 			cursor = statusCard.BottomLeft + Vector2.down * 0.6f;
-			Bounds2D syntaxHeader = RewiredUI.DrawSectionHeader("RHDL v0.1 SYNTAX", cursor, RightWidth);
+			Bounds2D syntaxHeader = RewiredUI.DrawSectionHeader("RHDL v0.2 SYNTAX", cursor, RightWidth);
 			cursor = syntaxHeader.BottomLeft;
 
 			RewiredUI.DrawCard(cursor, new Vector2(RightWidth, 20.5f));
 			Bounds2D syntaxCard = UI.PrevBounds;
 			string help =
 				"chip Name {\n" +
-				"  input a\n" +
-				"  input bus[8]\n" +
+				"  input a, b, c\n" +
 				"  output y\n\n" +
-				"  NAND n1\n" +
-				"  connect a -> n1.IN_A\n" +
-				"  connect n1.OUT -> y\n" +
+				"  y = (a AND b) OR c\n" +
 				"}\n\n" +
-				"Port widths: [1] [4] [8]\n" +
-				"Pin spaces may use underscores.\n" +
-				"// starts a comment.";
+				"Logic: AND OR XOR NOT\n" +
+				"Also: &  |  ^  !\n" +
+				"Parentheses are supported.\n\n" +
+				"Structural connect still works.\n" +
+				"Bus ports: [1] [4] [8]\n" +
+				"ENTER creates a new source line.";
 
 			UI.DrawText(
 				help,
@@ -248,6 +249,49 @@ namespace DLS.Graphics
 			}
 
 			UI.OverridePreviousBounds(rowBounds);
+		}
+
+		static void HandleEditorEnterKey()
+		{
+			if (!KeyboardShortcuts.ConfirmShortcutTriggered) return;
+
+			int focusedLine = -1;
+			for (int i = 0; i < MaxSourceLines; i++)
+			{
+				if (UI.GetInputFieldState(LineIDs[i]).focused)
+				{
+					focusedLine = i;
+					break;
+				}
+			}
+
+			if (focusedLine < 0 || focusedLine >= MaxSourceLines - 1) return;
+
+			InputFieldState lastLine = UI.GetInputFieldState(LineIDs[MaxSourceLines - 1]);
+			if (!string.IsNullOrEmpty(lastLine.text))
+			{
+				statusText = $"Editor is limited to {MaxSourceLines} lines.";
+				statusSuccess = false;
+				return;
+			}
+
+			InputFieldState current = UI.GetInputFieldState(LineIDs[focusedLine]);
+			if (current.isSelecting) current.Delete(true, ValidateSourceLine);
+
+			int splitIndex = Mathf.Clamp(current.cursorBeforeCharIndex, 0, current.text.Length);
+			string left = current.text.Substring(0, splitIndex);
+			string right = current.text.Substring(splitIndex);
+
+			for (int i = MaxSourceLines - 1; i > focusedLine + 1; i--)
+			{
+				string previousText = UI.GetInputFieldState(LineIDs[i - 1]).text;
+				UI.GetInputFieldState(LineIDs[i]).SetText(previousText, false);
+			}
+
+			current.SetText(left, false);
+			InputFieldState next = UI.GetInputFieldState(LineIDs[focusedLine + 1]);
+			next.SetText(right, true);
+			next.SetCursorIndex(0);
 		}
 
 		static bool ValidateSourceLine(string text) =>
@@ -345,35 +389,13 @@ namespace DLS.Graphics
 		}
 
 		public const string DefaultExample =
-@"// RHDL v0.1 example: gate-level half adder
+@"// RHDL v0.2 example: readable half adder
 chip HalfAdder {
-  input a
-  input b
-  output sum
-  output carry
+  input a, b
+  output sum, carry
 
-  NAND n1
-  NAND n2
-  NAND n3
-  NAND n4
-  NAND n5
-
-  connect a -> n1.IN_A
-  connect b -> n1.IN_B
-
-  connect a -> n2.IN_A
-  connect n1.OUT -> n2.IN_B
-
-  connect b -> n3.IN_A
-  connect n1.OUT -> n3.IN_B
-
-  connect n2.OUT -> n4.IN_A
-  connect n3.OUT -> n4.IN_B
-  connect n4.OUT -> sum
-
-  connect n1.OUT -> n5.IN_A
-  connect n1.OUT -> n5.IN_B
-  connect n5.OUT -> carry
+  sum = a XOR b
+  carry = a AND b
 }";
 	}
 }
