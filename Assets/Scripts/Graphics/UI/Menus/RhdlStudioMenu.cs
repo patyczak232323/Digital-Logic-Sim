@@ -103,6 +103,9 @@ namespace DLS.Graphics
 
 			HandleEditorEnterKey();
 			HandleEditorMultilinePaste();
+			HandleEditorIndentation();
+			HandleEditorNavigation();
+			HandleEditorShortcuts(project);
 			DrawRightPanel(theme, infoTop, project);
 
 			Vector2 actionsTopLeft = sourceCard.BottomLeft + Vector2.down * 0.7f;
@@ -185,8 +188,11 @@ namespace DLS.Graphics
 				"Also: &  |  ^  !\n" +
 				"Parentheses are supported.\n\n" +
 				"Structural connect still works.\n" +
-				"Bus ports: [1] [4] [8]\n" +
-				"ENTER creates a new source line.";
+				"Bus ports: [1] [4] [8]\n\n" +
+				"ENTER new line + auto-indent\n" +
+				"TAB / SHIFT+TAB indent\n" +
+				"CTRL+S save  CTRL+SHIFT+B build\n" +
+				"CTRL+C/V/X/A standard editing";
 
 			UI.DrawText(
 				help,
@@ -284,6 +290,9 @@ namespace DLS.Graphics
 			string left = current.text.Substring(0, splitIndex);
 			string right = current.text.Substring(splitIndex);
 
+			string indent = GetLeadingWhitespace(left);
+			if (left.TrimEnd().EndsWith("{")) indent += "  ";
+
 			for (int i = MaxSourceLines - 1; i > focusedLine + 1; i--)
 			{
 				string previousText = UI.GetInputFieldState(LineIDs[i - 1]).text;
@@ -292,8 +301,88 @@ namespace DLS.Graphics
 
 			current.SetText(left, false);
 			InputFieldState next = UI.GetInputFieldState(LineIDs[focusedLine + 1]);
-			next.SetText(right, true);
-			next.SetCursorIndex(0);
+			next.SetText(indent + right.TrimStart(), true);
+			next.SetCursorIndex(indent.Length);
+		}
+
+		static void HandleEditorIndentation()
+		{
+			int focusedLine = GetFocusedLineIndex();
+			if (focusedLine < 0 || !InputHelper.IsKeyDownThisFrame(KeyCode.Tab)) return;
+
+			InputFieldState state = UI.GetInputFieldState(LineIDs[focusedLine]);
+
+			if (InputHelper.ShiftIsHeld)
+			{
+				string text = state.text ?? string.Empty;
+				int removeCount = 0;
+				while (removeCount < 2 && removeCount < text.Length && text[removeCount] == ' ') removeCount++;
+				if (removeCount > 0)
+				{
+					int oldCursor = state.cursorBeforeCharIndex;
+					state.SetText(text.Substring(removeCount), true);
+					state.SetCursorIndex(Mathf.Max(0, oldCursor - removeCount));
+				}
+			}
+			else
+			{
+				state.TryInsertText("  ", ValidateSourceLine);
+			}
+		}
+
+		static void HandleEditorNavigation()
+		{
+			int focusedLine = GetFocusedLineIndex();
+			if (focusedLine < 0) return;
+
+			bool up = InputHelper.IsKeyDownThisFrame(KeyCode.UpArrow);
+			bool down = InputHelper.IsKeyDownThisFrame(KeyCode.DownArrow);
+			if (!up && !down) return;
+
+			int target = focusedLine + (up ? -1 : 1);
+			if (target < 0 || target >= MaxSourceLines) return;
+
+			InputFieldState current = UI.GetInputFieldState(LineIDs[focusedLine]);
+			int desiredColumn = current.cursorBeforeCharIndex;
+			current.SetFocus(false);
+
+			InputFieldState next = UI.GetInputFieldState(LineIDs[target]);
+			next.SetFocus(true);
+			next.SetCursorIndex(Mathf.Min(desiredColumn, next.text.Length));
+		}
+
+		static void HandleEditorShortcuts(Project project)
+		{
+			if (!InputHelper.CtrlIsHeld) return;
+
+			if (InputHelper.IsKeyDownThisFrame(KeyCode.S))
+			{
+				SaveDraft(project);
+				statusText = "Draft saved.  Ctrl+S";
+				statusSuccess = true;
+			}
+
+			if (InputHelper.ShiftIsHeld && InputHelper.IsKeyDownThisFrame(KeyCode.B))
+			{
+				Build(project, false);
+			}
+		}
+
+		static int GetFocusedLineIndex()
+		{
+			for (int i = 0; i < MaxSourceLines; i++)
+			{
+				if (UI.GetInputFieldState(LineIDs[i]).focused) return i;
+			}
+			return -1;
+		}
+
+		static string GetLeadingWhitespace(string text)
+		{
+			if (string.IsNullOrEmpty(text)) return string.Empty;
+			int count = 0;
+			while (count < text.Length && char.IsWhiteSpace(text[count])) count++;
+			return text.Substring(0, count);
 		}
 
 		static void HandleEditorMultilinePaste()
