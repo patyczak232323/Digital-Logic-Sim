@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Text;
+using DLS.Description;
 using DLS.Game;
 using DLS.RHDL;
 using DLS.SaveSystem;
