@@ -47,13 +47,13 @@ chip RW8_CORE {
   wire exec
   wire call2
   wire ret2
-  wire halted
+  wire halted_state
 
   fetch = state_q == 0x00
   exec = state_q == 0x01
   call2 = state_q == 0x02
   ret2 = state_q == 0x03
-  halted = state_q == 0x04
+  halted_state = state_q == 0x04
 
   RW8_REG8 state_reg(D=state_d, WE=1, CLK=CLK, RESET=RESET, Q=state_q)
 
@@ -517,7 +517,7 @@ chip RW8_CORE {
   DMEM_WRITE = dmem_write_i
   DMEM_READ = dmem_read_i
 
-  HALTED = halted
+  HALTED = halted_state
   FLAGS = flags_q[3:0]
   STATE = state_q
 
