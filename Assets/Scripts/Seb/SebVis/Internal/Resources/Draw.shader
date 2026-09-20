@@ -87,10 +87,21 @@ Shader "Vis/Draw"
             v2f vert(appdata v, uint instanceID : SV_InstanceID)
             {
                 ShapeData instance = InstanceData[instanceID + InstanceOffset];
-                // Initialize every varying. Some shape branches only write the fields
-                // they actually use; GLCore warns if the returned struct may contain
-                // uninitialized values even when the fragment path never reads them.
-                v2f o = (v2f)0;
+                // Initialize every varying explicitly. Some GLCore drivers still warn
+                // about aggregate zero-initialization of structs containing bool/int fields.
+                v2f o;
+                o.posClip = 0;
+                o.shapeType = 0;
+                o.uv = 0;
+                o.sizeData = 0;
+                o.col = 0;
+                o.worldPos = 0;
+                o.lineEndPoints = 0;
+                o.posLocal = 0;
+                o.maskMinMax = 0;
+                o.invTexelSize = 0;
+                o.useAntialiasing = false;
+
                 o.shapeType = instance.type;
                 o.maskMinMax = instance.maskMinMax;
                 o.col = instance.col;
