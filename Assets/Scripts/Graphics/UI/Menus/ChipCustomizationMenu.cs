@@ -181,7 +181,7 @@ namespace DLS.Graphics
 
 		static void DrawSectionHeader(string text, Vector2 topLeft, float width, float height, DrawSettings.UIThemeDLS theme, bool major)
 		{
-			RewiredUI.DrawSectionHeader(text, topLeft, width, major);
+			RewiredUI.DrawSectionHeader(text, topLeft, width, height, major);
 		}
 
 		static void DrawFieldLabel(string text, Vector2 pos, DrawSettings.UIThemeDLS theme)
