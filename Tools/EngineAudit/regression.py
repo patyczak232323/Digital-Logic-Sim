@@ -241,8 +241,8 @@ def test_waveform_ui_supports_scalar_and_bus_traces() -> None:
     assert '"LOGIC ANALYZER"' in menu
     assert "SimulationWaveformRecorder.GetProbes()" in menu
     assert "SimulationWaveformRecorder.GetSamples(probe.Id)" in menu
-    assert "DrawSingleBitTrace(traceBounds, samples)" in menu
-    assert "DrawBusHistory(traceBounds, samples, probe.BitCount)" in menu
+    assert "DrawSingleBitTrace(theme, bounds, samples, dim)" in menu
+    assert "DrawBusHistory(theme, bounds, samples, probe.BitCount, secondary)" in menu
     assert "PinState.GetBitTristatedValue(state, 0)" in menu
     assert "public readonly int BitCount;" in recorder
     assert "ResolveBitCount(pin)" in recorder
