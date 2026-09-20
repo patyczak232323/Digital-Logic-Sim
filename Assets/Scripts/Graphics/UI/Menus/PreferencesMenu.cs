@@ -64,8 +64,8 @@ namespace DLS.Graphics
 		static readonly UIHandle ID_SimFrequencyField = new("PREFS_SimTickTarget");
 		static readonly UIHandle ID_ClockSpeedInput = new("PREFS_ClockSpeed");
 
-		static readonly string showGridLabel = "Show grid" + CreateShortcutString("Ctrl+G");
-		static readonly string simStatusLabel = "Sim Status" + CreateShortcutString("Ctrl+Space");
+		static string showGridLabel => "Show grid" + CreateShortcutString(KeyboardShortcuts.GetBindingDisplayString(ShortcutAction.ToggleGrid));
+		static string simStatusLabel => "Sim Status" + CreateShortcutString(KeyboardShortcuts.GetBindingDisplayString(ShortcutAction.SimulationPause));
 		static readonly Func<string, bool> integerInputValidator = ValidateIntegerInput;
 
 		static double simAvgTicksPerSec_delayedRefreshForUI;
