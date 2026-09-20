@@ -88,19 +88,14 @@ namespace DLS.Graphics
 			}
 
 			UI.DrawFullscreenPanel(ColHelper.MakeCol255(47, 47, 53));
-			const string title = "REWIRED";
-			const string subtitle = "DIGITAL LOGIC SIMULATOR";
-			const float titleFontSize = 18.0f;
-			const float subtitleFontSize = 3.5f;
-			const float titleHeight = 24.5f;
-			const float shaddowOffset = -0.33f;
-			Color shadowCol = ColHelper.MakeCol255(87, 94, 230);
-			Color subtitleCol = new(1, 1, 1, 0.55f);
 
-			UI.DrawText(title, FontType.Born2bSporty, titleFontSize, UI.Centre + Vector2.up * (titleHeight + shaddowOffset), Anchor.CentreTop, shadowCol);
-			UI.DrawText(title, FontType.Born2bSporty, titleFontSize, UI.Centre + Vector2.up * titleHeight, Anchor.CentreTop, Color.white);
-			UI.DrawText(subtitle, FontType.Born2bSporty, subtitleFontSize, UI.Centre + Vector2.up * 14.0f, Anchor.CentreTop, subtitleCol);
-			DrawVersionInfo();
+			// Branding belongs only to the landing screen. Submenus need the full
+			// canvas so the large Rewired title cannot overlap their content.
+			if (activeMenuScreen == MenuScreen.Main)
+			{
+				DrawBranding();
+				DrawVersionInfo();
+			}
 
 			switch (activeMenuScreen)
 			{
@@ -140,6 +135,22 @@ namespace DLS.Graphics
 			activeMenuScreen = MenuScreen.Main;
 			activePopup = PopupKind.None;
 			selectedProjectIndex = -1;
+		}
+
+		static void DrawBranding()
+		{
+			const string title = "REWIRED";
+			const string subtitle = "DIGITAL LOGIC SIMULATOR";
+			const float titleFontSize = 18.0f;
+			const float subtitleFontSize = 3.5f;
+			const float titleHeight = 24.5f;
+			const float shaddowOffset = -0.33f;
+			Color shadowCol = ColHelper.MakeCol255(87, 94, 230);
+			Color subtitleCol = new(1, 1, 1, 0.55f);
+
+			UI.DrawText(title, FontType.Born2bSporty, titleFontSize, UI.Centre + Vector2.up * (titleHeight + shaddowOffset), Anchor.CentreTop, shadowCol);
+			UI.DrawText(title, FontType.Born2bSporty, titleFontSize, UI.Centre + Vector2.up * titleHeight, Anchor.CentreTop, Color.white);
+			UI.DrawText(subtitle, FontType.Born2bSporty, subtitleFontSize, UI.Centre + Vector2.up * 14.0f, Anchor.CentreTop, subtitleCol);
 		}
 
 		static void DrawMainScreen()
