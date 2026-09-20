@@ -6,7 +6,7 @@ using DLS.Game;
 
 namespace DLS.Simulation
 {
-	public static class DeterministicSimulator
+	internal static class DeterministicSimulator
 	{
 		const int Address8BitMask = 0xFF;
 		const int MaxEvaluationsPerChipPerSettle = 256;
