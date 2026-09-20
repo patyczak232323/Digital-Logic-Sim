@@ -196,6 +196,7 @@ namespace DLS.Graphics
 			}
 
 			UI.DrawPanel(bounds_UISpace, theme.StarredBarCol);
+			UI.DrawLine(bounds_UISpace.TopLeft, bounds_UISpace.TopRight, 0.06f, RewiredUI.Accent * 0.75f);
 
 			// Menu toggle button
 			Vector2 menuButtonPos = new(buttonSpacing, padY);
