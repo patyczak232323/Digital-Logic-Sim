@@ -85,6 +85,41 @@ Editor / Project / UI
 
 The older low-level `Simulator` implementation and `DeterministicSimulator` are internal runtime details. Game/UI code should not call them directly. This keeps editor integration stable while allowing the engine implementation to be reorganized or optimized independently.
 
+## RHDL Studio
+
+Rewired includes an experimental source-driven circuit generator called **RHDL Studio**.
+
+RHDL v0.1 is a structural HDL: source code is compiled into an ordinary Rewired `ChipDescription` containing normal pins, subchips and wires. Generated circuits therefore use the same editor, save format and `RewiredEngine` runtime as manually drawn circuits.
+
+Current v0.1 features include:
+
+- dedicated `RHDL STUDIO` workspace
+- project-local source files under `HDL/`
+- `chip`, `input`, `output`, chip-instance and `connect` statements
+- 1-bit, 4-bit and 8-bit ports
+- references to existing builtin or custom chips
+- automatic gate placement by dependency depth
+- `BUILD` and `BUILD & OPEN`
+- `OPEN SOURCE` for chips that have an RHDL source file
+
+Example:
+
+```text
+chip NandWrapper {
+  input a
+  input b
+  output y
+
+  NAND n1
+
+  connect a -> n1.IN_A
+  connect b -> n1.IN_B
+  connect n1.OUT -> y
+}
+```
+
+Pin names containing spaces can be written with underscores, for example `IN_A` resolves to `IN A`.
+
 ## Current development
 
 Current `main` includes work on:
