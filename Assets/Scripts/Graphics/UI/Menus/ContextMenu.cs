@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using DLS.Description;
 using DLS.Game;
+using DLS.RHDL;
 using DLS.Simulation;
 using Seb.Helpers;
 using Seb.Types;
@@ -32,6 +33,7 @@ namespace DLS.Graphics
 
 		static readonly MenuEntry deleteEntry = new(Format("DELETE"), Delete, CanDelete);
 		static readonly MenuEntry openChipEntry = new(Format("OPEN"), OpenChip, CanOpenChip);
+		static readonly MenuEntry openRhdlSourceEntry = new(Format("OPEN SOURCE"), OpenRhdlSource, CanOpenRhdlSource);
 		static readonly MenuEntry labelChipEntry = new(Format("LABEL"), OpenChipLabelPopup, CanLabelChip);
 		static readonly MenuEntry toggleProbeEntry = new(Format("TOGGLE PROBE"), ToggleProbe, CanProbePin);
 		static readonly MenuEntry mirrorHorizontalEntry = new(Format("MIRROR H"), MirrorHorizontal, CanMirrorChip);
@@ -41,6 +43,7 @@ namespace DLS.Graphics
 		{
 			new(Format("VIEW"), EnterViewMode, CanEnterViewMode),
 			openChipEntry,
+			openRhdlSourceEntry,
 			labelChipEntry,
 			mirrorHorizontalEntry,
 			mirrorVerticalEntry,
@@ -119,12 +122,14 @@ namespace DLS.Graphics
 		static readonly MenuEntry[] entries_bottomBarChip =
 		{
 			openChipEntry,
+			openRhdlSourceEntry,
 			new(Format("UN-STAR"), UnstarBottomBarEntry, () => true)
 		};
 
 		static readonly MenuEntry[] entries_collectionPopupChip =
 		{
-			openChipEntry
+			openChipEntry,
+			openRhdlSourceEntry
 		};
 
 		static readonly MenuEntry[] entries_bottomBarCollection =
@@ -529,6 +534,21 @@ namespace DLS.Graphics
 		}
 
 		static bool CanOpenChip() => IsCustomChip() && CanEditCurrentChip();
+
+		static bool CanOpenRhdlSource()
+		{
+			Project project = Project.ActiveProject;
+			return project != null &&
+			       IsCustomChip() &&
+			       RhdlSourceStore.HasChipSource(project.description.ProjectName, interactionContextName);
+		}
+
+		static void OpenRhdlSource()
+		{
+			string chipName = interactionContextName;
+			CloseContextMenu();
+			RhdlStudioMenu.OpenSource(chipName);
+		}
 
 		public static void Reset()
 		{
