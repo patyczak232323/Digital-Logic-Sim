@@ -1067,10 +1067,10 @@ namespace DLS.RHDL
 					float midX = SnapScalar((source.x + target.x) * 0.5f);
 					points = new[]
 					{
-						Vector2.zero,
+						new Vector2(),
 						Snap(new Vector2(midX, source.y)),
 						Snap(new Vector2(midX, target.y)),
-						Vector2.zero
+						new Vector2()
 					};
 				}
 				else if (Math.Abs(dx) <= 1.0f)
@@ -1079,10 +1079,10 @@ namespace DLS.RHDL
 					float sideX = Math.Max(source.x, target.x) + 2.0f + (sameColumnLane++ % 4) * 0.5f;
 					points = new[]
 					{
-						Vector2.zero,
+						new Vector2(),
 						Snap(new Vector2(sideX, source.y)),
 						Snap(new Vector2(sideX, target.y)),
-						Vector2.zero
+						new Vector2()
 					};
 				}
 				else
@@ -1094,12 +1094,12 @@ namespace DLS.RHDL
 					float targetEscapeX = target.x - 1.5f;
 					points = new[]
 					{
-						Vector2.zero,
+						new Vector2(),
 						Snap(new Vector2(sourceEscapeX, source.y)),
 						Snap(new Vector2(sourceEscapeX, laneY)),
 						Snap(new Vector2(targetEscapeX, laneY)),
 						Snap(new Vector2(targetEscapeX, target.y)),
-						Vector2.zero
+						new Vector2()
 					};
 				}
 
@@ -1126,7 +1126,7 @@ namespace DLS.RHDL
 				return root.Position;
 
 			if (!instanceById.TryGetValue(address.PinOwnerID, out InstanceDecl instance))
-				return Vector2.zero;
+				return new Vector2();
 
 			foreach (PinDescription pin in instance.Description.InputPins.Concat(instance.Description.OutputPins))
 			{
