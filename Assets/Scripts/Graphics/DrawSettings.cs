@@ -119,16 +119,16 @@ namespace DLS.Graphics
 			FontType fontBold = FontBold;
 			float fontSizeRegular = UIThemeLibrary.FontSizeMedium;
 
-			Color inactiveButtonCol = MakeCol255(62);
-			Color inactiveTextol = MakeCol255(125);
-			Color chipLibaryButtonOff = MakeCol255(88, 97, 112);
-			Color chipLibaryButtonOn = MakeCol255(255, 64, 102);
-			Color menuPanelCol = MakeCol255(41);
+			Color inactiveButtonCol = MakeCol255(48, 49, 54);
+			Color inactiveTextol = MakeCol255(112, 114, 122);
+			Color chipLibaryButtonOff = MakeCol255(43, 45, 51);
+			Color chipLibaryButtonOn = MakeCol255(72, 108, 233);
+			Color menuPanelCol = MakeCol255(32, 33, 37);
 
-			Color chipLibraryCollectionHighlightCol = MakeCol(0.97, 0.47, 0.47);
-			Color chipLibraryChipHighlightCol = MakeCol(0.32, 0.61, 0.85);
+			Color chipLibraryCollectionHighlightCol = MakeCol255(72, 108, 233);
+			Color chipLibraryChipHighlightCol = MakeCol255(86, 124, 245);
 
-			Color scrollBarCol = new(0.42f, 0.34f, 0.67f);
+			Color scrollBarCol = MakeCol255(72, 108, 233);
 
 
 			return new UIThemeDLS
@@ -140,44 +140,44 @@ namespace DLS.Graphics
 
 				// --- Menu colours ---
 				MenuPanelCol = menuPanelCol,
-				MenuBackgroundOverlayCol = new Color(0, 0, 0, 0.85f),
+				MenuBackgroundOverlayCol = new Color(0, 0, 0, 0.78f),
 				// --- Buttons ---
-				ButtonTheme = MakeButtonTheme(fontRegular, MakeCol255(64), MakeCol255(225), Color.white, Color.white, Color.black, Color.black),
-				ProjectSelectionButton = MakeButtonTheme(fontRegular, Color.clear, MakeCol255(54, 58, 135), MakeCol255(95, 102, 240), Color.white, Color.white, Color.white),
-				ProjectSelectionButtonSelected = MakeButtonTheme(fontRegular, MakeCol255(87, 94, 230), MakeCol255(87, 94, 230), MakeCol255(95, 102, 240), Color.white, Color.white, Color.white),
-				ChipButton = MakeButtonTheme(fontRegular, MakeCol255(48), MakeCol255(225), Color.white, Color.white, Color.black, Color.black),
-				MainMenuButtonTheme = MakeButtonTheme(fontRegular, MakeCol255(73, 73, 82), MakeCol255(72, 108, 233), MakeCol255(62, 116, 154), MakeCol255(228, 244, 255), Color.white, Color.white),
-				MenuButtonTheme = MakeButtonTheme(fontRegular, MakeCol255(67, 104, 149), MakeCol255(89, 159, 229), MakeCol255(117, 186, 224), MakeCol255(228, 244, 255), Color.white, Color.white),
-				MenuPopupButtonTheme = MakeButtonThemeFull(fontRegular, Color.white, MakeCol255(130, 190, 245), MakeCol255(145, 215, 245), MakeCol255(200), Color.black, Color.black, Color.black, inactiveTextol),
+				ButtonTheme = MakeButtonTheme(fontRegular, MakeCol255(61, 62, 68), MakeCol255(72, 108, 233), MakeCol255(55, 82, 181), Color.white, Color.white, Color.white),
+				ProjectSelectionButton = MakeButtonTheme(fontRegular, MakeCol255(37, 38, 43), MakeCol255(54, 72, 130), MakeCol255(58, 84, 184), Color.white, Color.white, Color.white),
+				ProjectSelectionButtonSelected = MakeButtonTheme(fontRegular, MakeCol255(72, 108, 233), MakeCol255(86, 124, 245), MakeCol255(55, 82, 181), Color.white, Color.white, Color.white),
+				ChipButton = MakeButtonTheme(fontRegular, MakeCol255(45, 46, 51), MakeCol255(61, 79, 137), MakeCol255(72, 108, 233), Color.white, Color.white, Color.white),
+				MainMenuButtonTheme = MakeButtonTheme(fontRegular, MakeCol255(52, 53, 59), MakeCol255(72, 108, 233), MakeCol255(55, 82, 181), MakeCol255(235, 239, 255), Color.white, Color.white),
+				MenuButtonTheme = MakeButtonTheme(fontRegular, MakeCol255(48, 50, 58), MakeCol255(72, 108, 233), MakeCol255(55, 82, 181), MakeCol255(235, 239, 255), Color.white, Color.white),
+				MenuPopupButtonTheme = MakeButtonThemeFull(fontRegular, MakeCol255(38, 39, 44), MakeCol255(55, 72, 126), MakeCol255(72, 108, 233), inactiveButtonCol, Color.white, Color.white, Color.white, inactiveTextol),
 
-				ChipLibraryCollectionToggleOff = MakeButtonTheme(fontRegular, MakeCol(0.066), MakeCol(0.87), chipLibraryCollectionHighlightCol, Color.white, Color.black, Color.black),
-				ChipLibraryCollectionToggleOn = MakeButtonThemeAuto(fontRegular, chipLibraryCollectionHighlightCol, Color.black),
-				ChipLibraryChipToggleOff = MakeButtonTheme(fontRegular, MakeCol(0.15), MakeCol(0.87), chipLibraryChipHighlightCol, Color.white, Color.black, Color.black),
-				ChipLibraryChipToggleOn = MakeButtonThemeAuto(fontRegular, chipLibraryChipHighlightCol, Color.black),
+				ChipLibraryCollectionToggleOff = MakeButtonTheme(fontRegular, MakeCol255(38, 39, 44), MakeCol255(55, 72, 126), chipLibraryCollectionHighlightCol, Color.white, Color.white, Color.white),
+				ChipLibraryCollectionToggleOn = MakeButtonThemeAuto(fontRegular, chipLibraryCollectionHighlightCol, Color.white),
+				ChipLibraryChipToggleOff = MakeButtonTheme(fontRegular, MakeCol255(44, 45, 50), MakeCol255(62, 79, 135), chipLibraryChipHighlightCol, Color.white, Color.white, Color.white),
+				ChipLibraryChipToggleOn = MakeButtonThemeAuto(fontRegular, chipLibraryChipHighlightCol, Color.white),
 
 				// --- Other stuff ---
 				ChipNameInputField = new InputFieldTheme
 				{
 					font = fontBold,
 					fontSize = UIThemeLibrary.FontSizeVeryLarge,
-					bgCol = MakeCol255(20),
-					defaultTextCol = MakeCol255(40),
+					bgCol = MakeCol255(22, 23, 27),
+					defaultTextCol = MakeCol255(94, 96, 105),
 					textCol = Color.white,
-					focusBorderCol = Color.black
+					focusBorderCol = MakeCol255(72, 108, 233)
 				},
 				OptionsWheel = new WheelSelectorTheme
 				{
-					backgroundCol = Color.white,
-					buttonTheme = MakeButtonTheme(fontBold, MakeCol255(207, 101, 101), MakeCol255(243, 168, 168), MakeCol255(180, 90, 90), Color.white, Color.white, Color.white),
-					textCol = Color.black,
-					inactiveTextCol = MakeCol(0.7f)
+					backgroundCol = MakeCol255(29, 30, 34),
+					buttonTheme = MakeButtonTheme(fontBold, MakeCol255(48, 49, 55), MakeCol255(72, 108, 233), MakeCol255(55, 82, 181), Color.white, Color.white, Color.white),
+					textCol = Color.white,
+					inactiveTextCol = MakeCol255(112, 114, 122)
 				},
 				ScrollTheme = new ScrollViewTheme
 				{
-					backgroundCol = MakeCol255(30),
+					backgroundCol = MakeCol255(25, 26, 30),
 					padding = 1,
-					scrollBarColBackground = MakeCol255(25),
-					scrollBarColInactive = MakeCol("#333333"),
+					scrollBarColBackground = MakeCol255(20, 21, 24),
+					scrollBarColInactive = MakeCol255(51, 53, 59),
 					scrollBarColNormal = scrollBarCol,
 					scrollBarColHover = Brighten(scrollBarCol, 0.05f, -0.025f),
 					scrollBarColPressed = Darken(scrollBarCol, 0.05f, 0.025f),
@@ -185,11 +185,11 @@ namespace DLS.Graphics
 				},
 				CheckBoxTheme = new CheckboxTheme
 				{
-					boxCol = Color.white,
-					tickCol = Color.black
+					boxCol = MakeCol255(45, 47, 53),
+					tickCol = Color.white
 				},
-				InfoBarCol = new Color(0, 0, 0, 0.9f),
-				StarredBarCol = MakeCol(29 / 255f)
+				InfoBarCol = new Color(0.07f, 0.075f, 0.085f, 0.96f),
+				StarredBarCol = MakeCol255(27, 28, 32)
 			};
 
 			ButtonTheme MakeButtonThemeAuto(FontType font, Color colNormal, Color textCol)
