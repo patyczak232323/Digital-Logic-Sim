@@ -14,6 +14,10 @@ namespace DLS.Game
 		public static readonly Version DLSVersion = new(2, 1, 6);
 		public static readonly Version DLSVersion_EarliestCompatible = new(2, 0, 0);
 		public const string LastUpdatedString = "5 May 2025";
+
+		// Rewired application branding/version. Keep DLSVersion above for legacy project-format compatibility.
+		public const string RewiredVersion = "0.2.0";
+		public const string RewiredLastUpdatedString = "20 Sep 2026";
 		public static AppSettings ActiveAppSettings;
 
 		public static Project ActiveProject { get; private set; }
