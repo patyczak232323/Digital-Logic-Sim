@@ -208,8 +208,8 @@ namespace DLS.Graphics
 				"chip Name(WIDTH=8) {\n" +
 				"  input A: WIDTH, B: WIDTH\n" +
 				"  input sel\n" +
-				"  output Y: WIDTH\n" +
-				"  wire sum: WIDTH\n\n" +
+				"  output Y        // width inferred\n" +
+				"  wire sum        // width inferred\n\n" +
 				"  sum = A + B\n" +
 				"  Y = sel ? sum : (A ^ B)\n" +
 				"}\n\n" +
@@ -217,7 +217,7 @@ namespace DLS.Graphics
 				"Bits: A[3]   slice: A[7:4]\n" +
 				"Concat: {A[7:4], B[3:0]}\n" +
 				"Constants: 0b1010  0xFF  42\n" +
-				"Widths: 1 / 4 / 8 bits\n" +
+				"Widths: 1 / 4 / 8 bits; output/wire can infer\n" +
 				"Named ports: NAND n(IN_A=a, IN_B=b, OUT=y)\n\n" +
 				"{} auto-pairs; TAB/ENTER inside {} expands block\n" +
 				"TAB / SHIFT+TAB indent\n" +
