@@ -25,7 +25,10 @@ namespace DLS.Graphics
 
 			using (UI.BeginBoundsScope(true))
 			{
-				UI.DrawText("Pulse Width (ticks)", theme.FontBold, theme.FontSizeRegular, pos, Anchor.TextCentre, Color.white * 0.8f);
+				const float panelWidth = 22f;
+				Vector2 headerTopLeft = new(pos.x - panelWidth / 2f, pos.y + 3.2f);
+				RewiredUI.DrawSectionHeader("PULSE SETTINGS", headerTopLeft, panelWidth, true);
+				RewiredUI.DrawLabel("Pulse Width (ticks)", pos, true, 0.72f, RewiredUI.SecondaryText, Anchor.TextCentre);
 
 				InputFieldTheme inputFieldTheme = DrawSettings.ActiveUITheme.ChipNameInputField;
 				inputFieldTheme.fontSize = DrawSettings.ActiveUITheme.FontSizeRegular;
