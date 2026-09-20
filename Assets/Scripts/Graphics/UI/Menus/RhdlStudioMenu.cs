@@ -149,7 +149,7 @@ namespace DLS.Graphics
 				theme.FontRegular,
 				theme.FontSizeRegular * 0.58f,
 				statusCard.TopLeft + new Vector2(0.8f, -2.4f),
-				Anchor.TextTopLeft,
+				Anchor.TopLeft,
 				statusCol);
 
 			cursor = statusCard.BottomLeft + Vector2.down * 0.6f;
@@ -176,7 +176,7 @@ namespace DLS.Graphics
 				theme.FontRegular,
 				theme.FontSizeRegular * 0.56f,
 				syntaxCard.TopLeft + new Vector2(0.8f, -0.8f),
-				Anchor.TextTopLeft,
+				Anchor.TopLeft,
 				RewiredUI.SecondaryText);
 
 			cursor = syntaxCard.BottomLeft + Vector2.down * 0.6f;
