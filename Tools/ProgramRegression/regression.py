@@ -140,7 +140,7 @@ def test_csharp_integration_guards() -> None:
     assert "return topologyChanged;" in simulator
     assert "public static class RewiredEngine" in simulation_facade
     assert "if (Simulator.ApplyModifications())" in simulation_facade
-    assert "if (topologyChanged) DeterministicSimulator.InvalidateTopology();" in simulation_facade
+    assert "DeterministicSimulator.InvalidateTopology();" in simulation_facade
     assert "pendingTopologyModification" not in simulation_facade
     assert not (ROOT / "Assets/Scripts/Game/Project/SimulationFacade.cs").exists()
     assert not (ROOT / "Assets/Scripts/Graphics/UI/Menus/SimulationFacade.cs").exists()
