@@ -87,33 +87,48 @@ The older low-level `Simulator` implementation and `DeterministicSimulator` are 
 
 ## RHDL Studio
 
-Rewired **0.3.0** introduces an experimental source-driven circuit generator called **RHDL Studio**.
+Rewired **0.3.0** includes the experimental **RHDL Studio** source-driven circuit generator.
 
-RHDL v0.2 combines a readable logic-expression layer with the original structural HDL. Source code is still compiled into an ordinary Rewired `ChipDescription` containing normal pins, subchips and wires, so generated circuits use the same editor, save format and `RewiredEngine` runtime as manually drawn circuits.
+RHDL v0.3 is a frontend for ordinary Rewired circuits: readable expressions are lowered into normal structural topology (NAND gates, split/merge chips, buses, pins and wires), then compiled into a standard `ChipDescription`. There is no separate RHDL simulation path.
 
-Current v0.1 features include:
+Current features include:
 
-- dedicated `RHDL STUDIO` workspace
-- project-local source files under `HDL/`
-- `chip`, `input`, `output`, chip-instance and `connect` statements
-- readable 1-bit logic assignments with `AND`, `OR`, `XOR`, `NOT` and parentheses
-- symbolic aliases `&`, `|`, `^`, `!`
-- automatic synthesis of readable logic expressions into ordinary NAND-based Rewired circuits
-- 1-bit, 4-bit and 8-bit ports
-- references to existing builtin or custom chips
-- automatic gate placement by dependency depth
-- `BUILD` and `BUILD & OPEN`
-- `OPEN SOURCE` for chips that have an RHDL source file
+- `chip`, `input`, `output`, `wire`, instance and `connect` statements
+- 1-bit, 4-bit and 8-bit signals using either `A[8]` or `A: 8` declaration syntax
+- compile-time constants: binary (`0b1010`), hexadecimal (`0xA5`) and decimal
+- compile-time parameters/defaults such as `chip Name(WIDTH=8)`
+- bitwise logic: `AND`, `OR`, `XOR`, `NOT` and `& | ^ ! ~`
+- arithmetic: `+` and `-`
+- unsigned comparisons: `== != < > <= >=`
+- constant shifts: `<<` and `>>`
+- ternary mux expressions: `sel ? A : B`
+- bit selection and slicing: `A[3]`, `A[7:4]`
+- concatenation: `{A[7:4], B[3:0]}`
+- named instance bindings, for example `NAND n(IN_A=a, IN_B=b, OUT=y)`
+- structural authoring with existing builtin or custom chips
+- diagnostics for invalid references, width mismatches, multiple drivers and assignment loops
+- line and column information for expression diagnostics
+- automatic dependency-based placement of generated topology
+- project-local source persistence under `HDL/`
+- `BUILD`, `BUILD & OPEN` and `OPEN SOURCE`
 
 Example:
 
 ```text
-chip HalfAdder {
-  input a, b
-  output sum, carry
+chip AluMini(WIDTH=8) {
+  input A: WIDTH, B: WIDTH
+  input sel
+  output Y: WIDTH
+  output equal
 
-  sum = a XOR b
-  carry = a AND b
+  wire sum: WIDTH
+  wire mixed: WIDTH
+
+  sum = A + B
+  mixed = {A[7:4], B[3:0]}
+
+  Y = sel ? sum : mixed
+  equal = A == B
 }
 ```
 
@@ -126,7 +141,11 @@ connect b -> n1.IN_B
 connect n1.OUT -> y
 ```
 
-Pin names containing spaces can be written with underscores, for example `IN_A` resolves to `IN A`. In RHDL Studio, Enter splits the current source line at the caret and continues editing on the newly created line.
+Pin names containing spaces can be written with underscores, for example `IN_A` resolves to `IN A`.
+
+RHDL Studio also provides document-wide selection/clipboard editing, automatic `{}`, `()` and `[]` pairing, automatic indentation, and block expansion: pressing **Tab** or **Enter** with the caret between `{}` expands the pair onto separate indented lines. A dedicated gutter and vertical separator visually separate line numbers from source text.
+
+Current bus widths are intentionally limited to **1, 4 and 8 bits**, matching the underlying Rewired pin types. Shift counts are compile-time constants/parameters. Chip parameters are currently compile-time defaults within one source unit rather than fully generic parameterized saved-chip instances.
 
 ## Current development
 
