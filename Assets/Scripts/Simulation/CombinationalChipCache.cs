@@ -123,13 +123,23 @@ namespace DLS.Simulation
 
 		internal static void LogFullLut(string message)
 		{
-			UnityEngine.Debug.Log("[FULL LUT] " + message);
+			string line = "[FULL LUT] " + message;
+#if UNITY_5_3_OR_NEWER
+			UnityEngine.Debug.Log(line);
+#else
+			Console.WriteLine(line);
+#endif
 		}
 
 		internal static void LogFullLutError(string message, Exception ex = null)
 		{
 			string details = ex == null ? message : message + Environment.NewLine + ex;
-			UnityEngine.Debug.LogError("[FULL LUT] " + details);
+			string line = "[FULL LUT] " + details;
+#if UNITY_5_3_OR_NEWER
+			UnityEngine.Debug.LogError(line);
+#else
+			Console.Error.WriteLine(line);
+#endif
 		}
 
 		public static ChipCacheAnalysis Analyze(ChipDescription description, ChipLibrary library)
