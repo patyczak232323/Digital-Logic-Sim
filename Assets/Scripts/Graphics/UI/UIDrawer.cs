@@ -56,7 +56,7 @@ namespace DLS.Graphics
 		{
 			MenuType menuToDraw = ActiveMenu; // cache state in case it changes while drawing/updating the menus
 
-			if (menuToDraw != MenuType.ChipCustomization) BottomBarUI.DrawUI(project);
+			if (menuToDraw is not MenuType.ChipCustomization and not MenuType.SimulationDiagnostics) BottomBarUI.DrawUI(project);
 
 			if (menuToDraw == MenuType.ChipSave) ChipSaveMenu.DrawMenu();
 			else if (menuToDraw == MenuType.ChipLibrary) ChipLibraryMenu.DrawMenu();
