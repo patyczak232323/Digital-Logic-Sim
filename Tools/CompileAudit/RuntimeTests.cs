@@ -19,6 +19,7 @@ namespace DLS.Simulation
 		{
 			Run("RHDL structural HalfAdder compilation", TestRhdlHalfAdderCompilation);
 			Run("RHDL readable logic synthesis", TestRhdlReadableLogicSynthesis);
+			Run("RHDL v0.3 buses, arithmetic, slices and mux", TestRhdlV3BusExpressions);
 			Run("feedback NAND latch", TestFeedbackNandLatch);
 			Run("feedback unchanged-input zero sweep", TestFeedbackZeroSweep);
 			Run("feedback state materialization", TestFeedbackMaterialization);
@@ -193,6 +194,133 @@ namespace DLS.Simulation
 						$"Readable RHDL AND mismatch for {a}{b}");
 				}
 			}
+
+			DeterministicSimulator.Reset();
+			Simulator.Reset();
+		}
+
+		static void TestRhdlV3BusExpressions()
+		{
+			PinDescription P(string name, int id, PinBitCount bits = PinBitCount.Bit1) =>
+				new(name, id, new UnityEngine.Vector2(), bits, PinColour.Red, PinValueDisplayMode.Off);
+
+			ChipDescription Builtin(
+				string name,
+				ChipType type,
+				PinDescription[] inputs,
+				PinDescription[] outputs) =>
+				new()
+				{
+					Name = name,
+					ChipType = type,
+					InputPins = inputs ?? Array.Empty<PinDescription>(),
+					OutputPins = outputs ?? Array.Empty<PinDescription>(),
+					SubChips = Array.Empty<SubChipDescription>(),
+					Wires = Array.Empty<WireDescription>(),
+					Displays = Array.Empty<DisplayDescription>()
+				};
+
+			ChipDescription nand = Builtin(
+				"NAND",
+				ChipType.Nand,
+				new[] { P("IN B", 0), P("IN A", 1) },
+				new[] { P("OUT", 2) });
+
+			ChipDescription bus8 = Builtin(
+				"BUS-8",
+				ChipType.Bus_8Bit,
+				new[] { P("BUS-8 (Hidden)", 0, PinBitCount.Bit8) },
+				new[] { P("BUS-8", 1, PinBitCount.Bit8) });
+
+			ChipDescription split8 = Builtin(
+				"8-1BIT",
+				ChipType.Split_8To1Bit,
+				new[] { P("IN", 0, PinBitCount.Bit8) },
+				Enumerable.Range(0, 8)
+					.Select(i => P("OUT " + (char)('H' - i), 1 + i))
+					.ToArray());
+
+			ChipDescription split4 = Builtin(
+				"4-1BIT",
+				ChipType.Split_4To1Bit,
+				new[] { P("IN", 0, PinBitCount.Bit4) },
+				Enumerable.Range(0, 4)
+					.Select(i => P("OUT " + (char)('D' - i), 1 + i))
+					.ToArray());
+
+			ChipDescription merge8 = Builtin(
+				"1-8BIT",
+				ChipType.Merge_1To8Bit,
+				Enumerable.Range(0, 8)
+					.Select(i => P("IN " + (char)('H' - i), i))
+					.ToArray(),
+				new[] { P("OUT", 8, PinBitCount.Bit8) });
+
+			ChipDescription merge4 = Builtin(
+				"1-4BIT",
+				ChipType.Merge_1To4Bit,
+				Enumerable.Range(0, 4)
+					.Select(i => P("IN " + (char)('D' - i), i))
+					.ToArray(),
+				new[] { P("OUT", 4, PinBitCount.Bit4) });
+
+			ChipLibrary library = new(nand, bus8, split8, split4, merge8, merge4);
+
+			string source =
+@"chip V3Demo(WIDTH=8) {
+  input A: WIDTH, B: WIDTH
+  input sel
+  output Y: WIDTH
+  output equal
+
+  wire sum: WIDTH
+  wire mixed: WIDTH
+
+  sum = A + B
+  mixed = {A[7:4], B[3:0]}
+  Y = sel ? sum : mixed
+  equal = A == B
+}";
+
+			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
+			Assert(result.Success,
+				"RHDL v0.3 compile failed: " + string.Join(" | ", result.Diagnostics.Select(d => d.ToString())));
+			Assert(result.Description != null, "RHDL v0.3 returned no description");
+			Assert(result.Description.InputPins.Length == 3, "RHDL v0.3 input count mismatch");
+			Assert(result.Description.OutputPins.Length == 2, "RHDL v0.3 output count mismatch");
+			Assert(result.Description.InputPins[0].BitCount == PinBitCount.Bit8, "A is not 8-bit");
+			Assert(result.Description.OutputPins[0].BitCount == PinBitCount.Bit8, "Y is not 8-bit");
+
+			Simulator.Reset();
+			DeterministicSimulator.Reset();
+			SimChip root = Simulator.BuildSimChip(result.Description, library);
+
+			DevPinInstance[] inputs =
+			{
+				new DevPinInstance(),
+				new DevPinInstance(),
+				new DevPinInstance()
+			};
+
+			for (int i = 0; i < inputs.Length; i++)
+				inputs[i].Pin.Address = new PinAddress(result.Description.InputPins[i].ID, 0);
+
+			void RunCase(uint a, uint b, uint sel, uint expectedY, uint expectedEqual)
+			{
+				inputs[0].Pin.PlayerInputState = a;
+				inputs[1].Pin.PlayerInputState = b;
+				inputs[2].Pin.PlayerInputState = sel;
+				DeterministicSimulator.RunSimulationStep(root, inputs, new SimAudio());
+
+				uint y = PinState.GetBitStates(root.OutputPins[0].State) & 0xFFu;
+				uint eq = Bit(root.OutputPins[1].State);
+				Assert(y == expectedY, $"RHDL v0.3 Y mismatch: A={a:X2} B={b:X2} sel={sel} got={y:X2} expected={expectedY:X2}");
+				Assert(eq == expectedEqual, $"RHDL v0.3 equality mismatch: A={a:X2} B={b:X2} got={eq} expected={expectedEqual}");
+			}
+
+			RunCase(0x12, 0x34, 0, 0x14, 0);
+			RunCase(0x12, 0x34, 1, 0x46, 0);
+			RunCase(0xA5, 0xA5, 0, 0xA5, 1);
 
 			DeterministicSimulator.Reset();
 			Simulator.Reset();
