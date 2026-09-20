@@ -67,6 +67,43 @@ namespace DLS.RHDL
 			public string TargetInstance;
 		}
 
+		sealed class AssignmentDecl
+		{
+			public string TargetText;
+			public string ExpressionText;
+			public int Line;
+		}
+
+		abstract class ExprNode { }
+
+		sealed class RefExpr : ExprNode
+		{
+			public readonly string Name;
+			public RefExpr(string name) => Name = name;
+		}
+
+		sealed class UnaryExpr : ExprNode
+		{
+			public readonly string Op;
+			public readonly ExprNode Value;
+			public UnaryExpr(string op, ExprNode value) { Op = op; Value = value; }
+		}
+
+		sealed class BinaryExpr : ExprNode
+		{
+			public readonly string Op;
+			public readonly ExprNode Left;
+			public readonly ExprNode Right;
+			public BinaryExpr(string op, ExprNode left, ExprNode right) { Op = op; Left = left; Right = right; }
+		}
+
+		readonly struct ExprToken
+		{
+			public readonly string Text;
+			public readonly int Position;
+			public ExprToken(string text, int position) { Text = text; Position = position; }
+		}
+
 		readonly struct Endpoint
 		{
 			public readonly PinAddress Address;
@@ -85,6 +122,7 @@ namespace DLS.RHDL
 			List<PortDecl> ports = new();
 			List<InstanceDecl> instances = new();
 			List<ConnectionDecl> connections = new();
+			List<AssignmentDecl> assignments = new();
 
 			if (library == null)
 			{
@@ -167,6 +205,32 @@ namespace DLS.RHDL
 					continue;
 				}
 
+				int assignmentEquals = line.IndexOf('=');
+				if (assignmentEquals > 0)
+				{
+					if (line.IndexOf('=', assignmentEquals + 1) >= 0)
+					{
+						diagnostics.Add(new RhdlDiagnostic(lineNumber, "RHDL logic assignment uses a single '='."));
+						continue;
+					}
+
+					string target = line.Substring(0, assignmentEquals).Trim();
+					string expression = line.Substring(assignmentEquals + 1).Trim();
+					if (string.IsNullOrWhiteSpace(target) || string.IsNullOrWhiteSpace(expression))
+					{
+						diagnostics.Add(new RhdlDiagnostic(lineNumber, "Expected: TARGET = expression"));
+						continue;
+					}
+
+					assignments.Add(new AssignmentDecl
+					{
+						TargetText = target,
+						ExpressionText = expression,
+						Line = lineNumber
+					});
+					continue;
+				}
+
 				string declaration = line;
 				if (declaration.StartsWith("use ", StringComparison.OrdinalIgnoreCase))
 					declaration = declaration.Substring(4).Trim();
@@ -189,6 +253,7 @@ namespace DLS.RHDL
 			if (string.IsNullOrWhiteSpace(chipName))
 				diagnostics.Add(new RhdlDiagnostic(0, "Missing 'chip NAME {' declaration."));
 
+			SynthesizeAssignments(assignments, ports, instances, connections, diagnostics);
 			ValidateNames(ports, instances, diagnostics);
 			if (diagnostics.Count != 0) return new RhdlCompileResult(null, diagnostics);
 
@@ -297,6 +362,301 @@ namespace DLS.RHDL
 			};
 
 			return new RhdlCompileResult(description, diagnostics);
+		}
+
+		static void SynthesizeAssignments(
+			List<AssignmentDecl> assignments,
+			List<PortDecl> ports,
+			List<InstanceDecl> instances,
+			List<ConnectionDecl> connections,
+			List<RhdlDiagnostic> diagnostics)
+		{
+			HashSet<string> usedInstanceNames = new(instances.Select(i => Normalize(i.Name)), StringComparer.OrdinalIgnoreCase);
+			HashSet<string> portNames = new(ports.Select(p => Normalize(p.Name)), StringComparer.OrdinalIgnoreCase);
+			int generatedCounter = 0;
+
+			foreach (AssignmentDecl assignment in assignments)
+			{
+				if (!portNames.Contains(Normalize(assignment.TargetText)))
+				{
+					diagnostics.Add(new RhdlDiagnostic(
+						assignment.Line,
+						$"Logic assignment target '{assignment.TargetText}' must currently be a declared output."));
+					continue;
+				}
+
+				PortDecl targetPort = ports.First(p => Normalize(p.Name) == Normalize(assignment.TargetText));
+				if (targetPort.IsInput)
+				{
+					diagnostics.Add(new RhdlDiagnostic(
+						assignment.Line,
+						$"Cannot assign to input '{assignment.TargetText}'."));
+					continue;
+				}
+
+				if (targetPort.Bits != PinBitCount.Bit1)
+				{
+					diagnostics.Add(new RhdlDiagnostic(
+						assignment.Line,
+						"RHDL logic expressions currently synthesize 1-bit signals. Use structural connect for 4/8-bit buses."));
+					continue;
+				}
+
+				if (!TryParseExpression(assignment.ExpressionText, out ExprNode expression, out string parseError))
+				{
+					diagnostics.Add(new RhdlDiagnostic(assignment.Line, parseError));
+					continue;
+				}
+
+				string source = SynthesizeExpression(expression, assignment.Line);
+				if (source == null) continue;
+
+				connections.Add(new ConnectionDecl
+				{
+					SourceText = source,
+					TargetText = assignment.TargetText,
+					Line = assignment.Line
+				});
+			}
+
+			string SynthesizeExpression(ExprNode node, int line)
+			{
+				if (node is RefExpr reference) return reference.Name;
+
+				if (node is UnaryExpr unary)
+				{
+					string input = SynthesizeExpression(unary.Value, line);
+					if (input == null) return null;
+					if (!string.Equals(unary.Op, "NOT", StringComparison.OrdinalIgnoreCase))
+					{
+						diagnostics.Add(new RhdlDiagnostic(line, $"Unsupported unary operator '{unary.Op}'."));
+						return null;
+					}
+					return CreateNand(input, input, line);
+				}
+
+				if (node is BinaryExpr binary)
+				{
+					string left = SynthesizeExpression(binary.Left, line);
+					string right = SynthesizeExpression(binary.Right, line);
+					if (left == null || right == null) return null;
+
+					switch (binary.Op.ToUpperInvariant())
+					{
+						case "AND":
+						{
+							string n = CreateNand(left, right, line);
+							return CreateNand(n, n, line);
+						}
+						case "OR":
+						{
+							string notLeft = CreateNand(left, left, line);
+							string notRight = CreateNand(right, right, line);
+							return CreateNand(notLeft, notRight, line);
+						}
+						case "XOR":
+						{
+							string common = CreateNand(left, right, line);
+							string a = CreateNand(left, common, line);
+							string b = CreateNand(right, common, line);
+							return CreateNand(a, b, line);
+						}
+						default:
+							diagnostics.Add(new RhdlDiagnostic(line, $"Unsupported binary operator '{binary.Op}'."));
+							return null;
+					}
+				}
+
+				diagnostics.Add(new RhdlDiagnostic(line, "Invalid expression node."));
+				return null;
+			}
+
+			string CreateNand(string a, string b, int line)
+			{
+				string name;
+				do
+				{
+					name = $"__rhdl_logic_{generatedCounter++}";
+				}
+				while (!usedInstanceNames.Add(Normalize(name)));
+
+				instances.Add(new InstanceDecl
+				{
+					TypeName = "NAND",
+					Name = name,
+					Line = line
+				});
+
+				connections.Add(new ConnectionDecl { SourceText = a, TargetText = name + ".IN_A", Line = line });
+				connections.Add(new ConnectionDecl { SourceText = b, TargetText = name + ".IN_B", Line = line });
+				return name + ".OUT";
+			}
+		}
+
+		static bool TryParseExpression(string text, out ExprNode expression, out string error)
+		{
+			expression = null;
+			error = null;
+			List<ExprToken> tokens = TokenizeExpression(text, out error);
+			if (tokens == null) return false;
+
+			int index = 0;
+			expression = ParseOr();
+			if (expression == null) return false;
+			if (index != tokens.Count)
+			{
+				error = $"Unexpected token '{tokens[index].Text}' in expression.";
+				expression = null;
+				return false;
+			}
+			return true;
+
+			ExprNode ParseOr()
+			{
+				ExprNode left = ParseXor();
+				while (left != null && Match("OR", "|"))
+				{
+					string op = "OR";
+					ExprNode right = ParseXor();
+					if (right == null) return null;
+					left = new BinaryExpr(op, left, right);
+				}
+				return left;
+			}
+
+			ExprNode ParseXor()
+			{
+				ExprNode left = ParseAnd();
+				while (left != null && Match("XOR", "^"))
+				{
+					ExprNode right = ParseAnd();
+					if (right == null) return null;
+					left = new BinaryExpr("XOR", left, right);
+				}
+				return left;
+			}
+
+			ExprNode ParseAnd()
+			{
+				ExprNode left = ParseUnary();
+				while (left != null && Match("AND", "&"))
+				{
+					ExprNode right = ParseUnary();
+					if (right == null) return null;
+					left = new BinaryExpr("AND", left, right);
+				}
+				return left;
+			}
+
+			ExprNode ParseUnary()
+			{
+				if (Match("NOT", "!"))
+				{
+					ExprNode value = ParseUnary();
+					if (value == null)
+					{
+						error = "Expected expression after NOT.";
+						return null;
+					}
+					return new UnaryExpr("NOT", value);
+				}
+				return ParsePrimary();
+			}
+
+			ExprNode ParsePrimary()
+			{
+				if (Match("("))
+				{
+					ExprNode inner = ParseOr();
+					if (inner == null) return null;
+					if (!Match(")"))
+					{
+						error = "Missing ')' in expression.";
+						return null;
+					}
+					return inner;
+				}
+
+				if (index >= tokens.Count)
+				{
+					error = "Expected signal name or expression.";
+					return null;
+				}
+
+				string token = tokens[index].Text;
+				if (token is ")" or "&" or "|" or "^")
+				{
+					error = $"Unexpected token '{token}'.";
+					return null;
+				}
+
+				index++;
+				return new RefExpr(token);
+			}
+
+			bool Match(params string[] options)
+			{
+				if (index >= tokens.Count) return false;
+				foreach (string option in options)
+				{
+					if (string.Equals(tokens[index].Text, option, StringComparison.OrdinalIgnoreCase))
+					{
+						index++;
+						return true;
+					}
+				}
+				return false;
+			}
+		}
+
+		static List<ExprToken> TokenizeExpression(string text, out string error)
+		{
+			error = null;
+			List<ExprToken> tokens = new();
+			for (int i = 0; i < text.Length;)
+			{
+				char c = text[i];
+				if (char.IsWhiteSpace(c))
+				{
+					i++;
+					continue;
+				}
+
+				if (c is '(' or ')' or '&' or '|' or '^' or '!')
+				{
+					tokens.Add(new ExprToken(c.ToString(), i));
+					i++;
+					continue;
+				}
+
+				if (char.IsLetter(c) || c == '_')
+				{
+					int start = i++;
+					while (i < text.Length)
+					{
+						char next = text[i];
+						if (char.IsLetterOrDigit(next) || next is '_' or '.')
+						{
+							i++;
+							continue;
+						}
+						break;
+					}
+					tokens.Add(new ExprToken(text.Substring(start, i - start), start));
+					continue;
+				}
+
+				error = $"Unexpected character '{c}' in logic expression.";
+				return null;
+			}
+
+			if (tokens.Count == 0)
+			{
+				error = "Expression is empty.";
+				return null;
+			}
+
+			return tokens;
 		}
 
 		static string StripComment(string line)
