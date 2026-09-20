@@ -110,6 +110,21 @@ namespace DLS.Graphics
 				Color rowCol = lineIndex % 2 == 0 ? RewiredUI.Surface : RewiredUI.SurfaceRaised;
 				UI.DrawPanel(row, rowCol);
 
+				// Dedicated line-number gutter. The separator stays visually fixed while
+				// the source text scrolls and makes the editable canvas boundary obvious.
+				Color gutterCol = ColHelper.Darken(rowCol, 0.055f);
+				UI.DrawPanel(
+					new Vector2(row.Left, row.Centre.y),
+					new Vector2(NumberWidth, RowHeight),
+					gutterCol,
+					Anchor.CentreLeft);
+				float gutterX = row.Left + NumberWidth;
+				UI.DrawLine(
+					new Vector2(gutterX, row.BottomLeft.y),
+					new Vector2(gutterX, row.TopLeft.y),
+					0.085f,
+					new Color(1f, 1f, 1f, 0.20f));
+
 				UI.DrawText(
 					(lineIndex + 1).ToString(),
 					activeTheme.font,
@@ -278,12 +293,13 @@ namespace DLS.Graphics
 
 			if (InputHelper.IsKeyDownThisFrame(KeyCode.Return) || InputHelper.IsKeyDownThisFrame(KeyCode.KeypadEnter))
 			{
-				InsertNewlineWithIndent();
+				if (!TryExpandBracePair()) InsertNewlineWithIndent();
 				return;
 			}
 
 			if (InputHelper.IsKeyDownThisFrame(KeyCode.Tab))
 			{
+				if (!shift && TryExpandBracePair()) return;
 				HandleTab(shift);
 				return;
 			}
@@ -353,9 +369,62 @@ namespace DLS.Graphics
 				foreach (char c in InputHelper.InputStringThisFrame)
 				{
 					if (char.IsControl(c) || char.IsSurrogate(c)) continue;
-					ReplaceSelection(c.ToString());
+					HandleTypedCharacter(c);
 				}
 			}
+		}
+
+		void HandleTypedCharacter(char c)
+		{
+			if (c is '{' or '(' or '[')
+			{
+				char close = c == '{' ? '}' : c == '(' ? ')' : ']';
+				if (HasSelection)
+				{
+					int start = SelectionMin;
+					string selected = SelectedText();
+					ReplaceRange(SelectionMin, SelectionMax, c + selected + close);
+					SetCaret(start + selected.Length + 2, false);
+				}
+				else
+				{
+					int start = caret;
+					ReplaceRange(caret, caret, new string(new[] { c, close }));
+					SetCaret(start + 1, false);
+				}
+				return;
+			}
+
+			if (c is '}' or ')' or ']')
+			{
+				if (!HasSelection && caret < text.Length && text[caret] == c)
+				{
+					SetCaret(caret + 1, false);
+					return;
+				}
+			}
+
+			ReplaceSelection(c.ToString());
+		}
+
+		bool TryExpandBracePair()
+		{
+			if (HasSelection || caret <= 0 || caret >= text.Length) return false;
+			if (text[caret - 1] != '{' || text[caret] != '}') return false;
+
+			EnsureLineCache();
+			int lineIndex = FindLineForIndex(caret);
+			string line = lines[lineIndex];
+
+			int leading = 0;
+			while (leading < line.Length && line[leading] == ' ') leading++;
+			string baseIndent = line.Substring(0, leading);
+			string insertion = "\n" + baseIndent + Indent + "\n" + baseIndent;
+			int innerCaret = caret + 1 + baseIndent.Length + Indent.Length;
+
+			ReplaceRange(caret, caret, insertion);
+			SetCaret(innerCaret, false);
+			return true;
 		}
 
 		void InsertNewlineWithIndent()
