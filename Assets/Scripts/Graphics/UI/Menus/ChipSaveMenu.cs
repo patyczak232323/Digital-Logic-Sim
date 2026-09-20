@@ -72,7 +72,10 @@ namespace DLS.Graphics
 
 				// -- Chip name input field --
 				(Vector2 inputFieldSize, float inputFieldTextPad) = GetTextInputSize();
-				inputFieldState = UI.InputField(ID_ChipNameField, inputTheme, new Vector2(50, 33), inputFieldSize, "Name", Anchor.Centre, inputFieldTextPad, chipNameValidator, true);
+				Vector2 inputCentre = new(50, 32);
+				Vector2 headerTopLeft = new(inputCentre.x - inputFieldSize.x / 2f, inputCentre.y + inputFieldSize.y / 2f + 3f);
+				RewiredUI.DrawSectionHeader("SAVE CHIP", headerTopLeft, inputFieldSize.x, true);
+				inputFieldState = UI.InputField(ID_ChipNameField, inputTheme, inputCentre, inputFieldSize, "Name", Anchor.Centre, inputFieldTextPad, chipNameValidator, true);
 
 				Vector2 buttonTopLeft = UI.PrevBounds.BottomLeft + Vector2.down * (DrawSettings.DefaultButtonSpacing * 2);
 				bool renaming = Project.ActiveProject.ChipHasBeenSavedBefore &&
