@@ -151,7 +151,7 @@ namespace DLS.Description
 			{
 				for (int i = 0; i < KeyBindings.Length; i++)
 				{
-					if (KeyBindings[i].Action != action && KeyBindings[i].SameCombination(binding))
+					if (KeyBindings[i].Action != action && SameShortcutContext(KeyBindings[i].Action, action) && KeyBindings[i].SameCombination(binding))
 					{
 						ShortcutBinding cleared = KeyBindings[i];
 						cleared.Key = KeyCode.None;
@@ -174,6 +174,14 @@ namespace DLS.Description
 		}
 
 		public void ResetKeyBindings() => KeyBindings = CreateDefaultKeyBindings();
+
+		static bool SameShortcutContext(ShortcutAction a, ShortcutAction b)
+		{
+			bool aMainMenu = a is ShortcutAction.MainMenuNewProject or ShortcutAction.MainMenuOpenProject or ShortcutAction.MainMenuSettings or ShortcutAction.MainMenuQuit;
+			bool bMainMenu = b is ShortcutAction.MainMenuNewProject or ShortcutAction.MainMenuOpenProject or ShortcutAction.MainMenuSettings or ShortcutAction.MainMenuQuit;
+			return aMainMenu == bMainMenu;
+		}
+
 
 		public static ShortcutBinding[] CreateDefaultKeyBindings() =>
 			new[]
