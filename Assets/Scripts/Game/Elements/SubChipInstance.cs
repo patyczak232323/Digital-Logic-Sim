@@ -29,6 +29,8 @@ namespace DLS.Game
 		public readonly PinInstance[] OutputPins;
 		public string activationKeyString; // input char for the 'key chip' type (stored as string to avoid allocating when drawing)
 		public string Label;
+		public bool MirrorX { get; private set; }
+		public bool MirrorY { get; private set; }
 
 		public SubChipInstance(ChipDescription description, SubChipDescription subChipDesc)
 		{
@@ -38,6 +40,8 @@ namespace DLS.Game
 			Position = subChipDesc.Position;
 			ID = subChipDesc.ID;
 			Label = subChipDesc.Label;
+			MirrorX = subChipDesc.MirrorX;
+			MirrorY = subChipDesc.MirrorY;
 			IsBus = ChipTypeHelper.IsBusType(ChipType);
 			MultiLineName = CreateMultiLineName(description.Name);
 			MinSize = CalculateMinChipSize(description.InputPins, description.OutputPins, description.Name);
@@ -45,6 +49,7 @@ namespace DLS.Game
 			InputPins = CreatePinInstances(description.InputPins, true);
 			OutputPins = CreatePinInstances(description.OutputPins, false);
 			AllPins = InputPins.Concat(OutputPins).ToArray();
+			ApplyHorizontalPinOrientation();
 			LoadOutputPinColours(subChipDesc.OutputPinColourInfo);
 
 			// Displays
@@ -67,10 +72,7 @@ namespace DLS.Game
 
 				if (IsBus && InternalData.Length > 1)
 				{
-					foreach (PinInstance pin in AllPins)
-					{
-						pin.SetBusFlip(BusIsFlipped);
-					}
+					ApplyHorizontalPinOrientation();
 				}
 			}
 
@@ -94,6 +96,7 @@ namespace DLS.Game
 
 		public int LinkedBusPairID => IsBus ? (int)InternalData[0] : -1;
 		public bool BusIsFlipped => IsBus && InternalData.Length > 1 && InternalData[1] == 1;
+		public bool HorizontalPinsFlipped => MirrorX ^ BusIsFlipped;
 		public Vector2 Size => Description.Size;
 		public Vector2 Position { get; set; }
 
@@ -268,7 +271,7 @@ namespace DLS.Game
 			float pinWidthPad = 0;
 			float offsetX = 0;
 			bool inputsHidden = ChipTypeHelper.IsBusOriginType(ChipType);
-			float flipX = BusIsFlipped ? -1 : 1;
+			float flipX = HorizontalPinsFlipped ? -1 : 1;
 
 			if (InputPins.Length > 0 && !inputsHidden)
 			{
@@ -371,10 +374,26 @@ namespace DLS.Game
 
 			bool isFlipped = !BusIsFlipped;
 			InternalData[1] = isFlipped ? 1u : 0;
+			ApplyHorizontalPinOrientation();
+		}
 
+		public void MirrorHorizontal()
+		{
+			MirrorX = !MirrorX;
+			ApplyHorizontalPinOrientation();
+		}
+
+		public void MirrorVertical()
+		{
+			MirrorY = !MirrorY;
+		}
+
+		void ApplyHorizontalPinOrientation()
+		{
+			bool flipped = HorizontalPinsFlipped;
 			foreach (PinInstance pin in AllPins)
 			{
-				pin.SetBusFlip(isFlipped);
+				pin.SetHorizontalFlip(flipped);
 			}
 		}
 
