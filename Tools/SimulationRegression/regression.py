@@ -549,7 +549,7 @@ def test_multidriver_resolution_and_coalescing() -> None:
 def test_source_integration_static() -> None:
     root = Path(__file__).resolve().parents[2]
     solver = (root / "Assets/Scripts/Simulation/DeterministicSimulator.cs").read_text(encoding="utf-8")
-    facade = (root / "Assets/Scripts/Game/Project/SimulationFacade.cs").read_text(encoding="utf-8")
+    facade = (root / "Assets/Scripts/Simulation/RewiredEngine.cs").read_text(encoding="utf-8")
 
     required_solver_tokens = (
         "SettleCombinational",
@@ -596,9 +596,12 @@ def test_source_integration_static() -> None:
     assert "static readonly HashSet<SimChip> inspectionPath = new();" in solver
     assert "Dictionary<SimPin, SimPin[]>" not in solver
     assert "DeterministicSimulator.RunSimulationStep" in facade
-    assert "bool topologyChanged = DLS.Simulation.Simulator.ApplyModifications();" in facade
+    assert "public static class RewiredEngine" in facade
+    assert "if (Simulator.ApplyModifications())" in facade
     assert "if (topologyChanged) DeterministicSimulator.InvalidateTopology();" in facade
     assert "pendingTopologyModification" not in facade
+    assert not (root / "Assets/Scripts/Game/Project/SimulationFacade.cs").exists()
+    assert not (root / "Assets/Scripts/Graphics/UI/Menus/SimulationFacade.cs").exists()
 
 
 def benchmark_sparse_parallel_bank() -> tuple[float, int, int]:
