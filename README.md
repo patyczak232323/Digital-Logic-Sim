@@ -87,7 +87,7 @@ The older low-level `Simulator` implementation and `DeterministicSimulator` are 
 
 ## RHDL Studio
 
-Rewired includes an experimental source-driven circuit generator called **RHDL Studio**.
+Rewired **0.3.0** introduces an experimental source-driven circuit generator called **RHDL Studio**.
 
 RHDL v0.1 is a structural HDL: source code is compiled into an ordinary Rewired `ChipDescription` containing normal pins, subchips and wires. Generated circuits therefore use the same editor, save format and `RewiredEngine` runtime as manually drawn circuits.
 
@@ -122,6 +122,8 @@ Pin names containing spaces can be written with underscores, for example `IN_A` 
 
 ## Current development
 
+Current development version: **Rewired v0.3.0**.
+
 Current `main` includes work on:
 
 - deterministic event-driven simulation
@@ -136,6 +138,8 @@ Current `main` includes work on:
 - non-convergence reporting
 - regression tests for latches, registers, counters, nested circuits and large netlists
 - compatibility tests for imported and stateful projects
+- RHDL Studio structural circuit generation and source persistence
+- unified Rewired UI styling and diagnostics workspace
 
 Rewired is still experimental. Complex circuits are expected to expose engine bugs and edge cases, and those projects are especially valuable for development.
 
@@ -158,7 +162,7 @@ Latest published release: **v0.2.0**
 
 https://github.com/patyczak232323/Digital-Logic-Sim/releases/tag/v0.2.0
 
-Development on `main` is ahead of that release.
+Development on `main` is **v0.3.0** and is ahead of the latest published v0.2.0 release.
 
 ## Repository policy
 
