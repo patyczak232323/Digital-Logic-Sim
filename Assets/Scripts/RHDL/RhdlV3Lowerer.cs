@@ -42,7 +42,10 @@ namespace DLS.RHDL
 		sealed class SignalDecl
 		{
 			public string Name;
+			// Width == 0 means "infer from use/assignment". Inputs without an explicit
+			// width still default to 1 bit; only outputs/wires participate in inference.
 			public int Width;
+			public bool WidthExplicit;
 			public SignalKind Kind;
 			public int Line;
 			public string BackingInstance;
@@ -221,6 +224,10 @@ namespace DLS.RHDL
 				ExpandNamedBindings();
 				ParseExpressions();
 				DetectAssignmentCycles();
+				if (diagnostics.Count != 0) return;
+
+				InferImplicitWidths();
+				FinalizeSignalTopology();
 				if (diagnostics.Count != 0) return;
 
 				foreach (AssignmentDecl assignment in assignments)
@@ -432,7 +439,7 @@ namespace DLS.RHDL
 
 				foreach (string part in parts)
 				{
-					if (!TryParseSignalDecl(part.Trim(), out string name, out int width, out string error))
+					if (!TryParseSignalDecl(part.Trim(), out string name, out int width, out bool widthExplicit, out string error))
 					{
 						diagnostics.Add(new RhdlDiagnostic(line, error));
 						continue;
@@ -441,7 +448,8 @@ namespace DLS.RHDL
 					SignalDecl signal = new()
 					{
 						Name = name,
-						Width = width,
+						Width = widthExplicit ? width : 0,
+						WidthExplicit = widthExplicit,
 						Kind = SignalKind.Wire,
 						Line = line
 					};
@@ -463,25 +471,35 @@ namespace DLS.RHDL
 			{
 				foreach (string part in SplitTopLevel(rest, ','))
 				{
-					if (!TryParseSignalDecl(part.Trim(), out string name, out int width, out string error))
+					if (!TryParseSignalDecl(part.Trim(), out string name, out int width, out bool widthExplicit, out string error))
 					{
 						diagnostics.Add(new RhdlDiagnostic(line, error));
 						continue;
 					}
-					signals.Add(new SignalDecl { Name = name, Width = width, Kind = kind, Line = line });
+					int resolvedWidth = widthExplicit ? width : kind == SignalKind.Input ? 1 : 0;
+					signals.Add(new SignalDecl
+					{
+						Name = name,
+						Width = resolvedWidth,
+						WidthExplicit = widthExplicit,
+						Kind = kind,
+						Line = line
+					});
 				}
 			}
 
-			bool TryParseSignalDecl(string token, out string name, out int width, out string error)
+			bool TryParseSignalDecl(string token, out string name, out int width, out bool widthExplicit, out string error)
 			{
 				name = token;
 				width = 1;
+				widthExplicit = false;
 				error = null;
 
 				int colon = token.IndexOf(':');
 				int bracket = token.IndexOf('[');
 				if (colon >= 0)
 				{
+					widthExplicit = true;
 					name = token.Substring(0, colon).Trim();
 					string widthText = token.Substring(colon + 1).Trim();
 					if (!TryResolveWidth(widthText, out width))
@@ -492,6 +510,7 @@ namespace DLS.RHDL
 				}
 				else if (bracket >= 0)
 				{
+					widthExplicit = true;
 					int close = token.IndexOf(']', bracket + 1);
 					if (close < 0 || close != token.Length - 1)
 					{
@@ -615,6 +634,16 @@ namespace DLS.RHDL
 
 				foreach (InstanceDecl instance in instances)
 					ResolveInstance(instance);
+			}
+
+			void FinalizeSignalTopology()
+			{
+				foreach (SignalDecl signal in signals)
+				{
+					// Backwards-compatible fallback: a declaration with no inferable source
+					// remains a one-bit signal.
+					if (signal.Width == 0) signal.Width = 1;
+				}
 
 				foreach (SignalDecl wire in signals.Where(s => s.Kind == SignalKind.Wire))
 				{
@@ -625,7 +654,8 @@ namespace DLS.RHDL
 					if (instance != null) instanceByName[Normalize(backing)] = instance;
 				}
 
-				// Rewrite old-style structural connections now that wire aliases are known.
+				// Structural connections stay textual until widths have been inferred and
+				// wire backing buses exist.
 				foreach (ConnectionDecl connection in connections)
 				{
 					if (TryRewriteEndpoint(connection.Source, true, connection.Line, out string sourceEndpoint, out _))
@@ -698,12 +728,10 @@ namespace DLS.RHDL
 						}
 						else
 						{
-							if (!TryRewriteEndpoint(binding.Value, false, binding.Line, out string target, out _))
-								continue;
 							connections.Add(new ConnectionDecl
 							{
 								Source = instance.Name + "." + binding.Pin,
-								Target = target,
+								Target = binding.Value,
 								Line = binding.Line
 							});
 						}
@@ -719,6 +747,85 @@ namespace DLS.RHDL
 						continue;
 					assignment.Parsed = expr;
 				}
+			}
+
+			void InferImplicitWidths()
+			{
+				// Width inference is deliberately conservative: only outputs and wires
+				// declared without a width are candidates. Explicit declarations always win.
+				// Repeat because one inferred wire can unlock another output/wire.
+				bool changed;
+				int guard = Math.Max(4, signals.Count + assignments.Count + connections.Count + 1);
+				do
+				{
+					changed = false;
+
+					foreach (AssignmentDecl assignment in assignments)
+					{
+						if (assignment.Parsed == null) continue;
+						if (!signalByName.TryGetValue(Normalize(assignment.Target), out SignalDecl target)) continue;
+						if (target.Kind == SignalKind.Input || target.Width != 0 || target.WidthExplicit) continue;
+
+						int inferred = InferWidth(assignment.Parsed, 0, assignment.Line);
+						if (!IsSupportedWidth(inferred)) continue;
+						target.Width = inferred;
+						changed = true;
+					}
+
+					foreach (ConnectionDecl connection in connections)
+					{
+						InferWidthFromConnection(connection, ref changed);
+					}
+				}
+				while (changed && --guard > 0);
+			}
+
+			void InferWidthFromConnection(ConnectionDecl connection, ref bool changed)
+			{
+				string sourceText = connection.Source?.Trim();
+				string targetText = connection.Target?.Trim();
+				if (string.IsNullOrEmpty(sourceText) || string.IsNullOrEmpty(targetText)) return;
+
+				SignalDecl sourceSignal = !sourceText.Contains('.') && signalByName.TryGetValue(Normalize(sourceText), out SignalDecl ss) ? ss : null;
+				SignalDecl targetSignal = !targetText.Contains('.') && signalByName.TryGetValue(Normalize(targetText), out SignalDecl ts) ? ts : null;
+
+				int sourceWidth = RawEndpointWidth(sourceText, true);
+				int targetWidth = RawEndpointWidth(targetText, false);
+
+				if (targetSignal != null && targetSignal.Kind != SignalKind.Input &&
+				    targetSignal.Width == 0 && !targetSignal.WidthExplicit && IsSupportedWidth(sourceWidth))
+				{
+					targetSignal.Width = sourceWidth;
+					changed = true;
+				}
+
+				if (sourceSignal != null && sourceSignal.Kind == SignalKind.Wire &&
+				    sourceSignal.Width == 0 && !sourceSignal.WidthExplicit && IsSupportedWidth(targetWidth))
+				{
+					sourceSignal.Width = targetWidth;
+					changed = true;
+				}
+			}
+
+			int RawEndpointWidth(string endpointText, bool asSource)
+			{
+				if (string.IsNullOrWhiteSpace(endpointText)) return 0;
+				endpointText = endpointText.Trim();
+
+				if (!endpointText.Contains('.'))
+				{
+					return signalByName.TryGetValue(Normalize(endpointText), out SignalDecl signal)
+						? signal.Width
+						: 0;
+				}
+
+				int dot = endpointText.IndexOf('.');
+				string owner = endpointText.Substring(0, dot).Trim();
+				string pin = endpointText.Substring(dot + 1).Trim();
+				if (!instanceByName.TryGetValue(Normalize(owner), out InstanceDecl instance) || instance.Description == null)
+					return 0;
+				PinDescription? found = FindPin(asSource ? instance.Description.OutputPins : instance.Description.InputPins, pin);
+				return found.HasValue ? (int)found.Value.BitCount : 0;
 			}
 
 			void DetectAssignmentCycles()
