@@ -484,12 +484,13 @@ namespace DLS.Graphics
 		{
 			DrawSettings.UIThemeDLS uiTheme = DrawSettings.ActiveUITheme;
 			ButtonTheme buttonTheme = uiTheme.MainMenuButtonTheme;
+			Color secondaryTextCol = new(1, 1, 1, 0.65f);
 
 			Vector2 panelCentre = UI.Centre + Vector2.up * 1;
-			Vector2 panelSize = new(64, 30);
+			Vector2 panelSize = new(76, 36);
 			UI.DrawPanel(panelCentre, panelSize, ColHelper.MakeCol255(37, 37, 43), Anchor.Centre);
 
-			Vector2 pos = panelCentre + new Vector2(0, 11);
+			Vector2 pos = panelCentre + new Vector2(0, 13);
 			UI.DrawText("REWIRED", FontType.Born2bSporty, 8f, pos, Anchor.Centre, Color.white);
 
 			pos += Vector2.down * 5;
@@ -497,15 +498,20 @@ namespace DLS.Graphics
 			pos += Vector2.down * 3;
 			UI.DrawText($"Version {Main.RewiredVersion} ({Main.RewiredLastUpdatedString})", uiTheme.FontRegular, uiTheme.FontSizeRegular, pos, Anchor.Centre, new Color(1, 1, 1, 0.7f));
 
-			pos += Vector2.down * 5;
+			pos += Vector2.down * 4.5f;
 			UI.DrawText("Rewired project and simulation engine: @patyczak232323", uiTheme.FontRegular, uiTheme.FontSizeRegular, pos, Anchor.Centre, Color.white);
 			pos += Vector2.down * 3;
 			UI.DrawText("Based on Digital Logic Sim by Sebastian Lague", uiTheme.FontRegular, uiTheme.FontSizeRegular, pos, Anchor.Centre, Color.white);
-			pos += Vector2.down * 3;
-			UI.DrawText("Original editor, project format and UI foundation retained under the MIT License.", uiTheme.FontRegular, uiTheme.FontSizeRegular, pos, Anchor.Centre, new Color(1, 1, 1, 0.65f));
 
-			pos += Vector2.down * 5;
-			UI.DrawText("Rewired uses its own simulation semantics; exact DLS behaviour is not guaranteed.", uiTheme.FontRegular, uiTheme.FontSizeRegular, pos, Anchor.Centre, new Color(1, 1, 1, 0.65f));
+			pos += Vector2.down * 4;
+			UI.DrawText("Original editor, project format and UI foundation retained", uiTheme.FontRegular, uiTheme.FontSizeRegular, pos, Anchor.Centre, secondaryTextCol);
+			pos += Vector2.down * 2.2f;
+			UI.DrawText("under the MIT License.", uiTheme.FontRegular, uiTheme.FontSizeRegular, pos, Anchor.Centre, secondaryTextCol);
+
+			pos += Vector2.down * 4;
+			UI.DrawText("Rewired uses its own simulation semantics;", uiTheme.FontRegular, uiTheme.FontSizeRegular, pos, Anchor.Centre, secondaryTextCol);
+			pos += Vector2.down * 2.2f;
+			UI.DrawText("exact DLS behaviour is not guaranteed.", uiTheme.FontRegular, uiTheme.FontSizeRegular, pos, Anchor.Centre, secondaryTextCol);
 
 			if (UI.Button("BACK", buttonTheme, UI.CentreBottom + Vector2.up * 8, new Vector2(15, 0), true, true, true))
 			{
