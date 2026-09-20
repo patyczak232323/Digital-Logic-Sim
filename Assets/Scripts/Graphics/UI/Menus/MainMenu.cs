@@ -72,8 +72,8 @@ namespace DLS.Graphics
 
 		static int selectedProjectIndex;
 
-		static readonly string authorString = "Created by: Sebastian Lague";
-		static readonly string versionString = $"Version: {Main.DLSVersion} ({Main.LastUpdatedString})";
+		static readonly string authorString = "Rewired by: @patyczak232323";
+		static readonly string versionString = $"Rewired v{Application.version}";
 		static string SelectedProjectName => allProjectDescriptions[selectedProjectIndex].ProjectName;
 
 		static string FormatButtonString(string s) => capitalize ? s.ToUpper() : s;
@@ -88,14 +88,18 @@ namespace DLS.Graphics
 			}
 
 			UI.DrawFullscreenPanel(ColHelper.MakeCol255(47, 47, 53));
-			const string title = "DIGITAL LOGIC SIM";
-			const float titleFontSize = 11.5f;
-			const float titleHeight = 24;
+			const string title = "REWIRED";
+			const string subtitle = "DIGITAL LOGIC SIMULATOR";
+			const float titleFontSize = 15.5f;
+			const float subtitleFontSize = 3.2f;
+			const float titleHeight = 25;
 			const float shaddowOffset = -0.33f;
 			Color shadowCol = ColHelper.MakeCol255(87, 94, 230);
+			Color subtitleCol = new(1, 1, 1, 0.55f);
 
 			UI.DrawText(title, FontType.Born2bSporty, titleFontSize, UI.Centre + Vector2.up * (titleHeight + shaddowOffset), Anchor.CentreTop, shadowCol);
 			UI.DrawText(title, FontType.Born2bSporty, titleFontSize, UI.Centre + Vector2.up * titleHeight, Anchor.CentreTop, Color.white);
+			UI.DrawText(subtitle, FontType.Born2bSporty, subtitleFontSize, UI.Centre + Vector2.up * 15.5f, Anchor.CentreTop, subtitleCol);
 			DrawVersionInfo();
 
 			switch (activeMenuScreen)
@@ -467,10 +471,32 @@ namespace DLS.Graphics
 
 		static void DrawAboutScreen()
 		{
-			ButtonTheme theme = DrawSettings.ActiveUITheme.MainMenuButtonTheme;
+			DrawSettings.UIThemeDLS uiTheme = DrawSettings.ActiveUITheme;
+			ButtonTheme buttonTheme = uiTheme.MainMenuButtonTheme;
 
-			UI.DrawText("Todo: write something helpful here...", theme.font, theme.fontSize, UI.Centre, Anchor.Centre, Color.white);
-			if (UI.Button("Back", theme, UI.CentreBottom + Vector2.up * 22, Vector2.zero, true, true, true))
+			Vector2 panelCentre = UI.Centre + Vector2.up * 1;
+			Vector2 panelSize = new(64, 30);
+			UI.DrawPanel(panelCentre, panelSize, ColHelper.MakeCol255(37, 37, 43), Anchor.Centre);
+
+			Vector2 pos = panelCentre + new Vector2(0, 11);
+			UI.DrawText("REWIRED", FontType.Born2bSporty, 8f, pos, Anchor.Centre, Color.white);
+
+			pos += Vector2.down * 5;
+			UI.DrawText("Independent digital logic simulator", uiTheme.FontRegular, uiTheme.FontSizeRegular, pos, Anchor.Centre, Color.white);
+			pos += Vector2.down * 3;
+			UI.DrawText($"Version {Application.version}", uiTheme.FontRegular, uiTheme.FontSizeRegular, pos, Anchor.Centre, new Color(1, 1, 1, 0.7f));
+
+			pos += Vector2.down * 5;
+			UI.DrawText("Rewired project and simulation engine: @patyczak232323", uiTheme.FontRegular, uiTheme.FontSizeRegular, pos, Anchor.Centre, Color.white);
+			pos += Vector2.down * 3;
+			UI.DrawText("Based on Digital Logic Sim by Sebastian Lague", uiTheme.FontRegular, uiTheme.FontSizeRegular, pos, Anchor.Centre, Color.white);
+			pos += Vector2.down * 3;
+			UI.DrawText("Original editor, project format and UI foundation retained under the MIT License.", uiTheme.FontRegular, uiTheme.FontSizeRegular, pos, Anchor.Centre, new Color(1, 1, 1, 0.65f));
+
+			pos += Vector2.down * 5;
+			UI.DrawText("Rewired uses its own simulation semantics; exact DLS behaviour is not guaranteed.", uiTheme.FontRegular, uiTheme.FontSizeRegular, pos, Anchor.Centre, new Color(1, 1, 1, 0.65f));
+
+			if (UI.Button("BACK", buttonTheme, UI.CentreBottom + Vector2.up * 8, new Vector2(15, 0), true, true, true))
 			{
 				BackToMain();
 			}
