@@ -123,6 +123,10 @@ namespace DLS.Graphics
 			{
 				Build(project, false);
 			}
+			if ((editorCommand & RhdlEditorCommand.BuildAndOpen) != 0)
+			{
+				Build(project, true);
+			}
 
 			DrawRightPanel(theme, infoTop, project);
 
@@ -219,7 +223,7 @@ namespace DLS.Graphics
 				"TAB / SHIFT+TAB indent\n" +
 				"CTRL+Z/Y undo/redo   CTRL+/ comment\n" +
 				"CTRL+D duplicate line   HOME smart-home\n" +
-				"CTRL+S save   CTRL+B build";
+				"CTRL+S save   CTRL+B build   F5 build+open";
 
 			UI.DrawText(
 				help,
