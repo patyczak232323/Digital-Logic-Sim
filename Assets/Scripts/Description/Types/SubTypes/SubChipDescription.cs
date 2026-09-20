@@ -9,6 +9,8 @@ namespace DLS.Description
 		public string Label;
 		public Vector2 Position;
 		public OutputPinColourInfo[] OutputPinColourInfo;
+		public bool MirrorX;
+		public bool MirrorY;
 
 		// Arbitrary data for specific chip types:
 		// ROM: stores memory contents
@@ -17,7 +19,7 @@ namespace DLS.Description
 		// Otherwise is null
 		public uint[] InternalData;
 
-		public SubChipDescription(string name, int id, string label, Vector2 position, OutputPinColourInfo[] outputPinColInfo, uint[] internalData = null)
+		public SubChipDescription(string name, int id, string label, Vector2 position, OutputPinColourInfo[] outputPinColInfo, uint[] internalData = null, bool mirrorX = false, bool mirrorY = false)
 		{
 			Name = name;
 			ID = id;
@@ -25,6 +27,8 @@ namespace DLS.Description
 			Position = position;
 			OutputPinColourInfo = outputPinColInfo;
 			InternalData = internalData;
+			MirrorX = mirrorX;
+			MirrorY = mirrorY;
 		}
 	}
 
