@@ -1,6 +1,6 @@
 # Rewired-8 shift/bit execution block for opcodes 0x20-0x2B.
 # Flag write policy is selected in RW8_CORE; this block only produces candidates.
-circuit RW8_SHIFTBIT8:
+circuit RW8_SHIFTBIT8
     input A: 8
     input OP: 4
     input OLD_C
@@ -36,16 +36,17 @@ circuit RW8_SHIFTBIT8:
     rcr = join(OLD_C, A[7], A[6], A[5], A[4], A[3], A[2], A[1])
     swap = join(A[3:0], A[7:4])
 
-    mask = (((((0x80 if BIT0 else 0x40)) if BIT1 else ((0x20 if BIT0 else 0x10)))) if BIT2 else ((((0x08 if BIT0 else 0x04)) if BIT1 else ((0x02 if BIT0 else 0x01)))))
+    mask = choose(BIT2, choose(BIT1, choose(BIT0, 0x80, 0x40), choose(BIT0, 0x20, 0x10)), choose(BIT1, choose(BIT0, 0x08, 0x04), choose(BIT0, 0x02, 0x01)))
     tested = A and mask
     bset = A or mask
     bclr = A and not mask
     btgl = A xor mask
 
-    result = (shl if OP == 0x0 else (shr if OP == 0x1 else (sar if OP == 0x2 else (rol if OP == 0x3 else (ror if OP == 0x4 else (rcl if OP == 0x5 else (rcr if OP == 0x6 else (swap if OP == 0x7 else (bset if OP == 0x9 else (bclr if OP == 0xA else (btgl if OP == 0xB else A)))))))))))
+    result = choose(OP == 0x0, shl, choose(OP == 0x1, shr, choose(OP == 0x2, sar, choose(OP == 0x3, rol, choose(OP == 0x4, ror, choose(OP == 0x5, rcl, choose(OP == 0x6, rcr, choose(OP == 0x7, swap, choose(OP == 0x9, bset, choose(OP == 0xA, bclr, choose(OP == 0xB, btgl, A)))))))))))
 
     R = result
     Z_RESULT = result == 0x00
     N_RESULT = result[7]
-    C_SHIFT = (A[7] if OP == 0x0 else (A[0] if OP == 0x1 else (A[0] if OP == 0x2 else (A[7] if OP == 0x3 else (A[0] if OP == 0x4 else (A[7] if OP == 0x5 else (A[0] if OP == 0x6 else OLD_C)))))))
+    C_SHIFT = choose(OP == 0x0, A[7], choose(OP == 0x1, A[0], choose(OP == 0x2, A[0], choose(OP == 0x3, A[7], choose(OP == 0x4, A[0], choose(OP == 0x5, A[7], choose(OP == 0x6, A[0], OLD_C)))))))
     BIT_ZERO = tested == 0x00
+end
