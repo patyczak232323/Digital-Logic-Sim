@@ -506,7 +506,7 @@ namespace DLS.Simulation
 			}
 
 			Visit(root);
-			if (expectedCaches.Count == 0) return "FULL LUT requested but no cacheable Cached/Auto Custom Chip exists in the test graph";
+			if (expectedCaches.Count == 0) return "FULL LUT requested but no cacheable cache-enabled Custom Chip exists in the test graph";
 
 			Stopwatch timer = Stopwatch.StartNew();
 			while (timer.ElapsedMilliseconds < timeoutMilliseconds)
