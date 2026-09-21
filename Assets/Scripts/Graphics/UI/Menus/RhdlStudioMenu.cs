@@ -81,7 +81,7 @@ namespace DLS.Graphics
 				topLeft,
 				WorkspaceWidth,
 				true,
-				"RHDL v0.5  /  CLEAR HARDWARE LANGUAGE");
+				"RHDL v0.6  /  HARDWARE LANGUAGE");
 
 			Vector2 contentTop = mainHeader.BottomLeft + Vector2.down * 0.7f;
 			Vector2 sourceTop = contentTop;
@@ -199,13 +199,13 @@ namespace DLS.Graphics
 				statusCol);
 
 			cursor = statusCard.BottomLeft + Vector2.down * 0.6f;
-			Bounds2D syntaxHeader = RewiredUI.DrawSectionHeader("RHDL v0.5 QUICK REFERENCE", cursor, RightWidth);
+			Bounds2D syntaxHeader = RewiredUI.DrawSectionHeader("RHDL v0.6 QUICK REFERENCE", cursor, RightWidth);
 			cursor = syntaxHeader.BottomLeft;
 
 			RewiredUI.DrawCard(cursor, new Vector2(RightWidth, 24.6f));
 			Bounds2D syntaxCard = UI.PrevBounds;
 			string help =
-				"circuit Adder:\n" +
+				"circuit Adder\n" +
 				"    input A: 8\n" +
 				"    input B: 8\n" +
 				"    output Y = A + B\n\n" +
@@ -213,12 +213,12 @@ namespace DLS.Graphics
 				"Constant: constant WIDTH = 8\n" +
 				"Logic: and / or / xor / not\n" +
 				"Logic levels: high / low\n" +
-				"Choice: A if select else B\n" +
+				"Choice: choose(select, A, B)\n" +
 				"Join bits: join(A[7:4], B[3:0])\n" +
-				"Component: component n = NAND(A=A, B=B, OUT=Y)\n" +
+				"Component: component n : NAND(A=A, B=B, OUT=Y)\n" +
 				"Exact wiring: connect SOURCE -> TARGET\n" +
 				"Comments start with #\n\n" +
-				"ENTER after ':' indents automatically\n" +
+				"ENTER after circuit header indents automatically\n" +
 				"TAB / SHIFT+TAB indent   ALT+UP/DOWN move lines\n" +
 				"CTRL+BACKSPACE/DELETE delete word\n" +
 				"CTRL+Z/Y undo/redo   CTRL+/ comment\n" +
@@ -353,15 +353,16 @@ namespace DLS.Graphics
 
 		public const string StarterTemplate =
 @"# Smallest useful RHDL circuit.
-circuit Adder:
+circuit Adder
     input A: 8
     input B: 8
 
-    output Y = A + B";
+    output Y = A + B
+end";
 
 		public const string DefaultExample =
-@"# RHDL v0.5: one clear spelling for each concept.
-circuit AluMini:
+@"# RHDL v0.6: hardware description, not Python.
+circuit AluMini
     constant WIDTH = 8
 
     input A: WIDTH
@@ -371,9 +372,10 @@ circuit AluMini:
     signal sum = A + B
     signal mixed = join(A[7:4], B[3:0])
 
-    output Y: WIDTH = sum if select else mixed
+    output Y: WIDTH = choose(select, sum, mixed)
     output equal = A == B
-    output ready = high";
+    output ready = high
+end";
 
 	}
 }
