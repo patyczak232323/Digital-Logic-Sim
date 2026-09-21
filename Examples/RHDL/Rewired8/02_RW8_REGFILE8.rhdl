@@ -1,5 +1,5 @@
 # Rewired-8: R0-R7, two asynchronous read ports and one clocked write port.
-# Register addresses are three individual bits because RHDL v0.3 buses are 1/4/8-bit.
+# Register addresses are three individual bits because RHDL v0.5 buses are 1/4/8-bit.
 circuit RW8_REGFILE8:
     input D: 8
     input WE
