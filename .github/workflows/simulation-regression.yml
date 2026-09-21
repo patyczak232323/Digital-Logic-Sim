@@ -33,3 +33,48 @@ jobs:
 
       - name: Run whole-program regression suite
         run: python3 Tools/ProgramRegression/regression.py
+
+  live-engine-compatibility:
+    name: Unity live-engine compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify Unity CI secrets
+        shell: bash
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          missing=0
+          for name in UNITY_LICENSE UNITY_EMAIL UNITY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing GitHub Actions secret: $name"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-compatibility-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-compatibility-
+            Library-StandaloneLinux64-
+
+      - name: Compile project and run live compatibility self-test
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          REWIRED_RUN_COMPATIBILITY: "1"
+        with:
+          unityVersion: auto
+          targetPlatform: StandaloneLinux64
+          buildName: RewiredCompatibilityCheck
+          buildsPath: compatibility-build
