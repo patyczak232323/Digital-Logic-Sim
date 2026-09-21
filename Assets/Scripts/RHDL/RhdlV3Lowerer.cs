@@ -39,6 +39,12 @@ namespace DLS.RHDL
 			Wire
 		}
 
+		static readonly HashSet<string> ReservedWords = new(StringComparer.OrdinalIgnoreCase)
+		{
+			"circuit", "input", "output", "signal", "constant", "component", "connect",
+			"if", "else", "and", "or", "xor", "not", "join", "high", "low"
+		};
+
 		sealed class SignalDecl
 		{
 			public string Name;
@@ -2128,6 +2134,7 @@ namespace DLS.RHDL
 		static bool ValidIdentifier(string text)
 		{
 			if (string.IsNullOrWhiteSpace(text)) return false;
+			if (ReservedWords.Contains(text)) return false;
 			if (!(char.IsLetter(text[0]) || text[0] == '_')) return false;
 			for (int i = 1; i < text.Length; i++)
 			{
