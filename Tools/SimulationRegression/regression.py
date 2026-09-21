@@ -550,6 +550,13 @@ def test_source_integration_static() -> None:
     root = Path(__file__).resolve().parents[2]
     solver = (root / "Assets/Scripts/Simulation/DeterministicSimulator.cs").read_text(encoding="utf-8")
     facade = (root / "Assets/Scripts/Simulation/RewiredEngine.cs").read_text(encoding="utf-8")
+    chip_types = (root / "Assets/Scripts/Description/Types/SubTypes/ChipTypes.cs").read_text(encoding="utf-8")
+    chip_names = (root / "Assets/Scripts/Description/Helpers/ChipTypeHelper.cs").read_text(encoding="utf-8")
+    chip_library = (root / "Assets/Scripts/Game/Project/ChipLibrary.cs").read_text(encoding="utf-8")
+    builtin_creator = (root / "Assets/Scripts/Game/Project/BuiltinChipCreator.cs").read_text(encoding="utf-8")
+    sim_chip = (root / "Assets/Scripts/Simulation/SimChip.cs").read_text(encoding="utf-8")
+    low_level_simulator = (root / "Assets/Scripts/Simulation/Simulator.cs").read_text(encoding="utf-8")
+    rhdl_compiler = (root / "Assets/Scripts/RHDL/RhdlCompiler.cs").read_text(encoding="utf-8")
 
     required_solver_tokens = (
         "SettleCombinational",
@@ -580,7 +587,7 @@ def test_source_integration_static() -> None:
 
     assert "sourceIndices.Length" not in solver, "stale jagged-adjacency reference breaks the CSR build"
 
-    # RandomBool is allowed only in the legacy-compatible multi-driver path.
+    # RandomBool is allowed only in the multi-driver resolution path.
     # Single-driver propagation (the hot path) must remain free of RNG work.
     assert solver.count("Simulator.RandomBool()") == 1
     assert "ResolveDrivenState(" in solver
@@ -602,6 +609,24 @@ def test_source_integration_static() -> None:
     assert "pendingTopologyModification" not in facade
     assert not (root / "Assets/Scripts/Game/Project/SimulationFacade.cs").exists()
     assert not (root / "Assets/Scripts/Graphics/UI/Menus/SimulationFacade.cs").exists()
+
+    # Rewired intentionally has no built-in RAM primitive. RAM must be built as
+    # normal user circuitry/custom chips, so the engine cannot silently grow a
+    # privileged memory implementation again.
+    no_builtin_ram_sources = (
+        chip_types,
+        chip_names,
+        chip_library,
+        builtin_creator,
+        sim_chip,
+        low_level_simulator,
+        solver,
+        rhdl_compiler,
+    )
+    assert all("dev_Ram_8Bit" not in source for source in no_builtin_ram_sources)
+    assert all("dev.RAM-8" not in source for source in no_builtin_ram_sources)
+    assert "Rom_256x16 = 6" in chip_types, "removed RAM enum slot 5 must remain unused"
+    assert not (root / "Tools/ComputerProjectBuilder").exists()
 
 
 def benchmark_sparse_parallel_bank() -> tuple[float, int, int]:
