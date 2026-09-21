@@ -93,10 +93,12 @@ RHDL v0.3 is a frontend for ordinary Rewired circuits: readable expressions are 
 
 Current features include:
 
-- `chip`, `input`, `output`, `wire`, instance and `connect` statements
+- `chip`, `input`, `output`, `wire`, `let`, `param`/`const`, instance and `connect` statements
 - 1-bit, 4-bit and 8-bit signals using either `A[8]` or `A: 8` declaration syntax
 - compile-time constants: binary (`0b1010`), hexadecimal (`0xA5`) and decimal
-- compile-time parameters/defaults such as `chip Name(WIDTH=8)`
+- compile-time parameters/defaults such as `chip Name(WIDTH=8)` and `const MASK = 0xFF`
+- concise inferred wires with `let sum = A + B`
+- inline output declaration/drive such as `output Y = A + B`
 - bitwise logic: `AND`, `OR`, `XOR`, `NOT` and `& | ^ ! ~`
 - arithmetic: `+` and `-`
 - unsigned comparisons: `== != < > <= >=`
@@ -118,17 +120,12 @@ Example:
 chip AluMini(WIDTH=8) {
   input A: WIDTH, B: WIDTH
   input sel
-  output Y: WIDTH
-  output equal
 
-  wire sum: WIDTH
-  wire mixed: WIDTH
+  let sum = A + B
+  let mixed = {A[7:4], B[3:0]}
 
-  sum = A + B
-  mixed = {A[7:4], B[3:0]}
-
-  Y = sel ? sum : mixed
-  equal = A == B
+  output Y: WIDTH = sel ? sum : mixed
+  output equal = A == B
 }
 ```
 
@@ -143,7 +140,7 @@ connect n1.OUT -> y
 
 Pin names containing spaces can be written with underscores, for example `IN_A` resolves to `IN A`.
 
-RHDL Studio also provides document-wide selection/clipboard editing, syntax highlighting, undo/redo, comment toggling, line duplication, smart Home/Backspace behaviour, automatic `{}`, `()` and `[]` pairing, automatic indentation, and block expansion: pressing **Tab** or **Enter** with the caret between `{}` expands the pair onto separate indented lines. Compiler diagnostics highlight affected source lines and move the caret to the first reported error.
+RHDL Studio also provides document-wide selection/clipboard editing, syntax highlighting, undo/redo, comment toggling, line duplication and movement, word-wise deletion, smart Home/Backspace behaviour, matching-bracket highlighting, whole-document formatting, automatic `{}`, `()` and `[]` pairing, automatic indentation, and block expansion: pressing **Tab** or **Enter** with the caret between `{}` expands the pair onto separate indented lines. Compiler diagnostics highlight affected source lines, move the caret to the first reported error, and can be traversed with **F8 / Shift+F8**.
 
 For a practical language reference and beginner examples, see `Docs/RHDL_GUIDE.md` and `Examples/RHDL/Basics/`.
 
