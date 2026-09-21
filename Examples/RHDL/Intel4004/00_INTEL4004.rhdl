@@ -121,6 +121,8 @@ circuit Intel4004
     signal pending_group_d: 4
     signal pending_opa_q: 4
     signal pending_opa_d: 4
+    signal pending_page_q: 4
+    signal pending_page_d: 4
 
     # Current instruction fields.
     signal op: 4 = ROM_DATA[7:4]
@@ -329,6 +331,7 @@ circuit Intel4004
     bank_d = choose(RESET, 0x0, choose(f_dcl, dcl_bank, bank_q))
     pending_group_d = choose(RESET, 0x0, choose(latch_pending, op, pending_group_q))
     pending_opa_d = choose(RESET, 0x0, choose(latch_pending, opa, pending_opa_q))
+    pending_page_d = choose(RESET, 0x0, choose(enter_fin, pc_hi_q, pending_page_q))
     phase_d = choose(RESET, 0x0, choose(phase0, choose(enter_fin, 0x2, choose(enter_two, 0x1, 0x0)), 0x0))
 
     signal pc0_lo_next: 8 = choose(ex_jin, pair_sel, choose(ex_bbl, st0_lo_q, pc_lo_inc))
@@ -350,8 +353,9 @@ circuit Intel4004
     st2_lo_d = choose(RESET, 0x00, choose(second_jms, st1_lo_q, st2_lo_q))
     st2_hi_d = choose(RESET, 0x0, choose(second_jms, st1_hi_q, st2_hi_q))
 
-    ROM_ADDR_LOW = choose(phase2, pending_pair, pc_lo_q)
-    ROM_ADDR_HIGH = pc_hi_q
+    signal fin_addr_low: 8 = join(r0_q, r1_q)
+    ROM_ADDR_LOW = choose(phase2, fin_addr_low, pc_lo_q)
+    ROM_ADDR_HIGH = choose(phase2, pending_page_q, pc_hi_q)
     RAM_ADDR = src_q
     RAM_BANK = bank_q
     RAM_DATA_OUT = acc_q
@@ -3163,5 +3167,84 @@ circuit Intel4004
     component pending_opa_b3_sreset : NAND(IN_A=pending_opa_b3_not_m_q, IN_B=CLK, OUT=pending_opa_b3_s_reset_n)
     component pending_opa_b3_sq : NAND(IN_A=pending_opa_b3_s_set_n, IN_B=pending_opa_b3_s_nq, OUT=pending_opa_q3)
     component pending_opa_b3_snq : NAND(IN_A=pending_opa_b3_s_reset_n, IN_B=pending_opa_q3, OUT=pending_opa_b3_s_nq)
+
+    # State: pending_page (4 bits)
+    signal pending_page_q0
+    signal pending_page_q1
+    signal pending_page_q2
+    signal pending_page_q3
+    pending_page_q = join(pending_page_q3, pending_page_q2, pending_page_q1, pending_page_q0)
+    signal pending_page_b0_d_bit = pending_page_d[0]
+    signal pending_page_b0_not_d = not pending_page_b0_d_bit
+    signal pending_page_b0_m_set_n
+    signal pending_page_b0_m_reset_n
+    signal pending_page_b0_m_q
+    signal pending_page_b0_m_nq
+    signal pending_page_b0_not_m_q = not pending_page_b0_m_q
+    signal pending_page_b0_s_set_n
+    signal pending_page_b0_s_reset_n
+    signal pending_page_b0_s_nq
+    component pending_page_b0_mset : NAND(IN_A=pending_page_b0_d_bit, IN_B=nclk, OUT=pending_page_b0_m_set_n)
+    component pending_page_b0_mreset : NAND(IN_A=pending_page_b0_not_d, IN_B=nclk, OUT=pending_page_b0_m_reset_n)
+    component pending_page_b0_mq : NAND(IN_A=pending_page_b0_m_set_n, IN_B=pending_page_b0_m_nq, OUT=pending_page_b0_m_q)
+    component pending_page_b0_mnq : NAND(IN_A=pending_page_b0_m_reset_n, IN_B=pending_page_b0_m_q, OUT=pending_page_b0_m_nq)
+    component pending_page_b0_sset : NAND(IN_A=pending_page_b0_m_q, IN_B=CLK, OUT=pending_page_b0_s_set_n)
+    component pending_page_b0_sreset : NAND(IN_A=pending_page_b0_not_m_q, IN_B=CLK, OUT=pending_page_b0_s_reset_n)
+    component pending_page_b0_sq : NAND(IN_A=pending_page_b0_s_set_n, IN_B=pending_page_b0_s_nq, OUT=pending_page_q0)
+    component pending_page_b0_snq : NAND(IN_A=pending_page_b0_s_reset_n, IN_B=pending_page_q0, OUT=pending_page_b0_s_nq)
+    signal pending_page_b1_d_bit = pending_page_d[1]
+    signal pending_page_b1_not_d = not pending_page_b1_d_bit
+    signal pending_page_b1_m_set_n
+    signal pending_page_b1_m_reset_n
+    signal pending_page_b1_m_q
+    signal pending_page_b1_m_nq
+    signal pending_page_b1_not_m_q = not pending_page_b1_m_q
+    signal pending_page_b1_s_set_n
+    signal pending_page_b1_s_reset_n
+    signal pending_page_b1_s_nq
+    component pending_page_b1_mset : NAND(IN_A=pending_page_b1_d_bit, IN_B=nclk, OUT=pending_page_b1_m_set_n)
+    component pending_page_b1_mreset : NAND(IN_A=pending_page_b1_not_d, IN_B=nclk, OUT=pending_page_b1_m_reset_n)
+    component pending_page_b1_mq : NAND(IN_A=pending_page_b1_m_set_n, IN_B=pending_page_b1_m_nq, OUT=pending_page_b1_m_q)
+    component pending_page_b1_mnq : NAND(IN_A=pending_page_b1_m_reset_n, IN_B=pending_page_b1_m_q, OUT=pending_page_b1_m_nq)
+    component pending_page_b1_sset : NAND(IN_A=pending_page_b1_m_q, IN_B=CLK, OUT=pending_page_b1_s_set_n)
+    component pending_page_b1_sreset : NAND(IN_A=pending_page_b1_not_m_q, IN_B=CLK, OUT=pending_page_b1_s_reset_n)
+    component pending_page_b1_sq : NAND(IN_A=pending_page_b1_s_set_n, IN_B=pending_page_b1_s_nq, OUT=pending_page_q1)
+    component pending_page_b1_snq : NAND(IN_A=pending_page_b1_s_reset_n, IN_B=pending_page_q1, OUT=pending_page_b1_s_nq)
+    signal pending_page_b2_d_bit = pending_page_d[2]
+    signal pending_page_b2_not_d = not pending_page_b2_d_bit
+    signal pending_page_b2_m_set_n
+    signal pending_page_b2_m_reset_n
+    signal pending_page_b2_m_q
+    signal pending_page_b2_m_nq
+    signal pending_page_b2_not_m_q = not pending_page_b2_m_q
+    signal pending_page_b2_s_set_n
+    signal pending_page_b2_s_reset_n
+    signal pending_page_b2_s_nq
+    component pending_page_b2_mset : NAND(IN_A=pending_page_b2_d_bit, IN_B=nclk, OUT=pending_page_b2_m_set_n)
+    component pending_page_b2_mreset : NAND(IN_A=pending_page_b2_not_d, IN_B=nclk, OUT=pending_page_b2_m_reset_n)
+    component pending_page_b2_mq : NAND(IN_A=pending_page_b2_m_set_n, IN_B=pending_page_b2_m_nq, OUT=pending_page_b2_m_q)
+    component pending_page_b2_mnq : NAND(IN_A=pending_page_b2_m_reset_n, IN_B=pending_page_b2_m_q, OUT=pending_page_b2_m_nq)
+    component pending_page_b2_sset : NAND(IN_A=pending_page_b2_m_q, IN_B=CLK, OUT=pending_page_b2_s_set_n)
+    component pending_page_b2_sreset : NAND(IN_A=pending_page_b2_not_m_q, IN_B=CLK, OUT=pending_page_b2_s_reset_n)
+    component pending_page_b2_sq : NAND(IN_A=pending_page_b2_s_set_n, IN_B=pending_page_b2_s_nq, OUT=pending_page_q2)
+    component pending_page_b2_snq : NAND(IN_A=pending_page_b2_s_reset_n, IN_B=pending_page_q2, OUT=pending_page_b2_s_nq)
+    signal pending_page_b3_d_bit = pending_page_d[3]
+    signal pending_page_b3_not_d = not pending_page_b3_d_bit
+    signal pending_page_b3_m_set_n
+    signal pending_page_b3_m_reset_n
+    signal pending_page_b3_m_q
+    signal pending_page_b3_m_nq
+    signal pending_page_b3_not_m_q = not pending_page_b3_m_q
+    signal pending_page_b3_s_set_n
+    signal pending_page_b3_s_reset_n
+    signal pending_page_b3_s_nq
+    component pending_page_b3_mset : NAND(IN_A=pending_page_b3_d_bit, IN_B=nclk, OUT=pending_page_b3_m_set_n)
+    component pending_page_b3_mreset : NAND(IN_A=pending_page_b3_not_d, IN_B=nclk, OUT=pending_page_b3_m_reset_n)
+    component pending_page_b3_mq : NAND(IN_A=pending_page_b3_m_set_n, IN_B=pending_page_b3_m_nq, OUT=pending_page_b3_m_q)
+    component pending_page_b3_mnq : NAND(IN_A=pending_page_b3_m_reset_n, IN_B=pending_page_b3_m_q, OUT=pending_page_b3_m_nq)
+    component pending_page_b3_sset : NAND(IN_A=pending_page_b3_m_q, IN_B=CLK, OUT=pending_page_b3_s_set_n)
+    component pending_page_b3_sreset : NAND(IN_A=pending_page_b3_not_m_q, IN_B=CLK, OUT=pending_page_b3_s_reset_n)
+    component pending_page_b3_sq : NAND(IN_A=pending_page_b3_s_set_n, IN_B=pending_page_b3_s_nq, OUT=pending_page_q3)
+    component pending_page_b3_snq : NAND(IN_A=pending_page_b3_s_reset_n, IN_B=pending_page_q3, OUT=pending_page_b3_s_nq)
 
 end
