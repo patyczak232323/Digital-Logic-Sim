@@ -503,6 +503,12 @@ namespace DLS.Graphics
 			if (InputHelper.IsKeyDownThisFrame(KeyCode.F5))
 				commands |= RhdlEditorCommand.BuildAndOpen;
 
+			if (InputHelper.IsKeyDownThisFrame(KeyCode.F8))
+			{
+				GoToDiagnostic(shift ? -1 : 1);
+				return;
+			}
+
 			if (ctrl && (InputHelper.IsKeyDownThisFrame(KeyCode.Return) || InputHelper.IsKeyDownThisFrame(KeyCode.KeypadEnter)))
 			{
 				commands |= RhdlEditorCommand.Build;
@@ -601,6 +607,39 @@ namespace DLS.Graphics
 					HandleTypedCharacter(c);
 				}
 			}
+		}
+
+		void GoToDiagnostic(int direction)
+		{
+			if (diagnosticLines.Count == 0) return;
+			int current = CaretLine;
+			int[] sorted = new int[diagnosticLines.Count];
+			diagnosticLines.CopyTo(sorted);
+			Array.Sort(sorted);
+
+			if (direction >= 0)
+			{
+				for (int i = 0; i < sorted.Length; i++)
+				{
+					if (sorted[i] > current)
+					{
+						GoTo(sorted[i]);
+						return;
+					}
+				}
+				GoTo(sorted[0]);
+				return;
+			}
+
+			for (int i = sorted.Length - 1; i >= 0; i--)
+			{
+				if (sorted[i] < current)
+				{
+					GoTo(sorted[i]);
+					return;
+				}
+			}
+			GoTo(sorted[sorted.Length - 1]);
 		}
 
 		void Undo()
