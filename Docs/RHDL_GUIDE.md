@@ -1,137 +1,213 @@
-# RHDL v0.3 — quick guide
+# RHDL v0.4 — beginner-first guide
 
-RHDL is Rewired's source language for generating ordinary circuit topology. It does not use a separate simulation engine: source is lowered to normal Rewired chips, pins, subchips and wires.
+RHDL is Rewired's hardware description language. The goal of v0.4 is simple: **code should be understandable by reading it, even before learning HDL syntax**.
+
+RHDL still compiles to ordinary Rewired topology. It does not use a separate simulator or runtime.
 
 ## 1. Smallest useful chip
 
 ```text
-chip And2 {
-  input A, B
-  output Y
+chip Adder:
+    input A: 8
+    input B: 8
 
-  Y = A & B
-}
+    output Y = A + B
 ```
 
-A source file contains one `chip` declaration. Statements do not require semicolons.
+That is a complete chip.
 
-## 2. Signals and widths
+- `chip Name:` starts a chip.
+- indentation shows that declarations belong to the chip.
+- `input` creates an input.
+- `output` creates an output.
+- `=` describes the logic that drives a signal.
+- semicolons are not required.
 
-Supported signal widths are currently **1, 4 and 8 bits**.
+RHDL Studio uses four spaces per indentation level.
+
+## 2. Signals
+
+Current supported widths are **1, 4 and 8 bits**.
 
 ```text
-input enable
-input A: 8
-input B[8]
-output Y
-wire temp
+chip Signals:
+    input enable
+    input A: 8
+    input B: 8
+
+    let sum = A + B
+
+    output Y = sum
+    output ready = true
 ```
 
-`A: 8` and `A[8]` both declare an 8-bit signal.
+An input without a width is one bit.
 
-Inputs without a width default to 1 bit. Outputs and wires may omit the width when it can be inferred from an assignment or structural connection:
+`let` creates an internal signal and lets RHDL infer its width:
 
 ```text
-input A: 8
-input B: 8
-output Y
-wire sum
-
-sum = A + B
-Y = sum
+let sum = A + B
+let same = A == B
 ```
 
-Here both `sum` and `Y` become 8-bit automatically. Comparisons infer to 1 bit, and slices infer to the slice width.
-
-Do not use `A[7:0]` in a declaration. Ranges are expression slices:
+Outputs can also infer their width:
 
 ```text
-wire high: 4
-high = A[7:4]
+output Y = A + B
+output same = A == B
 ```
 
-Parameters can be used for widths. `const` is accepted as a more familiar alias for `param`:
+For explicit internal wiring, `wire` is still available.
+
+## 3. Constants
 
 ```text
-chip Example(WIDTH=8) {
-  const MASK = 0xFF
-  input A: WIDTH
-  output Y: WIDTH
-  Y = A & MASK
-}
+const MASK = 0xFF
+const ENABLED = true
 ```
 
-## 3. Expressions
-
-RHDL supports readable combinational expressions:
+Accepted logic values:
 
 ```text
-sum = A + B
-diff = A - B
-logic = (A & B) ^ 0xFF
-equal = A == B
-Y = select ? sum : diff
+true   false
+high   low
+on     off
 ```
 
-Operators:
-
-- logic: `& | ^ ! ~` or `AND OR XOR NOT`
-- arithmetic: `+ -`
-- compare: `== != < > <= >=`
-- shift: `<< >>` with a compile-time constant/parameter
-- mux: `condition ? whenTrue : whenFalse`
-
-Constants may be decimal, binary or hexadecimal:
+Numeric constants may be decimal, binary or hexadecimal:
 
 ```text
-0
 42
 0b1010
 0xFF
 ```
 
-## 4. Bits, slices and concatenation
+Underscores in numeric literals are accepted.
+
+## 4. Logic reads like normal code
+
+Preferred readable operators:
 
 ```text
-bit0 = A[0]
-nibble = A[7:4]
-mixed = {A[7:4], B[3:0]}
+let both = A and B
+let either = A or B
+let different = A xor B
+let inverted = not A
 ```
 
-The final width must still be 1, 4 or 8 bits.
-
-## 5. Internal wires and concise declarations
-
-Use a `wire` when an intermediate result is reused:
+Symbol forms are also supported:
 
 ```text
-wire sum: 8
-sum = A + B
-
-Y = select ? sum : A
-carryLike = sum > A
+A & B
+A | B
+A ^ B
+!A
+~A
 ```
 
-For the common case, `let` is shorthand for an inferred wire plus initializer:
+Arithmetic and comparisons:
 
 ```text
-let sum = A + B
+A + B
+A - B
+
+A == B
+A != B
+A < B
+A <= B
+A > B
+A >= B
+```
+
+Constant shifts:
+
+```text
+A << 1
+A >> 2
+```
+
+## 5. Choosing between two values
+
+The most readable form is Python-like:
+
+```text
+output Y = A if select else B
+```
+
+There is also an explicit hardware helper:
+
+```text
+output Y = mux(select, A, B)
+```
+
+Both generate mux logic.
+
+The older form is still accepted:
+
+```text
+output Y = select ? A : B
+```
+
+## 6. Bits, slices and joining buses
+
+Read one bit:
+
+```text
+let bit0 = A[0]
+```
+
+Read a slice:
+
+```text
+let high = A[7:4]
+```
+
+Join values with the readable helper:
+
+```text
+let mixed = concat(A[7:4], B[3:0])
+```
+
+`join(...)` is an alias for `concat(...)`.
+
+The older brace form remains valid:
+
+```text
 let mixed = {A[7:4], B[3:0]}
 ```
 
-Outputs can also be declared and driven in one statement:
+## 7. Parameters
 
 ```text
-output Y = A + B
-output equal = A == B
-output forced: 8 = A ^ 0xFF
+chip Logic8(WIDTH=8):
+    const MASK = 0xFF
+
+    input A: WIDTH
+    input B: WIDTH
+
+    output Y: WIDTH = (A and B) xor MASK
 ```
 
-Inputs are sources. Outputs are final destinations. A reusable internal value should normally be a wire or `let`.
+`param` is still accepted as an alias-style legacy declaration; `const` is preferred for readability.
 
-## 6. Existing chips / structural RHDL
+## 8. Using another chip
 
-You can instantiate existing builtin or custom chips:
+Python-like instance syntax:
+
+```text
+chip NandExample:
+    input A
+    input B
+    output Y
+
+    n = NAND(A=A, B=B, OUT=Y)
+```
+
+For common pins named `IN A`, `IN B`, `IN_A` or `IN_B`, RHDL accepts the shorter aliases `A` and `B`.
+
+Exact pin names remain available when needed.
+
+The older structural form is still supported:
 
 ```text
 NAND n
@@ -140,92 +216,74 @@ connect B -> n.IN_B
 connect n.OUT -> Y
 ```
 
-Named bindings are shorter:
+Use `connect` when you want exact topology rather than concise source code.
+
+## 9. Comments
+
+Preferred Python-style comments:
 
 ```text
-NAND n(IN_A=A, IN_B=B, OUT=Y)
+# this is a comment
+output Y = A + B  # this is also a comment
 ```
 
-Pin names containing spaces can be written with underscores, e.g. `IN_A` resolves to `IN A`.
+Legacy `// comments` are still accepted.
 
-## 7. Editor shortcuts
-
-RHDL Studio includes:
-
-- `Ctrl+S` — save draft
-- `Ctrl+B` — build
-- `Ctrl+Z` / `Ctrl+Y` — undo / redo
-- `Ctrl+Shift+Z` — redo
-- `Ctrl+/` — comment/uncomment selected lines
-- `Ctrl+D` — duplicate current/selected lines
-- `Ctrl+Shift+F` — format the whole document
-- `F8` / `Shift+F8` — jump to next / previous diagnostic line
-- `Alt+Up` / `Alt+Down` — move current/selected lines
-- `Ctrl+Backspace` / `Ctrl+Delete` — delete by word
-- `Ctrl+Enter` — build
-- `Tab` / `Shift+Tab` — indent / unindent
-- `Home` — jump between indentation and true line start
-- click the line-number gutter — select the whole line
-- matching `()`, `[]` and `{}` are highlighted near the caret
-- automatic `{}`, `()`, `[]` pairing
-- `Tab` or `Enter` between `{}` — expand an indented block
-- smart Backspace for indentation and empty bracket pairs
-
-After a failed build, RHDL Studio marks diagnostic lines and moves the caret to the first source error.
-
-## 8. Typical mistakes
-
-### Width declaration vs slice
-
-Wrong declaration:
+## 10. Full readable example
 
 ```text
-input A[7:0]
+chip AluMini(WIDTH=8):
+    input A: WIDTH
+    input B: WIDTH
+    input select
+
+    let sum = A + B
+    let mixed = concat(A[7:4], B[3:0])
+
+    output Y: WIDTH = sum if select else mixed
+    output equal = A == B
+    output ready = true
 ```
 
-Correct:
+## 11. Editor behaviour
+
+RHDL Studio is tuned for the v0.4 syntax:
+
+- Enter after a line ending in `:` automatically indents.
+- indentation uses four spaces.
+- `Ctrl+/` toggles `#` comments.
+- `Ctrl+Shift+F` formats the document.
+- `Ctrl+B` or `Ctrl+Enter` builds.
+- `F5` builds and opens the generated chip.
+- `F8` / `Shift+F8` moves between diagnostics.
+- `Tab` / `Shift+Tab` indents and unindents.
+- `Alt+Up` / `Alt+Down` moves selected lines.
+- `Ctrl+D` duplicates a line or selection.
+- `Ctrl+Backspace` / `Ctrl+Delete` deletes by word.
+- matching brackets are highlighted.
+- clicking the line-number gutter selects a whole line.
+
+## 12. Compatibility with older RHDL
+
+Existing RHDL v0.3 source remains valid.
+
+This is still accepted:
 
 ```text
-input A: 8
+chip Adder {
+  input A: 8
+  input B: 8
+  output Y = A + B
+}
 ```
 
-Then slice it in an expression:
+The preferred v0.4 spelling is:
 
 ```text
-wire low: 4
-low = A[3:0]
+chip Adder:
+    input A: 8
+    input B: 8
+    output Y = A + B
 ```
 
-### Driving an input
-
-Wrong:
-
-```text
-input A
-A = B
-```
-
-Inputs are driven from outside the chip. Assign to an output or wire instead.
-
-### Reusing an output as internal logic
-
-Prefer:
-
-```text
-wire result: 8
-result = A + B
-Y = result
-flag = result == 0
-```
-
-rather than treating an output as an internal source.
-
-## 9. Examples
-
-Start with:
-
-- `Examples/RHDL/Basics/00_AND.rhdl`
-- `Examples/RHDL/Basics/01_BUS_ALU.rhdl`
-- `Examples/RHDL/Basics/02_STRUCTURAL_NAND.rhdl`
-
-The larger `Examples/RHDL/Rewired8/` set demonstrates CPU-scale RHDL.
+Both lower to the same ordinary Rewired circuit topology.
