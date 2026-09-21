@@ -1,7 +1,6 @@
-// Minimal RHDL example.
-chip And2 {
-  input A, B
-  output Y
+# Minimal RHDL example.
+circuit And2:
+    input A, B
+    output Y
 
-  Y = A & B
-}
+    Y = A and B
