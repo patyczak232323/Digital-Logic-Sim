@@ -1017,7 +1017,7 @@ namespace DLS.RHDL
 			// Stable coarse grouping makes generated designs read as blocks rather
 			// than as an arbitrary list of primitive gates.
 			ChipType type = instance.Description.ChipType;
-			if (type == ChipType.Rom_256x16 || type == ChipType.dev_Ram_8Bit) return 0;
+			if (type == ChipType.Rom_256x16) return 0;
 			if (type == ChipType.Custom) return 1;
 
 			string name = instance.Name ?? string.Empty;
