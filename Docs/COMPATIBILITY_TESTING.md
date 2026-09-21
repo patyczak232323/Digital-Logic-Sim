@@ -1,17 +1,29 @@
-# Compatibility testing
+# Rewired regression testing
 
-Rewired is a separate simulator derived from Digital Logic Sim. Project/file compatibility is useful, but exact legacy traversal-order side effects are not part of the Rewired contract.
+Rewired is an independent simulator. **Matching Sebastian Lague's original Digital Logic Sim engine is not a goal.**
 
-The compatibility system therefore tests two things separately:
+This test system protects Rewired's own semantic contract and checks that optimization backends do not change Rewired behavior.
 
-1. **Rewired semantic stability** — the same circuit and input sequence must keep producing the same externally visible step-by-step behavior.
-2. **Reference compatibility** — when a Digital Logic Sim circuit has a known-good trace, Rewired can compare every output at every simulation step against that trace.
+## What is the reference?
 
-## Test layers
+For Rewired, the intended deterministic live simulation semantics are the reference.
 
-### 1. Gate-level solver regression
+The regression system checks:
 
-`Tools/SimulationRegression/regression.py` is the executable specification for the deterministic solver.
+- deterministic signal propagation
+- sequential state behavior
+- Clock and Pulse semantics
+- RAM and ROM behavior
+- feedback convergence and non-convergence handling
+- deep Custom Chip nesting
+- repeatability across restarts
+- parity between the live Rewired solver and acceleration paths
+
+The original Digital Logic Sim engine is deliberately **not** used as a correctness oracle.
+
+## 1. Gate-level solver regression
+
+`Tools/SimulationRegression/regression.py` is the executable specification for core gate-level and delta-cycle behavior.
 
 It covers:
 
@@ -35,9 +47,9 @@ Run:
 python3 Tools/SimulationRegression/regression.py
 ```
 
-### 2. Built-in compatibility contract
+## 2. Built-in semantic regression
 
-`Tools/CompatibilityRegression/regression.py` specifies the timing/state contract for the built-in components that cannot be represented as ordinary combinational NAND networks.
+`Tools/CompatibilityRegression/regression.py` specifies the intended Rewired behavior of built-in components that cannot be represented as ordinary combinational NAND networks.
 
 It covers:
 
@@ -46,8 +58,8 @@ It covers:
 - RAM reset/write/read semantics
 - ROM byte ordering and address masking
 - golden-trace comparison
-- live-versus-accelerated trace parity contract
-- static verification that the C# live-engine suite still contains all required cases
+- live-versus-accelerated trace parity
+- static verification that required C# live-engine cases remain present
 
 Run:
 
@@ -55,15 +67,13 @@ Run:
 python3 Tools/CompatibilityRegression/regression.py
 ```
 
-This suite runs automatically in GitHub Actions together with the other regression suites. A separate Unity CI job also compiles the project and runs the real-engine self-test before the Linux compatibility build.
+## 3. Real Rewired engine self-test
 
-### 3. Real Rewired engine self-test
+`Assets/Scripts/Simulation/CompatibilitySelfTestSuite.cs` builds real `SimChip` graphs and drives them through `RewiredEngine`.
 
-`Assets/Scripts/Simulation/CompatibilitySelfTestSuite.cs` builds real `SimChip` graphs and runs them through `RewiredEngine`.
+Current live cases include:
 
-Current live cases are:
-
-- NAND truth table and propagation
+- NAND propagation
 - tri-state disconnect/reconnect
 - Pulse
 - Clock
@@ -71,46 +81,17 @@ Current live cases are:
 - RAM
 - SR feedback latch
 - deep Custom Chip nesting
-- direct retained legacy-Simulator versus Rewired parity for stable NAND/tri-state/Pulse/Clock/ROM/RAM/nesting cases
-- live solver versus native JIT parity
-- live solver versus FULL LUT parity
-- live solver versus feedback-JIT parity
+- live solver versus native JIT
+- live solver versus FULL LUT
+- live solver versus feedback JIT
 
-The runner intentionally advances **one actual Rewired simulation step per vector**. Stateful components keep their state between vectors.
-
-From an installed Unity 6000.0.46f1 editor, run the suite headlessly from the repository root:
-
-```bash
-Unity \
-  -batchmode \
-  -quit \
-  -projectPath . \
-  -executeMethod DLS.EditorTools.CompatibilitySelfTestCommand.Run \
-  -logFile -
-```
-
-Use the platform-specific Unity executable path if `Unity` is not in `PATH`.
-
-A failed compatibility case throws an exception, so the command exits as a failed CI/build step. In GitHub Actions, `REWIRED_RUN_COMPATIBILITY=1` activates `CompatibilityBuildPreprocessor`, which runs the same suite before the Unity Linux build; a failing case therefore blocks that CI job.
-
-## Direct legacy Simulator comparison
-
-The repository still retains the legacy `Simulator.RunSimulationStep` traversal engine originating from the original Digital Logic Sim architecture. `CompatibilityTestRunner.RunLegacyParity(...)` can build two independent circuit instances, feed them the same vectors, run one through that legacy path and one through the deterministic Rewired path, and compare every output after every step.
-
-This is used only for circuits with a stable, unambiguous expected behavior. It is deliberately **not** used as the correctness oracle for traversal-order races or ambiguous feedback initialization, because reproducing those legacy side effects is not a Rewired goal.
+The runner advances one actual Rewired simulation step per vector, so stateful components preserve state between vectors.
 
 ## Golden traces
 
-`CompatibilityTestRunner.RunGolden(...)` compares outputs after every simulation step.
+`CompatibilityTestRunner.RunGolden(...)` compares Rewired output after every simulation step against an explicitly defined Rewired expectation.
 
-A trace consists of:
-
-- a step name
-- input pin states
-- expected output pin states
-- optional per-output masks
-
-Conceptually:
+Example:
 
 ```text
 step 0  IN=00  OUT=01
@@ -118,15 +99,9 @@ step 1  IN=01  OUT=11
 step 2  IN=11  OUT=10
 ```
 
-If Rewired produces a different value at step 1, the failure identifies the exact step and output instead of only reporting that the final state is wrong.
+If a later engine change produces a different value at step 1, the regression identifies that exact step and output.
 
-This is the preferred way to preserve a behavior observed in:
-
-- a known-good Rewired release
-- the original Digital Logic Sim
-- a reduced bug-reproduction circuit
-
-For Digital Logic Sim compatibility work, record a small deterministic input/output trace from the reference project and encode those outputs as `CompatibilityStep.ExpectedOutputs`. Do not use circuits whose expected result intentionally depends on undefined races as a correctness oracle.
+Golden traces should come from an intentionally defined Rewired behavior or a known-good Rewired revision, not from the original Sebastian engine.
 
 ## Acceleration parity
 
@@ -137,31 +112,46 @@ For Digital Logic Sim compatibility work, record a small deterministic input/out
 
 Every externally visible output is compared step by step.
 
-This guards the core rule:
+Core rule:
 
-> acceleration may change performance, but it must not change circuit behavior.
+> acceleration may change performance, but it must not change Rewired behavior.
 
-The result also reports whether cache/JIT/feedback-JIT activity was actually observed through engine diagnostics. On a platform where a particular accelerator is unavailable, output parity can still pass while reporting that no accelerated path was selected.
+The result also reports whether cache, JIT or feedback-JIT activity was actually observed.
+
+## CI
+
+The lightweight regression suites run in GitHub Actions.
+
+A separate Unity CI job compiles the project and runs the real-engine self-test with `REWIRED_RUN_COMPATIBILITY=1`. A failed semantic regression therefore blocks that job.
+
+The suite can also be run headlessly from an installed Unity 6000.0.46f1 editor:
+
+```bash
+Unity \
+  -batchmode \
+  -quit \
+  -projectPath . \
+  -executeMethod DLS.EditorTools.CompatibilitySelfTestCommand.Run \
+  -logFile -
+```
 
 ## Adding a regression for a bug
 
-When a compatibility bug is found:
+When a Rewired engine bug is found:
 
 1. reduce it to the smallest practical circuit/input sequence;
-2. reproduce the wrong behavior;
-3. add a golden-trace or solver regression that fails;
-4. fix the engine;
-5. keep the regression permanently.
+2. reproduce the incorrect Rewired behavior;
+3. define the intended Rewired behavior;
+4. add a regression that fails;
+5. fix the engine;
+6. keep the regression permanently.
 
-For timing/order bugs, always compare intermediate simulation steps — not only the final state.
+For timing/order bugs, compare intermediate simulation steps rather than only the final state.
 
-## What compatibility does not promise
+## Non-goal: Sebastian engine compatibility
 
-Rewired does not promise to reproduce every accidental behavior of the original engine, especially behavior caused by:
+No regression should be added merely to force Rewired to reproduce an original Digital Logic Sim timing quirk, traversal order, race outcome or initialization side effect.
 
-- unspecified traversal order
-- ambiguous active-driver contention
-- race conditions with no stable digital interpretation
-- legacy initialization side effects
+If an old project behaves differently, the question is whether Rewired's own semantics are coherent and correct — not whether the original engine produced the same accidental result.
 
-The suite instead makes intended Rewired semantics explicit and provides a mechanism for checking specific Digital Logic Sim circuits where a stable reference trace exists.
+See **[Project Principles](PROJECT_PRINCIPLES.md)**.
