@@ -461,7 +461,7 @@ namespace DLS.RHDL
 				List<string> parts = SplitTopLevel(declaration, ',');
 				if (initializer != null && parts.Count != 1)
 				{
-					diagnostics.Add(new RhdlDiagnostic(line, "A wire initializer can only be used with one wire declaration."));
+					diagnostics.Add(new RhdlDiagnostic(line, "A signal initializer can only be used with one signal declaration."));
 					return;
 				}
 
@@ -742,11 +742,11 @@ namespace DLS.RHDL
 				if (instance.Description == null)
 				{
 					string hint = Suggestion(instance.TypeName, library.allChips.Select(c => c.Name));
-					diagnostics.Add(new RhdlDiagnostic(instance.Line, $"Unknown chip type '{instance.TypeName}'.{hint}"));
+					diagnostics.Add(new RhdlDiagnostic(instance.Line, $"Unknown component type '{instance.TypeName}'.{hint}"));
 					return;
 				}
 				if (ChipDescription.NameMatch(instance.Description.Name, chipName))
-					diagnostics.Add(new RhdlDiagnostic(instance.Line, "A generated chip cannot directly instantiate itself."));
+					diagnostics.Add(new RhdlDiagnostic(instance.Line, "A circuit cannot directly contain itself as a component."));
 			}
 
 			ChipDescription ResolveChipType(string typeName)
@@ -1114,7 +1114,7 @@ namespace DLS.RHDL
 							if (!IsSupportedWidth(total))
 							{
 								diagnostics.Add(new RhdlDiagnostic(line, node.Position + 1,
-									$"Concatenation is {total}-bit; RHDL supports 1, 4 and 8-bit buses."));
+									$"join(...) produces {total} bits; RHDL supports 1, 4 and 8-bit buses."));
 								return default;
 							}
 
@@ -1201,7 +1201,7 @@ namespace DLS.RHDL
 					if (!TryEvaluateCompileTimeInt(binary.Right, out int amount))
 					{
 						diagnostics.Add(new RhdlDiagnostic(line, binary.Right.Position + 1,
-							"Shift amount must be a compile-time constant or parameter."));
+							"Shift amount must be a compile-time constant."));
 						return default;
 					}
 					if (amount < 0)
@@ -1556,7 +1556,7 @@ namespace DLS.RHDL
 
 					if (asSource && signal.Kind != SignalKind.Input)
 					{
-						diagnostics.Add(new RhdlDiagnostic(line, $"'{text}' is an output and cannot drive an expression/connection. Use a wire for reusable internal signals."));
+						diagnostics.Add(new RhdlDiagnostic(line, $"'{text}' is an output and cannot drive an expression/connection. Use a signal for reusable internal values."));
 						return false;
 					}
 					if (!asSource && signal.Kind != SignalKind.Output)
