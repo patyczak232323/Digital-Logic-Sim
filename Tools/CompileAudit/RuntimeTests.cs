@@ -338,6 +338,7 @@ namespace DLS.Simulation
     let either = A or B
 
     output Y = both if select else either
+    output Y_mux = mux(select, both, either)
     output enabled = true";
 
 			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
@@ -345,7 +346,7 @@ namespace DLS.Simulation
 				"Python-like RHDL compile failed: " + string.Join(" | ", result.Diagnostics.Select(d => d.ToString())));
 			Assert(result.Description != null, "Python-like RHDL returned no description");
 			Assert(result.Description.InputPins.Length == 3, "Python-like RHDL input count mismatch");
-			Assert(result.Description.OutputPins.Length == 2, "Python-like RHDL output count mismatch");
+			Assert(result.Description.OutputPins.Length == 3, "Python-like RHDL output count mismatch");
 
 			Simulator.Reset();
 			DeterministicSimulator.Reset();
@@ -367,8 +368,10 @@ namespace DLS.Simulation
 
 						uint expectedY = select != 0 ? (a & b) : (a | b);
 						Assert(Bit(root.OutputPins[0].State) == expectedY,
-							$"Python-like mux mismatch for A={a} B={b} select={select}");
-						Assert(Bit(root.OutputPins[1].State) == 1,
+							$"Python-like conditional mismatch for A={a} B={b} select={select}");
+						Assert(Bit(root.OutputPins[1].State) == expectedY,
+							$"Python-like mux(...) mismatch for A={a} B={b} select={select}");
+						Assert(Bit(root.OutputPins[2].State) == 1,
 							"Python-like true constant should produce logic high");
 					}
 				}
@@ -383,7 +386,7 @@ namespace DLS.Simulation
     input B
     output Y
 
-    n = NAND(IN_A=A, IN_B=B, OUT=Y)";
+    n = NAND(A=A, B=B, OUT=Y)";
 
 			RhdlCompileResult instance = RhdlCompiler.Compile(instanceSource, library);
 			Assert(instance.Success,
