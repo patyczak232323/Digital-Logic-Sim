@@ -125,15 +125,7 @@ circuit CPU4
     inc_v = acc_q + 0x1
     dec_v = acc_q - 0x1
 
-    acc_d = choose(i_ldi, operand_i,
-            choose(i_addi, add_v,
-            choose(i_subi, sub_v,
-            choose(i_andi, and_v,
-            choose(i_ori, or_v,
-            choose(i_xori, xor_v,
-            choose(i_not, not_v,
-            choose(i_inc, inc_v,
-            choose(i_dec, dec_v, acc_q)))))))))
+    acc_d = choose(i_ldi, operand_i, choose(i_addi, add_v, choose(i_subi, sub_v, choose(i_andi, and_v, choose(i_ori, or_v, choose(i_xori, xor_v, choose(i_not, not_v, choose(i_inc, inc_v, choose(i_dec, dec_v, acc_q)))))))))
 
     signal running
     signal acc_instruction
