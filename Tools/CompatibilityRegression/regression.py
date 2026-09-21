@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""Compatibility contract for Rewired built-ins and trace comparison.
+"""Semantic regression contract for Rewired built-ins and engine parity.
+
+Rewired is an independent simulator. Matching Sebastian Lague's original
+Digital Logic Sim engine is explicitly not a goal of this suite.
 
 This suite complements SimulationRegression:
 - SimulationRegression specifies gate-level/delta-cycle behavior, DFFs, latches,
   counters, nesting, oscillation guards and large stress cases.
-- CompatibilityRegression specifies the state machines of built-in Clock, Pulse,
-  RAM and ROM components and verifies that the live-engine C# compatibility
-  harness remains wired into the repository.
+- This suite specifies the state machines of built-in Clock, Pulse, RAM and ROM
+  components and verifies that the live-engine C# Rewired self-test remains
+  wired into the repository.
 
 The C# CompatibilitySelfTestSuite runs these concerns through real SimChip graphs.
 """
@@ -180,8 +183,6 @@ def test_csharp_harness_surface() -> None:
         "RunGolden(",
         "CaptureTrace(",
         "RunAccelerationParity(",
-        "RunLegacyParity(",
-        "Simulator.RunSimulationStep",
         "RewiredEngine.EnsureInitialized",
         "RewiredEngine.RunStep",
         "DisableAccelerationRecursive",
@@ -192,7 +193,7 @@ def test_csharp_harness_surface() -> None:
         "waitForFullLut",
     )
     for token in runner_tokens:
-        assert token in runner, f"missing compatibility runner mechanism: {token}"
+        assert token in runner, f"missing Rewired regression runner mechanism: {token}"
 
     required_cases = (
         "NAND truth table / propagation",
@@ -203,19 +204,12 @@ def test_csharp_harness_surface() -> None:
         "RAM reset / rising-edge write / hold",
         "Feedback SR latch SET/HOLD/RESET/HOLD",
         "Deep custom-chip nesting",
-        "Legacy DLS vs Rewired: NAND",
-        "Legacy DLS vs Rewired: tri-state",
-        "Legacy DLS vs Rewired: Pulse",
-        "Legacy DLS vs Rewired: Clock",
-        "Legacy DLS vs Rewired: ROM",
-        "Legacy DLS vs Rewired: RAM",
-        "Legacy DLS vs Rewired: deep nesting",
         "Live solver vs native JIT parity",
         "FULL LUT cache vs live solver parity",
         "Feedback live solver vs feedback-JIT parity",
     )
     for name in required_cases:
-        assert name in suite, f"missing live compatibility case: {name}"
+        assert name in suite, f"missing live Rewired regression case: {name}"
 
     assert "CompatibilitySelfTestSuite.RunAll()" in editor
     assert "throw new Exception" in editor
@@ -233,7 +227,7 @@ def test_gate_level_suite_coverage_is_retained() -> None:
         "oscillator delta-cycle guard",
     )
     for token in required:
-        assert token in solver_suite, f"gate-level compatibility coverage disappeared: {token}"
+        assert token in solver_suite, f"gate-level regression coverage disappeared: {token}"
 
 
 TESTS = (
@@ -252,7 +246,7 @@ def main() -> None:
     for test in TESTS:
         test()
         print(f"PASS  {test.__name__}")
-    print(f"ALL {len(TESTS)} COMPATIBILITY REGRESSIONS PASSED")
+    print(f"ALL {len(TESTS)} REWIRED REGRESSIONS PASSED")
 
 
 if __name__ == "__main__":
