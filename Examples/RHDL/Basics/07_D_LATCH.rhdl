@@ -1,0 +1,22 @@
+# Level-sensitive D latch built only from NAND logic.
+# While EN=1, Q follows D. While EN=0, the previous state is held.
+circuit DLatch
+    input D, EN
+    output Q, NOT_Q
+
+    signal not_d
+    signal set_n
+    signal reset_n
+    signal q_i
+    signal nq_i
+
+    not_d = not D
+
+    component set_gate : NAND(IN_A=D, IN_B=EN, OUT=set_n)
+    component reset_gate : NAND(IN_A=not_d, IN_B=EN, OUT=reset_n)
+    component q_gate : NAND(IN_A=set_n, IN_B=nq_i, OUT=q_i)
+    component nq_gate : NAND(IN_A=reset_n, IN_B=q_i, OUT=nq_i)
+
+    Q = q_i
+    NOT_Q = nq_i
+end
