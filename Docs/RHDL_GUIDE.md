@@ -159,6 +159,7 @@ RHDL Studio includes:
 - `Ctrl+/` — comment/uncomment selected lines
 - `Ctrl+D` — duplicate current/selected lines
 - `Ctrl+Shift+F` — format the whole document
+- `F8` / `Shift+F8` — jump to next / previous diagnostic line
 - `Alt+Up` / `Alt+Down` — move current/selected lines
 - `Ctrl+Backspace` / `Ctrl+Delete` — delete by word
 - `Ctrl+Enter` — build
