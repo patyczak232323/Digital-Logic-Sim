@@ -1,5 +1,5 @@
 # 8-bit arithmetic, logic and value selection.
-circuit BusAlu:
+circuit BusAlu
     constant WIDTH = 8
 
     input A: WIDTH, B: WIDTH
@@ -10,5 +10,6 @@ circuit BusAlu:
     signal sum: WIDTH
     sum = A + B
 
-    Y = (sum if sel else (A xor B))
+    Y = choose(sel, sum, A xor B)
     equal = A == B
+end
