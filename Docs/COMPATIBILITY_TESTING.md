@@ -55,7 +55,7 @@ Run:
 python3 Tools/CompatibilityRegression/regression.py
 ```
 
-This suite runs automatically in GitHub Actions together with the other regression suites.
+This suite runs automatically in GitHub Actions together with the other regression suites. A separate Unity CI job also compiles the project and runs the real-engine self-test before the Linux compatibility build.
 
 ### 3. Real Rewired engine self-test
 
@@ -89,7 +89,7 @@ Unity \
 
 Use the platform-specific Unity executable path if `Unity` is not in `PATH`.
 
-A failed compatibility case throws an exception, so the command exits as a failed CI/build step.
+A failed compatibility case throws an exception, so the command exits as a failed CI/build step. In GitHub Actions, `REWIRED_RUN_COMPATIBILITY=1` activates `CompatibilityBuildPreprocessor`, which runs the same suite before the Unity Linux build; a failing case therefore blocks that CI job.
 
 ## Golden traces
 
