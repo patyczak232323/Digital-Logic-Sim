@@ -209,14 +209,14 @@ namespace DLS.Graphics
 				"    input A: 8\n" +
 				"    input B: 8\n" +
 				"    output Y = A + B\n\n" +
-				"Python-style:  value_if_true if condition else value_if_false\n" +
+				"Choose: A if select else B   or   mux(select, A, B)\n" +
 				"Logic words: and / or / xor / not\n" +
 				"Logic values: true/false, high/low, on/off\n" +
 				"Internal value: let sum = A + B\n" +
 				"Constant: const MASK = 0xFF\n" +
 				"Bits: A[3]   slice: A[7:4]\n" +
-				"Concat: {A[7:4], B[3:0]}\n" +
-				"Chip instance: n = NAND(IN_A=A, IN_B=B, OUT=Y)\n" +
+				"Concat: concat(A[7:4], B[3:0])\n" +
+				"Chip instance: n = NAND(A=A, B=B, OUT=Y)\n" +
 				"Comments start with #\n\n" +
 				"ENTER after ':' indents automatically\n" +
 				"TAB / SHIFT+TAB indent   ALT+UP/DOWN move lines\n" +
@@ -224,7 +224,7 @@ namespace DLS.Graphics
 				"CTRL+Z/Y undo/redo   CTRL+/ comment\n" +
 				"CTRL+SHIFT+F format document   F8 next error\n" +
 				"CTRL+D duplicate line   HOME smart-home\n" +
-				"CTRL+S save   CTRL+B/ENTER build   F5 build+open";
+				"CTRL+S save   CTRL+B / CTRL+ENTER build   F5 build+open";
 
 			UI.DrawText(
 				help,
@@ -367,7 +367,7 @@ chip AluMini(WIDTH=8):
     input select
 
     let sum = A + B
-    let mixed = {A[7:4], B[3:0]}
+    let mixed = concat(A[7:4], B[3:0])
 
     output Y: WIDTH = sum if select else mixed
     output equal = A == B
