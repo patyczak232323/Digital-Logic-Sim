@@ -217,6 +217,103 @@ namespace DLS.Simulation
 					Step("high-again", new uint[] { 1 }, 1),
 				});
 
+			RunLegacyParity(
+				cases,
+				"Legacy DLS vs Rewired: NAND",
+				nandWrapper,
+				library,
+				new uint[][]
+				{
+					new uint[] { 0, 0 },
+					new uint[] { 0, 1 },
+					new uint[] { 1, 0 },
+					new uint[] { 1, 1 },
+				});
+
+			RunLegacyParity(
+				cases,
+				"Legacy DLS vs Rewired: tri-state",
+				triWrapper,
+				library,
+				new uint[][]
+				{
+					new uint[] { 1, 0 },
+					new uint[] { 1, 1 },
+					new uint[] { 0, 1 },
+					new uint[] { 0, 0 },
+				});
+
+			RunLegacyParity(
+				cases,
+				"Legacy DLS vs Rewired: Pulse",
+				pulseWrapper,
+				library,
+				new uint[][]
+				{
+					new uint[] { 0 },
+					new uint[] { 1 },
+					new uint[] { 1 },
+					new uint[] { 1 },
+					new uint[] { 1 },
+					new uint[] { 0 },
+					new uint[] { 1 },
+				});
+
+			RunLegacyParity(
+				cases,
+				"Legacy DLS vs Rewired: Clock",
+				clockWrapper,
+				library,
+				new uint[][]
+				{
+					Array.Empty<uint>(),
+					Array.Empty<uint>(),
+					Array.Empty<uint>(),
+					Array.Empty<uint>(),
+				},
+				stepsPerClockTransition: 2);
+
+			RunLegacyParity(
+				cases,
+				"Legacy DLS vs Rewired: ROM",
+				romWrapper,
+				library,
+				new uint[][]
+				{
+					new uint[] { 0x12 },
+					new uint[] { 0x13 },
+					new uint[] { 0xFE },
+				});
+
+			RunLegacyParity(
+				cases,
+				"Legacy DLS vs Rewired: RAM",
+				ramWrapper,
+				library,
+				new uint[][]
+				{
+					new uint[] { 0x2A, 0x00, 0, 1, 1 },
+					new uint[] { 0x2A, 0xA5, 1, 0, 0 },
+					new uint[] { 0x2A, 0xA5, 1, 0, 1 },
+					new uint[] { 0x2A, 0x5A, 1, 0, 1 },
+					new uint[] { 0x2A, 0x5A, 1, 0, 0 },
+					new uint[] { 0x2A, 0x5A, 1, 0, 1 },
+					new uint[] { 0x2B, 0x00, 0, 0, 1 },
+				});
+
+			RunLegacyParity(
+				cases,
+				"Legacy DLS vs Rewired: deep nesting",
+				deepest,
+				library,
+				new uint[][]
+				{
+					new uint[] { 0 },
+					new uint[] { 1 },
+					new uint[] { 0 },
+					new uint[] { 1 },
+				});
+
 			RunParity(
 				cases,
 				"Live solver vs native JIT parity",
@@ -306,6 +403,50 @@ namespace DLS.Simulation
 					name,
 					false,
 					$"step {failure.StepIndex} ({failure.StepName}), output {failure.OutputIndex}: expected 0x{failure.Expected:X8}, actual 0x{failure.Actual:X8}; {failure.Reason}"));
+			}
+			catch (Exception ex)
+			{
+				cases.Add(new CompatibilityCaseResult(name, false, ex.GetType().Name + ": " + ex.Message));
+			}
+		}
+
+
+		static void RunLegacyParity(
+			List<CompatibilityCaseResult> cases,
+			string name,
+			ChipDescription description,
+			ChipLibrary library,
+			IReadOnlyList<uint[]> vectors,
+			int stepsPerClockTransition = 1)
+		{
+			try
+			{
+				CompatibilityParityResult result = CompatibilityTestRunner.RunLegacyParity(
+					description,
+					library,
+					vectors,
+					stepsPerClockTransition);
+
+				if (!result.Supported)
+				{
+					cases.Add(new CompatibilityCaseResult(name, false, result.UnsupportedReason));
+					return;
+				}
+
+				if (!result.Passed)
+				{
+					CompatibilityFailure failure = result.Failures[0];
+					cases.Add(new CompatibilityCaseResult(
+						name,
+						false,
+						$"step {failure.StepIndex}, output {failure.OutputIndex}: legacy 0x{failure.Expected:X8}, Rewired 0x{failure.Actual:X8}; {failure.Reason}"));
+					return;
+				}
+
+				cases.Add(new CompatibilityCaseResult(
+					name,
+					true,
+					$"{result.AcceleratedSamples.Length} steps match legacy Simulator"));
 			}
 			catch (Exception ex)
 			{
