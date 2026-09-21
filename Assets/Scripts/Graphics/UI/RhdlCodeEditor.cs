@@ -27,12 +27,13 @@ namespace DLS.Graphics
 		const float RowHeight = 1.85f;
 		const float NumberWidth = 4.2f;
 		const float TextPad = 0.45f;
-		const string Indent = "  ";
+		const string Indent = "    ";
 
 		static readonly HashSet<string> SyntaxKeywords = new(StringComparer.OrdinalIgnoreCase)
 		{
 			"chip", "input", "output", "wire", "let", "param", "const", "connect", "use",
-			"AND", "OR", "XOR", "NOT"
+			"if", "else", "and", "or", "xor", "not",
+			"true", "false", "high", "low", "on", "off"
 		};
 
 		readonly UIHandle scrollID = new("RHDL_DocumentScroll");
@@ -230,7 +231,7 @@ namespace DLS.Graphics
 		{
 			if (string.IsNullOrEmpty(line)) return;
 
-			int commentStart = line.IndexOf("//", StringComparison.Ordinal);
+			int commentStart = FindEditorCommentStart(line);
 			int codeEnd = commentStart >= 0 ? commentStart : line.Length;
 			int i = 0;
 			while (i < codeEnd)
@@ -744,7 +745,9 @@ namespace DLS.Graphics
 				int p = 0;
 				while (p < line.Length && char.IsWhiteSpace(line[p])) p++;
 				if (p >= line.Length) continue;
-				if (p + 1 >= line.Length || line[p] != '/' || line[p + 1] != '/')
+				bool hash = line[p] == '#';
+				bool slash = p + 1 < line.Length && line[p] == '/' && line[p + 1] == '/';
+				if (!hash && !slash)
 				{
 					allCommented = false;
 					break;
@@ -760,15 +763,13 @@ namespace DLS.Graphics
 				while (p < line.Length && char.IsWhiteSpace(line[p])) p++;
 				if (allCommented)
 				{
-					if (p + 1 < line.Length && line[p] == '/' && line[p + 1] == '/')
-					{
-						int remove = p + 2 < line.Length && line[p + 2] == ' ' ? 3 : 2;
-						work[i] = line.Remove(p, remove);
-					}
+					int markerLength = line[p] == '#' ? 1 : 2;
+					int remove = p + markerLength < line.Length && line[p + markerLength] == ' ' ? markerLength + 1 : markerLength;
+					work[i] = line.Remove(p, remove);
 				}
 				else if (p < line.Length)
 				{
-					work[i] = line.Insert(p, "// ");
+					work[i] = line.Insert(p, "# ");
 				}
 			}
 
@@ -806,6 +807,8 @@ namespace DLS.Graphics
 					if (code[c] == '{') opens++;
 					else if (code[c] == '}') closes++;
 				}
+				// Python-style block header, primarily "chip Name:".
+				if (code.TrimEnd().EndsWith(":", StringComparison.Ordinal)) opens++;
 
 				int leadingCloses = 0;
 				while (leadingCloses < code.Length && code[leadingCloses] == '}') leadingCloses++;
@@ -830,9 +833,16 @@ namespace DLS.Graphics
 			Touch();
 		}
 
+		static int FindEditorCommentStart(string line)
+		{
+			int slash = line.IndexOf("//", StringComparison.Ordinal);
+			int hash = line.IndexOf('#');
+			return slash < 0 ? hash : hash < 0 ? slash : Math.Min(slash, hash);
+		}
+
 		static string StripEditorComment(string line)
 		{
-			int comment = line.IndexOf("//", StringComparison.Ordinal);
+			int comment = FindEditorCommentStart(line);
 			return comment >= 0 ? line.Substring(0, comment).TrimStart() : line;
 		}
 
@@ -931,7 +941,8 @@ namespace DLS.Graphics
 			int whitespaceCount = 0;
 			while (whitespaceCount < beforeCaret.Length && char.IsWhiteSpace(beforeCaret[whitespaceCount])) whitespaceCount++;
 			string indent = beforeCaret.Substring(0, whitespaceCount);
-			if (beforeCaret.TrimEnd().EndsWith("{")) indent += Indent;
+			string codeBeforeCaret = beforeCaret.TrimEnd();
+			if (codeBeforeCaret.EndsWith("{") || codeBeforeCaret.EndsWith(":")) indent += Indent;
 
 			ReplaceSelection("\n" + indent);
 		}
