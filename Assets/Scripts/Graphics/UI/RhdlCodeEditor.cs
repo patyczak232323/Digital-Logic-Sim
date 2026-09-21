@@ -257,10 +257,10 @@ namespace DLS.Graphics
 					while (i < codeEnd && (char.IsLetterOrDigit(line[i]) || line[i] == '_')) i++;
 					colour = new Color(0.92f, 0.76f, 0.43f);
 				}
-				else if ("{}[]():?,=+-&|^!~<>;".IndexOf(line[i]) >= 0)
+				else if ("[]():,=+-<>".IndexOf(line[i]) >= 0)
 				{
 					i++;
-					while (i < codeEnd && "{}[]():?,=+-&|^!~<>;".IndexOf(line[i]) >= 0) i++;
+					while (i < codeEnd && "[]():,=+-<>".IndexOf(line[i]) >= 0) i++;
 					colour = RewiredUI.SecondaryText;
 				}
 				else
@@ -707,7 +707,7 @@ namespace DLS.Graphics
 			if (caret <= 0 || caret >= text.Length) return false;
 			char open = text[caret - 1];
 			char close = text[caret];
-			bool pair = (open == '{' && close == '}') || (open == '(' && close == ')') || (open == '[' && close == ']');
+			bool pair = (open == '(' && close == ')') || (open == '[' && close == ']');
 			if (!pair) return false;
 			ReplaceRange(caret - 1, caret + 1, string.Empty);
 			return true;
@@ -1101,7 +1101,7 @@ namespace DLS.Graphics
 			};
 			if (mate == '\0') return;
 
-			bool forward = c is '(' or '[' or '{';
+			bool forward = c is '(' or '[';
 			int depth = 0;
 			for (int i = index; forward ? i < text.Length : i >= 0; i += forward ? 1 : -1)
 			{
@@ -1120,7 +1120,7 @@ namespace DLS.Graphics
 			}
 		}
 
-		static bool IsBracket(char c) => c is '(' or ')' or '[' or ']' or '{' or '}';
+		static bool IsBracket(char c) => c is '(' or ')' or '[' or ']';
 
 		void ReplaceSelection(string replacement)
 		{
