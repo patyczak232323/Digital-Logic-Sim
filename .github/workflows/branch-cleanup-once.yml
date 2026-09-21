@@ -1,0 +1,31 @@
+name: One-shot branch cleanup
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/branch-cleanup-once.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete all branches except main
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$REPOSITORY/branches?per_page=100" --jq '.[].name' | while IFS= read -r branch; do
+            if [ "$branch" = "main" ]; then
+              continue
+            fi
+            echo "Deleting branch: $branch"
+            encoded=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$branch")
+            gh api -X DELETE "repos/$REPOSITORY/git/refs/heads/$encoded"
+          done
