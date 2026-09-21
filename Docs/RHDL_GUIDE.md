@@ -149,7 +149,7 @@ circuit StructuralNand
 end
 ```
 
-This structural level is the escape hatch that keeps RHDL general: if a topology can be represented by Rewired components and wires, RHDL can describe it. That includes feedback networks, latches, registers, RAM, clocks, custom chips and complete CPUs.
+This structural level is the escape hatch that keeps RHDL general: if a topology can be represented by Rewired components and wires, RHDL can describe it. That includes feedback networks, latches, flip-flops, registers, clocks, custom chips and complete CPUs. The current public Rewired palette has no general-purpose RAM primitive; RAM can be attached later as a user-built/custom component.
 
 ## Complete example
 
@@ -176,7 +176,7 @@ end
 
 RHDL source is declarative. `A = B + C` means that combinational hardware drives A from B and C; it does not mean “execute this statement now”.
 
-State is represented by stateful Rewired components such as registers/RAM or by explicit feedback topology. This keeps the surface language small while still allowing arbitrary Rewired hardware to be built.
+State can be represented directly with explicit feedback topology. The examples build SR latches, D latches, D flip-flops and registers from NAND gates, so they do not rely on a hidden RAM primitive. This keeps the surface language small while still allowing stateful Rewired hardware to be built.
 
 ## RHDL Studio
 
@@ -188,3 +188,11 @@ State is represented by stateful Rewired components such as registers/RAM or by 
 - `F8` / `Shift+F8` navigates diagnostics.
 
 RHDL is experimental. v0.6 intentionally makes breaking syntax changes instead of carrying compatibility aliases from earlier development versions.
+
+## Example progression
+
+The `Examples/RHDL/Basics` directory now progresses from gates and arithmetic through feedback state:
+
+`AND -> bus ALU -> structural NAND -> half adder -> full adder -> MUX8 -> SR latch -> D latch -> DFF -> Reg4 -> Counter4`
+
+`CPU4` uses those NAND-built registers plus the stock program ROM. `Rewired8` uses the NAND-built `DffBit` for all architectural registers and exposes data memory externally.
