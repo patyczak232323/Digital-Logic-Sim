@@ -95,6 +95,8 @@ See `Examples/RHDL/CPU4/README.md` for the ISA and a test ROM program.
 
 For difficult circuits, use the simulation diagnostics and profiling tools described in [SIMULATION_DIAGNOSTICS.md](SIMULATION_DIAGNOSTICS.md).
 
-## Compatibility note
+## Project independence
 
-Rewired is based on Digital Logic Sim but uses a different simulation model. Existing projects may load successfully while timing-sensitive or race-dependent behaviour can differ.
+Rewired is based on Digital Logic Sim, but compatibility with Sebastian Lague's original simulation engine is not a design goal. Rewired defines its own deterministic semantics, and timing-sensitive or race-dependent legacy behavior may intentionally differ.
+
+See [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md).
