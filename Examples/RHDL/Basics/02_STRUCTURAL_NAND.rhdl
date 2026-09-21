@@ -1,9 +1,10 @@
 # Structural RHDL using an existing builtin chip.
-circuit StructuralNand:
+circuit StructuralNand
     input A, B
     output Y
 
-    component n = NAND
+    component n : NAND
     connect A -> n.IN_A
     connect B -> n.IN_B
     connect n.OUT -> Y
+end
