@@ -1,0 +1,88 @@
+name: One-shot release cleanup
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/release-cleanup-once.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository with tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Replace old releases with Rewired v0.3.0
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p release-assets
+          gh release download v0.0.1-test \
+            --repo "$REPOSITORY" \
+            --pattern "*.zip" \
+            --dir release-assets
+
+          SOURCE_SHA="$(git rev-list -n 1 v0.0.1-test)"
+
+          cat > release-notes.md <<'EOF'
+          # Rewired v0.3.0
+
+          Rewired v0.3.0 is the current public development release of Rewired, an independent digital logic simulator derived from Sebastian Lague's Digital Logic Sim.
+
+          Rewired keeps much of the familiar editor workflow and project structure, but uses its own simulation runtime and does not promise exact behavioural compatibility with the original simulator.
+
+          ## Highlights
+
+          - deterministic event-driven simulation
+          - compiled netlist topology and dirty-gate scheduling
+          - improved deeply nested Custom Chip propagation
+          - native combinational JIT acceleration
+          - native feedback JIT for supported cyclic gate networks
+          - persistent FULL LUT caching for suitable combinational circuits
+          - state materialization for accelerated regions
+          - simulation diagnostics, profiling and waveform recording
+          - deterministic replay and non-convergence reporting
+          - regression coverage for latches, registers, counters, nested circuits and large netlists
+          - experimental RHDL Studio circuit generator
+          - Rewired-8 CPU project as a technology demo for the engine
+
+          ## Compatibility
+
+          Rewired is now treated as its own simulator. Project/file-format compatibility with Digital Logic Sim remains a goal, but exact timing, race conditions and propagation-order behaviour are not guaranteed to match the original engine.
+
+          ## Downloads
+
+          - Windows x64: `DLSRewired-Windows-x64.zip`
+          - Linux x86_64: `DLSRewired-Linux-x86_64.zip`
+
+          Rewired is still under active development, so complex circuits may expose engine bugs or unsupported edge cases.
+          EOF
+
+          if gh release view v0.3.0 --repo "$REPOSITORY" >/dev/null 2>&1; then
+            gh release delete v0.3.0 --repo "$REPOSITORY" --yes
+          fi
+
+          gh release create v0.3.0 \
+            --repo "$REPOSITORY" \
+            --target "$SOURCE_SHA" \
+            --title "Rewired v0.3.0" \
+            --notes-file release-notes.md \
+            release-assets/*.zip
+
+          for tag in $(gh release list --repo "$REPOSITORY" --limit 100 --json tagName --jq '.[].tagName'); do
+            if [ "$tag" != "v0.3.0" ]; then
+              gh release delete "$tag" --repo "$REPOSITORY" --yes
+              gh api -X DELETE "repos/$REPOSITORY/git/refs/tags/$tag" >/dev/null 2>&1 || true
+            fi
+          done
