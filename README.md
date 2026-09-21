@@ -149,16 +149,35 @@ Its purpose is to exercise the engine with a complete computer designed specific
 
 ## Downloads
 
-Prebuilt releases currently use the existing Rewired package names:
+Prebuilt releases use these package names:
 
 - **Windows x64:** `DLSRewired-Windows-x64.zip`
 - **Linux x86_64:** `DLSRewired-Linux-x86_64.zip`
 
-Latest published release: **v0.2.0**
+Release builds are generated automatically by GitHub Actions whenever a tag matching `v*` is pushed, for example `v0.3.0`. The workflow builds both desktop targets, creates the GitHub Release if needed and uploads both ZIP packages.
 
-https://github.com/patyczak232323/Digital-Logic-Sim/releases/tag/v0.2.0
+Latest release:
 
-Development on `main` is **v0.3.0** and is ahead of the latest published v0.2.0 release.
+https://github.com/patyczak232323/Digital-Logic-Sim/releases/latest
+
+### Release CI setup
+
+The automated Unity build uses GameCI and requires these repository secrets under **Settings -> Secrets and variables -> Actions**:
+
+- `UNITY_LICENSE`
+- `UNITY_EMAIL`
+- `UNITY_PASSWORD`
+
+The project Unity version is detected automatically from `ProjectSettings/ProjectVersion.txt`.
+
+To publish a release after the secrets are configured:
+
+```bash
+git tag v0.3.0
+git push origin v0.3.0
+```
+
+GitHub Actions then builds and publishes the release automatically.
 
 ## Repository policy
 
