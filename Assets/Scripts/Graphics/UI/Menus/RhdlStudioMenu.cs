@@ -202,7 +202,7 @@ namespace DLS.Graphics
 			Bounds2D syntaxHeader = RewiredUI.DrawSectionHeader("RHDL v0.3 QUICK REFERENCE", cursor, RightWidth);
 			cursor = syntaxHeader.BottomLeft;
 
-			RewiredUI.DrawCard(cursor, new Vector2(RightWidth, 20.5f));
+			RewiredUI.DrawCard(cursor, new Vector2(RightWidth, 22.8f));
 			Bounds2D syntaxCard = UI.PrevBounds;
 			string help =
 				"chip Name(WIDTH=8) {\n" +
