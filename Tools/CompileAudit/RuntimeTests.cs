@@ -21,10 +21,10 @@ namespace DLS.Simulation
 			Run("RHDL readable logic synthesis", TestRhdlReadableLogicSynthesis);
 			Run("RHDL concise authoring sugar", TestRhdlConciseAuthoringSugar);
 			Run("RHDL v0.5 clear beginner syntax", TestRhdlClearSyntax);
-			Run("RHDL buses, arithmetic, slices and mux", TestRhdlV3BusExpressions);
+			Run("RHDL buses, arithmetic, slices and selection", TestRhdlBusExpressions);
 			Run("RHDL implicit width inference", TestRhdlImplicitWidthInference);
 			Run("RHDL block layout and orthogonal routing", TestRhdlBlockLayout);
-			Run("RHDL operators, constants and named ports", TestRhdlV3OperatorsAndNamedPorts);
+			Run("RHDL operators, constants and named ports", TestRhdlOperatorsAndNamedPorts);
 			Run("RHDL examples and Rewired-8 source pack compile", TestRewired8RhdlPackCompilation);
 			Run("feedback NAND latch", TestFeedbackNandLatch);
 			Run("feedback unchanged-input zero sweep", TestFeedbackZeroSweep);
@@ -385,9 +385,9 @@ namespace DLS.Simulation
 						Assert(Bit(root.OutputPins[0].State) == expectedY,
 							$"RHDL v0.5 conditional mismatch for A={a} B={b} select={select}");
 						Assert(Bit(root.OutputPins[1].State) == expectedY,
-							$"RHDL v0.5 mux(...) mismatch for A={a} B={b} select={select}");
+							$"RHDL v0.5 conditional mismatch #2 for A={a} B={b} select={select}");
 						Assert(Bit(root.OutputPins[2].State) == 1,
-							"RHDL v0.5 true constant should produce logic high");
+							"RHDL v0.5 high constant should produce logic high");
 					}
 				}
 			}
@@ -407,9 +407,29 @@ namespace DLS.Simulation
 			Assert(instance.Success,
 				"RHDL v0.5 instance syntax failed: " + string.Join(" | ", instance.Diagnostics.Select(d => d.ToString())));
 			Assert(instance.Description.SubChips.Length == 1, "RHDL v0.5 instance syntax should create one NAND");
+
+			string oldHeader =
+@"chip OldStyle {
+  input A
+  output Y = A
+}";
+			RhdlCompileResult oldHeaderResult = RhdlCompiler.Compile(oldHeader, library);
+			Assert(!oldHeaderResult.Success, "Removed 'chip' syntax should fail in RHDL v0.5");
+			Assert(oldHeaderResult.Diagnostics.Any(d => d.Message.Contains("'chip' was removed")),
+				"Removed 'chip' syntax should explain the v0.5 replacement");
+
+			string oldLogic =
+@"circuit OldLogic:
+    input A
+    input B
+    output Y = A & B";
+			RhdlCompileResult oldLogicResult = RhdlCompiler.Compile(oldLogic, library);
+			Assert(!oldLogicResult.Success, "Removed '&' syntax should fail in RHDL v0.5");
+			Assert(oldLogicResult.Diagnostics.Any(d => d.Message.Contains("Use 'and' instead of '&'")),
+				"Removed '&' syntax should point to the readable 'and' operator");
 		}
 
-		static void TestRhdlV3BusExpressions()
+		static void TestRhdlBusExpressions()
 		{
 			PinDescription P(string name, int id, PinBitCount bits = PinBitCount.Bit1) =>
 				new(name, id, new UnityEngine.Vector2(), bits, PinColour.Red, PinValueDisplayMode.Off);
@@ -733,7 +753,7 @@ namespace DLS.Simulation
 			Simulator.Reset();
 		}
 
-		static void TestRhdlV3OperatorsAndNamedPorts()
+		static void TestRhdlOperatorsAndNamedPorts()
 		{
 			PinDescription P(string name, int id, PinBitCount bits = PinBitCount.Bit1) =>
 				new(name, id, new UnityEngine.Vector2(), bits, PinColour.Red, PinValueDisplayMode.Off);
