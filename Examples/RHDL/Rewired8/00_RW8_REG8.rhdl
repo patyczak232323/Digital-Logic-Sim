@@ -1,8 +1,9 @@
 # Rewired-8: 8-bit edge-clocked register.
 # Uses the stock 256x8 RAM at address 0 as a one-byte register.
-circuit RW8_REG8:
+circuit RW8_REG8
     input D: 8
     input WE, CLK, RESET
     output Q: 8
 
-    component cell = dev.RAM-8(ADDRESS=0x00, DATA=D, WRITE=WE, RESET=RESET, CLOCK=CLK, OUT=Q)
+    component cell : dev.RAM-8(ADDRESS=0x00, DATA=D, WRITE=WE, RESET=RESET, CLOCK=CLK, OUT=Q)
+end
