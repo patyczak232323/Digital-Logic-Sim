@@ -906,18 +906,6 @@ end";
 				new[] { P("IN B", 0), P("IN A", 1) },
 				new[] { P("OUT", 2) });
 
-			ChipDescription ram = Builtin(
-				"dev.RAM-8",
-				ChipType.dev_Ram_8Bit,
-				new[]
-				{
-					P("ADDRESS", 0, PinBitCount.Bit8),
-					P("DATA", 1, PinBitCount.Bit8),
-					P("WRITE", 2),
-					P("RESET", 3),
-					P("CLOCK", 4)
-				},
-				new[] { P("OUT", 5, PinBitCount.Bit8) });
 
 			ChipDescription rom = Builtin(
 				"ROM 256×16",
@@ -963,7 +951,6 @@ end";
 			List<ChipDescription> descriptions = new()
 			{
 				nand,
-				ram,
 				rom,
 				split8,
 				split4,
@@ -979,6 +966,14 @@ end";
 				"Examples/RHDL/Basics/00_AND.rhdl",
 				"Examples/RHDL/Basics/01_BUS_ALU.rhdl",
 				"Examples/RHDL/Basics/02_STRUCTURAL_NAND.rhdl",
+				"Examples/RHDL/Basics/03_HALF_ADDER.rhdl",
+				"Examples/RHDL/Basics/04_FULL_ADDER.rhdl",
+				"Examples/RHDL/Basics/05_MUX8.rhdl",
+				"Examples/RHDL/Basics/06_SR_LATCH.rhdl",
+				"Examples/RHDL/Basics/07_D_LATCH.rhdl",
+				"Examples/RHDL/Basics/08_DFF.rhdl",
+				"Examples/RHDL/Basics/09_REG4.rhdl",
+				"Examples/RHDL/Basics/10_COUNTER4.rhdl",
 				"Examples/RHDL/CPU4/00_CPU4.rhdl",
 				"Examples/RHDL/Rewired8/00_RW8_REG8.rhdl",
 				"Examples/RHDL/Rewired8/01_RW8_REG16.rhdl",
@@ -1021,11 +1016,9 @@ end";
 			Assert(core.OutputPins.Any(p => p.Name == "HALTED"), "RW8_CORE missing HALTED output");
 			Assert(core.SubChips.Length > 100, "RW8_CORE unexpectedly small; high-level logic was not lowered");
 
-			// Execute a real program on CPU4 using its internal ROM:
+			// Execute a real program on RAM-free CPU4 using its internal ROM:
 			//   LDI 3
-			//   STA 0
-			//   LDI 2
-			//   ADD 0
+			//   ADDI 2
 			//   OUT
 			//   HLT
 			ChipLibrary cpu4Library = new(descriptions.ToArray());
@@ -1035,7 +1028,7 @@ end";
 
 			SimChip cpu4Rom = cpu4Root.SubChips.FirstOrDefault(c => c.ChipType == ChipType.Rom_256x16);
 			Assert(cpu4Rom != null, "CPU4 has no internal program ROM");
-			uint[] cpu4Program = { 0x0013u, 0x0030u, 0x0012u, 0x0040u, 0x00E0u, 0x00F0u };
+			uint[] cpu4Program = { 0x0013u, 0x0022u, 0x00E0u, 0x00F0u };
 			for (int i = 0; i < cpu4Program.Length; i++) cpu4Rom.InternalState[i] = cpu4Program[i];
 
 			DevPinInstance[] cpu4Inputs = new DevPinInstance[cpu4.InputPins.Length];
@@ -1078,7 +1071,7 @@ end";
 			Assert(ReadCpu4("HALTED", 1) == 1, "CPU4 did not reach HLT");
 			Assert(ReadCpu4("ACC") == 5, $"CPU4 ACC expected 5, got {ReadCpu4("ACC")}");
 			Assert(ReadCpu4("OUT_PORT") == 5, $"CPU4 OUT_PORT expected 5, got {ReadCpu4("OUT_PORT")}");
-			Assert(ReadCpu4("PC") == 5, $"CPU4 PC should remain on HLT at address 5, got {ReadCpu4("PC")}");
+			Assert(ReadCpu4("PC") == 3, $"CPU4 PC should remain on HLT at address 3, got {ReadCpu4("PC")}");
 
 			DeterministicSimulator.Reset();
 			Simulator.Reset();
