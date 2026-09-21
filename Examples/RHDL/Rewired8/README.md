@@ -1,6 +1,6 @@
-# Rewired-8 in RHDL v0.5
+# Rewired-8 in RHDL v0.6
 
-This directory contains a complete Rewired-8 CPU core written in the current RHDL v0.5 language.
+This directory contains a complete Rewired-8 CPU core written in the current RHDL v0.6 language.
 
 The CPU uses only ordinary Rewired chips and generated RHDL topology. There is no simulator-side CPU implementation.
 
@@ -33,7 +33,7 @@ The final chip is **RW8_CORE**.
 - 64 KiB byte-addressable data-memory interface
 - memory-mapped I/O can be implemented in the external data-memory address space
 
-RHDL v0.5 has 1/4/8-bit buses, so every 16-bit architectural value is represented as an explicit HI/LO pair.
+RHDL v0.6 has 1/4/8-bit buses, so every 16-bit architectural value is represented as an explicit HI/LO pair.
 
 ## Instruction formats
 
