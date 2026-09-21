@@ -71,7 +71,9 @@ Current live cases are:
 - RAM
 - SR feedback latch
 - deep Custom Chip nesting
-- live solver versus JIT/FULL LUT parity
+- direct retained legacy-Simulator versus Rewired parity for stable NAND/tri-state/Pulse/Clock/ROM/RAM/nesting cases
+- live solver versus native JIT parity
+- live solver versus FULL LUT parity
 - live solver versus feedback-JIT parity
 
 The runner intentionally advances **one actual Rewired simulation step per vector**. Stateful components keep their state between vectors.
@@ -90,6 +92,12 @@ Unity \
 Use the platform-specific Unity executable path if `Unity` is not in `PATH`.
 
 A failed compatibility case throws an exception, so the command exits as a failed CI/build step. In GitHub Actions, `REWIRED_RUN_COMPATIBILITY=1` activates `CompatibilityBuildPreprocessor`, which runs the same suite before the Unity Linux build; a failing case therefore blocks that CI job.
+
+## Direct legacy Simulator comparison
+
+The repository still retains the legacy `Simulator.RunSimulationStep` traversal engine originating from the original Digital Logic Sim architecture. `CompatibilityTestRunner.RunLegacyParity(...)` can build two independent circuit instances, feed them the same vectors, run one through that legacy path and one through the deterministic Rewired path, and compare every output after every step.
+
+This is used only for circuits with a stable, unambiguous expected behavior. It is deliberately **not** used as the correctness oracle for traversal-order races or ambiguous feedback initialization, because reproducing those legacy side effects is not a Rewired goal.
 
 ## Golden traces
 
