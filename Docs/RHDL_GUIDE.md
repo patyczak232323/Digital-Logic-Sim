@@ -188,10 +188,6 @@ State can be represented directly with explicit feedback topology. The examples 
 
 RHDL is experimental. v0.6 intentionally makes breaking syntax changes instead of carrying compatibility aliases from earlier development versions.
 
-## Example progression
+## Examples
 
-The `Examples/RHDL/Basics` directory now progresses from gates and arithmetic through feedback state:
-
-`AND -> bus ALU -> structural NAND -> half adder -> full adder -> MUX8 -> SR latch -> D latch -> DFF -> Reg4 -> Counter4`
-
-`CPU4` uses those NAND-built registers plus the stock program ROM. `Rewired8` uses the NAND-built `DffBit` for all architectural registers and exposes data memory externally.
+The previous development example pack has been removed. A new curated example set will be added against the current RHDL v0.6 syntax and Rewired runtime.
