@@ -81,7 +81,7 @@ namespace DLS.Graphics
 				topLeft,
 				WorkspaceWidth,
 				true,
-				"RHDL v0.4  /  PYTHON-LIKE + STRUCTURAL");
+				"RHDL v0.5  /  CLEAR HARDWARE LANGUAGE");
 
 			Vector2 contentTop = mainHeader.BottomLeft + Vector2.down * 0.7f;
 			Vector2 sourceTop = contentTop;
@@ -199,24 +199,24 @@ namespace DLS.Graphics
 				statusCol);
 
 			cursor = statusCard.BottomLeft + Vector2.down * 0.6f;
-			Bounds2D syntaxHeader = RewiredUI.DrawSectionHeader("RHDL v0.4 QUICK REFERENCE", cursor, RightWidth);
+			Bounds2D syntaxHeader = RewiredUI.DrawSectionHeader("RHDL v0.5 QUICK REFERENCE", cursor, RightWidth);
 			cursor = syntaxHeader.BottomLeft;
 
 			RewiredUI.DrawCard(cursor, new Vector2(RightWidth, 24.6f));
 			Bounds2D syntaxCard = UI.PrevBounds;
 			string help =
-				"chip Adder:\n" +
+				"circuit Adder:\n" +
 				"    input A: 8\n" +
 				"    input B: 8\n" +
 				"    output Y = A + B\n\n" +
-				"Choose: A if select else B   or   mux(select, A, B)\n" +
-				"Logic words: and / or / xor / not\n" +
-				"Logic values: true/false, high/low, on/off\n" +
-				"Internal value: let sum = A + B\n" +
-				"Constant: const MASK = 0xFF\n" +
-				"Bits: A[3]   slice: A[7:4]\n" +
-				"Concat: concat(A[7:4], B[3:0])\n" +
-				"Chip instance: n = NAND(A=A, B=B, OUT=Y)\n" +
+				"Internal signal: signal sum = A + B\n" +
+				"Constant: constant WIDTH = 8\n" +
+				"Logic: and / or / xor / not\n" +
+				"Logic levels: high / low\n" +
+				"Choice: A if select else B\n" +
+				"Join bits: join(A[7:4], B[3:0])\n" +
+				"Component: component n = NAND(A=A, B=B, OUT=Y)\n" +
+				"Exact wiring: connect SOURCE -> TARGET\n" +
 				"Comments start with #\n\n" +
 				"ENTER after ':' indents automatically\n" +
 				"TAB / SHIFT+TAB indent   ALT+UP/DOWN move lines\n" +
@@ -352,26 +352,28 @@ namespace DLS.Graphics
 		static void SetEditorSource(string source) => CodeEditor.SetText(source);
 
 		public const string StarterTemplate =
-@"# A chip starts with its name and a colon.
-chip Adder:
+@"# Smallest useful RHDL circuit.
+circuit Adder:
     input A: 8
     input B: 8
 
     output Y = A + B";
 
 		public const string DefaultExample =
-@"# RHDL v0.4: readable hardware description
-chip AluMini(WIDTH=8):
+@"# RHDL v0.5: one clear spelling for each concept.
+circuit AluMini:
+    constant WIDTH = 8
+
     input A: WIDTH
     input B: WIDTH
     input select
 
-    let sum = A + B
-    let mixed = concat(A[7:4], B[3:0])
+    signal sum = A + B
+    signal mixed = join(A[7:4], B[3:0])
 
     output Y: WIDTH = sum if select else mixed
     output equal = A == B
-    output ready = true";
+    output ready = high";
 
 	}
 }
