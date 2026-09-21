@@ -81,7 +81,7 @@ namespace DLS.Graphics
 				topLeft,
 				WorkspaceWidth,
 				true,
-				"RHDL v0.3  /  BUS + EXPRESSIONS + STRUCTURAL");
+				"RHDL v0.4  /  PYTHON-LIKE + STRUCTURAL");
 
 			Vector2 contentTop = mainHeader.BottomLeft + Vector2.down * 0.7f;
 			Vector2 sourceTop = contentTop;
@@ -199,29 +199,26 @@ namespace DLS.Graphics
 				statusCol);
 
 			cursor = statusCard.BottomLeft + Vector2.down * 0.6f;
-			Bounds2D syntaxHeader = RewiredUI.DrawSectionHeader("RHDL v0.3 QUICK REFERENCE", cursor, RightWidth);
+			Bounds2D syntaxHeader = RewiredUI.DrawSectionHeader("RHDL v0.4 QUICK REFERENCE", cursor, RightWidth);
 			cursor = syntaxHeader.BottomLeft;
 
-			RewiredUI.DrawCard(cursor, new Vector2(RightWidth, 22.8f));
+			RewiredUI.DrawCard(cursor, new Vector2(RightWidth, 24.6f));
 			Bounds2D syntaxCard = UI.PrevBounds;
 			string help =
-				"chip Name(WIDTH=8) {\n" +
-				"  const MASK = 0xFF\n" +
-				"  input A: WIDTH, B: WIDTH\n" +
-				"  input sel\n" +
-				"  let sum = A + B\n" +
-				"  output Y = sel ? sum : (A ^ B)\n" +
-				"}\n\n" +
-				"let name = expr   // inferred internal wire\n" +
-				"output Y = expr   // declare + drive at once\n" +
-				"param/const NAME = value\n" +
-				"Ops: + - & | ^ ! == != < > <= >= << >>\n" +
+				"chip Adder:\n" +
+				"    input A: 8\n" +
+				"    input B: 8\n" +
+				"    output Y = A + B\n\n" +
+				"Python-style:  value_if_true if condition else value_if_false\n" +
+				"Logic words: and / or / xor / not\n" +
+				"Logic values: true/false, high/low, on/off\n" +
+				"Internal value: let sum = A + B\n" +
+				"Constant: const MASK = 0xFF\n" +
 				"Bits: A[3]   slice: A[7:4]\n" +
 				"Concat: {A[7:4], B[3:0]}\n" +
-				"Constants: 0b1010  0xFF  42\n" +
-				"Widths: 1 / 4 / 8 bits; output/wire can infer\n" +
-				"Named ports: NAND n(IN_A=a, IN_B=b, OUT=y)\n\n" +
-				"{} auto-pairs; TAB/ENTER inside {} expands block\n" +
+				"Chip instance: n = NAND(IN_A=A, IN_B=B, OUT=Y)\n" +
+				"Comments start with #\n\n" +
+				"ENTER after ':' indents automatically\n" +
 				"TAB / SHIFT+TAB indent   ALT+UP/DOWN move lines\n" +
 				"CTRL+BACKSPACE/DELETE delete word\n" +
 				"CTRL+Z/Y undo/redo   CTRL+/ comment\n" +
@@ -355,24 +352,26 @@ namespace DLS.Graphics
 		static void SetEditorSource(string source) => CodeEditor.SetText(source);
 
 		public const string StarterTemplate =
-@"// RHDL can infer widths and create simple internal wires automatically.
-chip Adder {
-  input A:8
-  input B:8
-  output Y = A + B
-}";
+@"# A chip starts with its name and a colon.
+chip Adder:
+    input A: 8
+    input B: 8
+
+    output Y = A + B";
 
 		public const string DefaultExample =
-@"// RHDL v0.3 example: concise 8-bit arithmetic + mux
-chip AluMini(WIDTH=8) {
-  input A: WIDTH, B: WIDTH
-  input sel
+@"# RHDL v0.4: readable hardware description
+chip AluMini(WIDTH=8):
+    input A: WIDTH
+    input B: WIDTH
+    input select
 
-  let sum = A + B
-  let mixed = {A[7:4], B[3:0]}
+    let sum = A + B
+    let mixed = {A[7:4], B[3:0]}
 
-  output Y: WIDTH = sel ? sum : mixed
-  output equal = A == B
-}";
+    output Y: WIDTH = sum if select else mixed
+    output equal = A == B
+    output ready = true";
+
 	}
 }
