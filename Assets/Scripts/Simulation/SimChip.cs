@@ -75,17 +75,6 @@ namespace DLS.Simulation
 				// first 256 bits = display buffer, next 256 bits = back buffer, last bit = clock state (to allow edge-trigger behaviour)
 				InternalState = new uint[addressSize_8Bit * 2 + 1];
 			}
-			else if (ChipType is ChipType.dev_Ram_8Bit)
-			{
-				InternalState = new uint[addressSize_8Bit + 1]; // +1 for clock state (to allow edge-trigger behaviour)
-
-				// Initialize each 8-bit memory cell without leaking random upper bits
-				// into the pin-state flags stored in the same uint.
-				for (int i = 0; i < InternalState.Length - 1; i++)
-				{
-					InternalState[i] = (uint)Simulator.rng.Next(0, 256);
-				}
-			}
 			else
 			{
 				int requiredStateLength = ChipType switch
