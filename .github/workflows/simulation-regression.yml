@@ -20,7 +20,7 @@ jobs:
       - name: Run deterministic propagation stress suite
         run: python3 Tools/SimulationRegression/regression.py
 
-      - name: Run compatibility contract suite
+      - name: Run Rewired semantic regression suite
         run: python3 Tools/CompatibilityRegression/regression.py
 
       - name: Run 8-bit computer behavioral suite
@@ -34,8 +34,8 @@ jobs:
       - name: Run whole-program regression suite
         run: python3 Tools/ProgramRegression/regression.py
 
-  live-engine-compatibility:
-    name: Unity live-engine compatibility
+  live-engine-regression:
+    name: Unity live-engine regression
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -61,7 +61,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: Library
-          key: Library-compatibility-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          key: Library-rewired-regression-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
           restore-keys: |
             Library-compatibility-
             Library-StandaloneLinux64-
@@ -76,5 +76,5 @@ jobs:
         with:
           unityVersion: auto
           targetPlatform: StandaloneLinux64
-          buildName: RewiredCompatibilityCheck
-          buildsPath: compatibility-build
+          buildName: RewiredRegressionCheck
+          buildsPath: regression-build
