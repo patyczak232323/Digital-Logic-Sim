@@ -1,74 +1,136 @@
-# Rewired
+# Rewired — Digital Logic Simulator
 
-**Rewired** is an independent digital logic simulator project based on Sebastian Lague's [Digital Logic Sim](https://github.com/SebLague/Digital-Logic-Sim).
+**Rewired** is an open-source **digital logic simulator and logic gate circuit simulator** for building and testing digital circuits, CPUs, registers, memory and custom chips. It includes a high-performance simulation runtime, a graphical editor and **RHDL**, a small hardware description language for generating circuits from source.
 
-The project started from the Digital Logic Sim codebase and keeps much of its editor workflow, file format and visual language, but the simulation runtime is being redesigned around a different execution model. Rewired should therefore be treated as its **own simulator**, not as a drop-in replacement or a fully compatible "better version" of Digital Logic Sim.
+Rewired is based on Sebastian Lague's [Digital Logic Sim](https://github.com/SebLague/Digital-Logic-Sim), but uses its own simulation engine and should be treated as an independent simulator rather than a drop-in compatible replacement.
 
-## What Rewired is
+[![Latest Release](https://img.shields.io/github/v/release/patyczak232323/Digital-Logic-Sim?label=release)](https://github.com/patyczak232323/Digital-Logic-Sim/releases/latest)
+[![Regression](https://github.com/patyczak232323/Digital-Logic-Sim/actions/workflows/simulation-regression.yml/badge.svg)](https://github.com/patyczak232323/Digital-Logic-Sim/actions/workflows/simulation-regression.yml)
+[![License](https://img.shields.io/github/license/patyczak232323/Digital-Logic-Sim)](LICENSE)
 
-Rewired is focused on experimenting with a high-performance simulation engine for large digital circuits.
+## What you can build
 
-The runtime uses ideas such as:
+Rewired is intended for learning and experimenting with **digital electronics, Boolean logic, computer architecture and CPU design**.
 
-- event-driven propagation
-- compiled netlist topology
+You can build:
+
+- logic gates and combinational circuits
+- multiplexers, adders and ALUs
+- latches, flip-flops and registers
+- counters and state machines
+- RAM and other gate-level memory structures
+- custom reusable chips
+- small CPUs and complete computer architectures
+- source-generated circuits with RHDL
+
+The repository includes a compact example progression ending with a **4-bit CPU** and a separate **4×4-bit RAM** example.
+
+## Main features
+
+- graphical digital circuit editor
+- deterministic event-driven simulation
+- compiled circuit/netlist topology
 - dirty-gate scheduling
-- deterministic fixed-point settling
-- combinational JIT compilation
+- fixed-point settling for signal propagation
+- support for deeply nested Custom Chips
+- combinational JIT acceleration
 - feedback JIT for supported cyclic gate networks
-- optional FULL LUT caching for suitable combinational Custom Chips
-- diagnostics, profiling, waveform capture and regression testing
+- persistent FULL LUT cache for suitable combinational circuits
+- simulation diagnostics and profiling
+- waveform capture and deterministic replay
+- non-convergence diagnostics
+- **RHDL v0.6** hardware description language
+- Windows x64 and Linux x86_64 release builds
 
-The goal is to make it practical to simulate large and deeply nested circuits while keeping circuit behaviour well-defined under the Rewired execution model.
+## Download
 
-## Relationship to Digital Logic Sim
+The latest prebuilt version is available in **GitHub Releases**:
 
-Rewired is derived from Digital Logic Sim and still shares a significant amount of editor, project and UI code with the original project.
+**[Download the latest Rewired release](https://github.com/patyczak232323/Digital-Logic-Sim/releases/latest)**
 
-However, the simulation engine is intentionally different.
+Release packages:
 
-Digital Logic Sim's original runtime processes gates and subchips in traversal order and allows ordering effects to influence some feedback circuits. Rewired instead attempts to propagate affected logic to a stable state using deterministic delta-cycle settling and additional acceleration paths.
+- Windows x64: `DLSRewired-Windows-x64.zip`
+- Linux x86_64: `DLSRewired-Linux-x86_64.zip`
 
-That difference is important.
+On Linux, after extracting the archive, the executable may need permission:
 
-A circuit that was designed around propagation order, race conditions or timing quirks of the original Digital Logic Sim engine may behave differently in Rewired even when the project loads successfully.
+```bash
+chmod +x DLSRewired.x86_64
+./DLSRewired.x86_64
+```
 
-Rewired is therefore **not intended to guarantee behavioural compatibility with Digital Logic Sim**.
+For a first project, see **[Getting Started](Docs/GETTING_STARTED.md)**.
 
-## Project compatibility
+## RHDL — hardware description language
 
-Many Digital Logic Sim projects can still be opened because Rewired retains the familiar project structure and editor concepts.
+Rewired includes **RHDL Studio**, a source-driven circuit generator. RHDL describes hardware concurrently and lowers into normal Rewired components and wires; it does not use a separate simulation runtime.
 
-Compatibility should currently be understood as:
+Example:
 
-- project/file-format compatibility: generally a goal
-- editor/workflow familiarity: generally a goal
-- exact simulation behaviour: **not guaranteed**
-- timing/order-dependent circuits: may behave differently
-- NAND-built latches, flip-flops, counters and gate-level memories: should be tested specifically
-- built-in stateful components such as Pulse, Clock, RAM and displays: actively tested, but differences can still exist
+```text
+circuit Adder
+    input A: 8
+    input B: 8
+    output Y: 8
 
-Large existing computers are useful compatibility and stress tests, but Rewired does not define correctness as reproducing every race-condition or traversal-order side effect of the original engine.
+    Y = A + B
+end
+```
 
-## Simulation model
+RHDL supports:
 
-The normal Rewired step is broadly structured as:
+- 1, 4 and 8-bit signals
+- Boolean logic: `and`, `or`, `xor`, `not`
+- arithmetic and comparisons
+- bit indexing and slicing
+- `join(...)`
+- `choose(...)` multiplexing
+- reusable component instances
+- explicit structural `connect` wiring
+- feedback/stateful circuits through ordinary Rewired topology
 
-1. apply external and spontaneous inputs
-2. settle combinational propagation
-3. advance built-in sequential/stateful components
-4. settle resulting combinational changes
-5. update diagnostics and visible state
+See the **[RHDL v0.6 Guide](Docs/RHDL_GUIDE.md)**.
 
-Feedback networks can be handled by the deterministic solver or by supported acceleration paths. Initialization is treated separately so that storage elements can reach a usable starting state without making normal simulation depend on random gate evaluation.
+## Examples
 
-This model is one of the main architectural differences between Rewired and Digital Logic Sim.
+The curated RHDL examples are intentionally small and easy to follow:
 
-## Engine integration architecture
+```text
+AND
+ └─ Half Adder
+     └─ Full Adder
+         └─ MUX4
+             └─ D Flip-Flop
+                 └─ 4-bit Register
+                     ├─ RAM 4×4
+                     └─ CPU4
+```
 
-Application and editor code now integrate with the runtime through a single entry point: `RewiredEngine`.
+Files are under **[Examples/RHDL](Examples/RHDL/)**.
 
-The intended dependency direction is:
+### CPU4
+
+CPU4 is a simple educational processor example with:
+
+- 4-bit accumulator
+- 4-bit program counter
+- 4-bit output port
+- 16 program addresses
+- fixed 8-bit instructions
+- arithmetic, logic, jumps, output and halt
+
+See **[CPU4 documentation](Examples/RHDL/CPU4/README.md)**.
+
+### RAM4x4
+
+The memory example contains four 4-bit words built from normal RHDL registers rather than a hidden RAM primitive.
+
+See **[RAM4x4 documentation](Examples/RHDL/Memory/README.md)**.
+
+## Simulation engine
+
+Rewired's runtime is organized around a single integration boundary:
 
 ```text
 Editor / Project / UI
@@ -79,118 +141,82 @@ Editor / Project / UI
         +-- deterministic runtime
         +-- simulation graph/backend
         +-- JIT / feedback JIT
-        +-- LUT cache
+        +-- FULL LUT cache
         +-- diagnostics / replay / waveform
 ```
 
-The older low-level `Simulator` implementation and `DeterministicSimulator` are internal runtime details. Game/UI code should not call them directly. This keeps editor integration stable while allowing the engine implementation to be reorganized or optimized independently.
+The goal is predictable simulation semantics while still allowing acceleration of suitable circuit regions.
 
-## RHDL Studio
+More detail:
 
-Rewired includes the experimental **RHDL Studio** source-driven circuit generator.
+- **[Simulation Diagnostics](Docs/SIMULATION_DIAGNOSTICS.md)**
+- **[Native JIT](Docs/NATIVE_JIT.md)**
+- **[Persistent FULL LUT Cache](Docs/PERSISTENT_FULL_LUT_CACHE.md)**
 
-The current frontend is **RHDL v0.6**. Its syntax is intentionally hardware-oriented rather than Python-like:
+## Compatibility with Digital Logic Sim
 
-```text
-circuit AluMini
-    input A: 8
-    input B: 8
-    input select
+Rewired keeps much of the original Digital Logic Sim editor workflow, project structure and visual language, so many existing projects can be opened.
 
-    signal sum = A + B
-    output Y: 8 = choose(select, sum, B)
-end
-```
+However, exact simulation behaviour is **not guaranteed to match** Digital Logic Sim.
 
-Equations are concurrent hardware descriptions, not sequential software statements. Logic uses `and`, `or`, `xor`, `not`; buses use slices and `join(...)`; selection uses `choose(condition, when_high, when_low)`.
+In particular, circuits that depend on:
 
-Existing Rewired components can be instantiated with HDL-style instance syntax:
+- traversal order
+- race conditions
+- propagation timing quirks
+- feedback initialization side effects
 
-```text
-component gate : NAND(A=A, B=B, OUT=Y)
-```
+may behave differently under Rewired's deterministic simulation model.
 
-For exact topology, `component` plus `connect` exposes the structural level directly. This keeps the language general enough to describe feedback/stateful circuits and complete CPUs, not just combinational expressions.
+Rewired is therefore best considered a separate **digital circuit simulator** derived from the original project.
 
-RHDL lowers into ordinary Rewired topology and a standard `ChipDescription`; there is no separate RHDL simulation runtime.
+## Documentation
 
-Current bus widths are **1, 4 and 8 bits**, matching the underlying Rewired pin types. See `Docs/RHDL_GUIDE.md` for the canonical syntax and `Examples/RHDL/` for a small curated example set ending with a 4-bit CPU.
+Start here:
 
-## Current development
+- **[Documentation index](Docs/README.md)**
+- **[Getting Started](Docs/GETTING_STARTED.md)**
+- **[RHDL Guide](Docs/RHDL_GUIDE.md)**
+- **[Simulation Diagnostics](Docs/SIMULATION_DIAGNOSTICS.md)**
+- **[Native JIT](Docs/NATIVE_JIT.md)**
+- **[Persistent FULL LUT Cache](Docs/PERSISTENT_FULL_LUT_CACHE.md)**
+- **[Rewired v0.3.0 release notes](Docs/RELEASE_0.3.0.md)**
 
-Current development version: **Rewired v0.3.0**.
+## Development
 
-Current `main` includes work on:
+Current version: **Rewired v0.3.0**
 
-- deterministic event-driven simulation
-- deeply nested Custom Chip propagation
-- native combinational JIT
-- native feedback JIT for supported cyclic gate networks
-- persistent FULL LUT caching
-- state materialization when accelerated regions are inspected
-- simulation profiling and diagnostics
-- waveform recording
-- deterministic replay
-- non-convergence reporting
-- regression tests for latches, registers, counters, nested circuits and large netlists
-- compatibility tests for imported and stateful projects
-- RHDL Studio structural circuit generation and source persistence
-- unified Rewired UI styling and diagnostics workspace
+The Unity version is defined in `ProjectSettings/ProjectVersion.txt`.
 
-Rewired is still experimental. Complex circuits are expected to expose engine bugs and edge cases, and those projects are especially valuable for development.
-
-See `Docs/SIMULATION_DIAGNOSTICS.md` for current diagnostics and debugging tools.
-
-## Rewired-8
-
-**Rewired-8** is an 8-bit CPU being designed as a technology demo for the Rewired simulation engine.
-
-Its purpose is to exercise the engine with a complete computer designed specifically around Rewired's simulation semantics rather than around compatibility quirks of another simulator.
-
-## Downloads
-
-Prebuilt releases use these package names:
-
-- **Windows x64:** `DLSRewired-Windows-x64.zip`
-- **Linux x86_64:** `DLSRewired-Linux-x86_64.zip`
-
-Release builds are generated automatically by GitHub Actions whenever a tag matching `v*` is pushed, for example `v0.3.0`. The workflow builds both desktop targets, creates the GitHub Release if needed and uploads both ZIP packages.
-
-Latest release:
-
-https://github.com/patyczak232323/Digital-Logic-Sim/releases/latest
-
-### Release CI setup
-
-The automated Unity build uses GameCI and requires these repository secrets under **Settings -> Secrets and variables -> Actions**:
-
-- `UNITY_LICENSE`
-- `UNITY_EMAIL`
-- `UNITY_PASSWORD`
-
-The project Unity version is detected automatically from `ProjectSettings/ProjectVersion.txt`.
-
-To publish a release after the secrets are configured:
+Clone:
 
 ```bash
-git tag v0.3.0
-git push origin v0.3.0
+git clone https://github.com/patyczak232323/Digital-Logic-Sim.git
+cd Digital-Logic-Sim
 ```
 
-GitHub Actions then builds and publishes the release automatically.
+The repository includes regression tooling for the simulation engine and computer-level behaviour.
 
-## Repository policy
+Release builds are produced automatically by GitHub Actions when a version tag such as `v0.3.0` is pushed.
 
-The canonical project is maintained by **@patyczak232323**.
+## Project status
 
-External contributors should use forks and pull requests. Direct write access to the canonical repository is not intended for third parties.
+Rewired is under active development. Complex stateful circuits and very large designs may still expose engine bugs or unsupported edge cases.
+
+Bug reports and reproducible test circuits are useful, especially for:
+
+- sequential logic
+- feedback networks
+- large nested chips
+- CPU designs
+- imported Digital Logic Sim projects
 
 ## Credits
 
 Rewired is based on [Sebastian Lague's Digital Logic Sim](https://github.com/SebLague/Digital-Logic-Sim).
 
-The original project provided the foundation for the editor, circuit format and much of the surrounding application code. Rewired's simulation runtime and related tooling are being developed separately from that foundation.
+The original project provides the foundation for much of the editor, project format and surrounding application code. Rewired develops a separate simulation runtime, diagnostics tooling, acceleration paths and RHDL authoring workflow on top of that foundation.
 
 ## License
 
-Licensed under the MIT License. See `LICENSE`.
+Licensed under the **MIT License**. See [LICENSE](LICENSE).
