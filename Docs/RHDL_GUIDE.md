@@ -102,7 +102,7 @@ Join values from high part to low part:
 mixed = join(A[7:4], B[3:0])
 ```
 
-Current Rewired pin widths exposed through RHDL are 1, 4 and 8 bits. Larger architectural values can be represented with multiple buses, as Rewired-8 currently does for 16-bit PC/X/Y/SP.
+Current Rewired pin widths exposed through RHDL are 1, 4 and 8 bits. Larger architectural values can be represented by combining multiple buses.
 
 ## Logic levels and constants
 
@@ -175,7 +175,7 @@ end
 
 RHDL source is declarative. `A = B + C` means that combinational hardware drives A from B and C; it does not mean “execute this statement now”.
 
-State can be represented directly with explicit feedback topology. The examples build SR latches, D latches, D flip-flops and registers from NAND gates, so they do not rely on a hidden RAM primitive. This keeps the surface language small while still allowing stateful Rewired hardware to be built.
+State can be represented directly with explicit feedback topology. The curated examples build a D flip-flop, a 4-bit register and a small RAM from ordinary components, without relying on a hidden RAM primitive. This keeps the surface language small while still allowing stateful Rewired hardware to be built.
 
 ## RHDL Studio
 
