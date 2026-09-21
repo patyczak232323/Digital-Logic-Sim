@@ -130,9 +130,11 @@ def test_csharp_integration_guards() -> None:
     assert "canCreateProject && KeyboardShortcuts.ConfirmShortcutTriggered" in main_menu
     assert "wireDescription.ConnectedWireIndex < allWires.Count" in dev_chip
     assert "Cyclic chip dependency detected" in simulator
-    assert deterministic.count("GetAddress8Bit(") >= 8
+    assert deterministic.count("GetAddress8Bit(") >= 6
     assert "Math.Max(requiredStateLength, serializedStateLength)" in sim_chip
-    assert "Simulator.rng.Next(0, 256)" in sim_chip
+    assert "dev_Ram_8Bit" not in deterministic
+    assert "dev_Ram_8Bit" not in sim_chip
+    assert "dev.RAM-8" not in simulator
     assert "Thread.Sleep(TimeSpan.FromMilliseconds(waitMs));" in project
     assert "Thread.Yield();" in project
     assert "Thread.SpinWait(10);" not in project
