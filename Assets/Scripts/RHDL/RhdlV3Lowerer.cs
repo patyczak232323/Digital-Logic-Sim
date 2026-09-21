@@ -1601,8 +1601,28 @@ namespace DLS.RHDL
 			{
 				if (pins == null) return null;
 				string normalized = Normalize(name);
+
+				// Exact pin names always win.
 				foreach (PinDescription pin in pins)
 					if (Normalize(pin.Name) == normalized) return pin;
+
+				// Friendly aliases let common pins such as "IN A" be written as "A".
+				// This only applies when the original pin visibly uses an IN/OUT prefix,
+				// so arbitrary names such as INDEX are never shortened by accident.
+				foreach (PinDescription pin in pins)
+				{
+					string raw = (pin.Name ?? string.Empty).Trim();
+					string alias = null;
+					if (raw.StartsWith("IN ", StringComparison.OrdinalIgnoreCase) ||
+					    raw.StartsWith("IN_", StringComparison.OrdinalIgnoreCase))
+						alias = raw.Substring(3);
+					else if (raw.StartsWith("OUT ", StringComparison.OrdinalIgnoreCase) ||
+					         raw.StartsWith("OUT_", StringComparison.OrdinalIgnoreCase))
+						alias = raw.Substring(4);
+
+					if (!string.IsNullOrWhiteSpace(alias) && Normalize(alias) == normalized)
+						return pin;
+				}
 				return null;
 			}
 
@@ -1870,6 +1890,63 @@ namespace DLS.RHDL
 					}
 
 					Token token = tokens[index++];
+
+					if ((token.Text.Equals("concat", StringComparison.OrdinalIgnoreCase) ||
+					     token.Text.Equals("join", StringComparison.OrdinalIgnoreCase)) && Match("("))
+					{
+						ConcatExpr concat = new() { Position = token.Position };
+						if (Match(")"))
+						{
+							Error("concat(...) needs at least one value.", token.Position);
+							return null;
+						}
+						while (true)
+						{
+							ExprNode part = ParseTernary();
+							if (part == null) return null;
+							concat.Parts.Add(part);
+							if (Match(")")) break;
+							if (!Match(","))
+							{
+								Error("Expected ',' or ')' in concat(...).");
+								return null;
+							}
+						}
+						return concat;
+					}
+
+					if (token.Text.Equals("mux", StringComparison.OrdinalIgnoreCase) && Match("("))
+					{
+						ExprNode condition = ParseTernary();
+						if (condition == null) return null;
+						if (!Match(","))
+						{
+							Error("mux(...) expects: mux(condition, when_true, when_false)");
+							return null;
+						}
+						ExprNode whenTrue = ParseTernary();
+						if (whenTrue == null) return null;
+						if (!Match(","))
+						{
+							Error("mux(...) expects: mux(condition, when_true, when_false)");
+							return null;
+						}
+						ExprNode whenFalse = ParseTernary();
+						if (whenFalse == null) return null;
+						if (!Match(")"))
+						{
+							Error("Missing ')' after mux(...).");
+							return null;
+						}
+						return new TernaryExpr
+						{
+							Condition = condition,
+							WhenTrue = whenTrue,
+							WhenFalse = whenFalse,
+							Position = token.Position
+						};
+					}
+
 					if (token.Text.Equals("true", StringComparison.OrdinalIgnoreCase) ||
 					    token.Text.Equals("high", StringComparison.OrdinalIgnoreCase) ||
 					    token.Text.Equals("on", StringComparison.OrdinalIgnoreCase))
