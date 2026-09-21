@@ -50,13 +50,14 @@ wire high: 4
 high = A[7:4]
 ```
 
-Parameters can be used for widths:
+Parameters can be used for widths. `const` is accepted as a more familiar alias for `param`:
 
 ```text
 chip Example(WIDTH=8) {
+  const MASK = 0xFF
   input A: WIDTH
   output Y: WIDTH
-  Y = A
+  Y = A & MASK
 }
 ```
 
@@ -99,7 +100,7 @@ mixed = {A[7:4], B[3:0]}
 
 The final width must still be 1, 4 or 8 bits.
 
-## 5. Internal wires
+## 5. Internal wires and concise declarations
 
 Use a `wire` when an intermediate result is reused:
 
@@ -111,7 +112,22 @@ Y = select ? sum : A
 carryLike = sum > A
 ```
 
-Inputs are sources. Outputs are final destinations. A reusable internal value should normally be a wire.
+For the common case, `let` is shorthand for an inferred wire plus initializer:
+
+```text
+let sum = A + B
+let mixed = {A[7:4], B[3:0]}
+```
+
+Outputs can also be declared and driven in one statement:
+
+```text
+output Y = A + B
+output equal = A == B
+output forced: 8 = A ^ 0xFF
+```
+
+Inputs are sources. Outputs are final destinations. A reusable internal value should normally be a wire or `let`.
 
 ## 6. Existing chips / structural RHDL
 
@@ -142,8 +158,13 @@ RHDL Studio includes:
 - `Ctrl+Shift+Z` — redo
 - `Ctrl+/` — comment/uncomment selected lines
 - `Ctrl+D` — duplicate current/selected lines
+- `Alt+Up` / `Alt+Down` — move current/selected lines
+- `Ctrl+Backspace` / `Ctrl+Delete` — delete by word
+- `Ctrl+Enter` — build
 - `Tab` / `Shift+Tab` — indent / unindent
 - `Home` — jump between indentation and true line start
+- click the line-number gutter — select the whole line
+- matching `()`, `[]` and `{}` are highlighted near the caret
 - automatic `{}`, `()`, `[]` pairing
 - `Tab` or `Enter` between `{}` — expand an indented block
 - smart Backspace for indentation and empty bracket pairs
