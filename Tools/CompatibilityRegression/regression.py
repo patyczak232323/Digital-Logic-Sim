@@ -186,6 +186,8 @@ def test_csharp_harness_surface() -> None:
         "Diagnostics.CacheHits",
         "Diagnostics.JitHits",
         "Diagnostics.FeedbackJitHits",
+        "WaitForFullLutReady",
+        "waitForFullLut",
     )
     for token in runner_tokens:
         assert token in runner, f"missing compatibility runner mechanism: {token}"
@@ -199,7 +201,8 @@ def test_csharp_harness_surface() -> None:
         "RAM reset / rising-edge write / hold",
         "Feedback SR latch SET/HOLD/RESET/HOLD",
         "Deep custom-chip nesting",
-        "Live solver vs JIT/LUT parity",
+        "Live solver vs native JIT parity",
+        "FULL LUT cache vs live solver parity",
         "Feedback live solver vs feedback-JIT parity",
     )
     for name in required_cases:
