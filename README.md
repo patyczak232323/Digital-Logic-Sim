@@ -87,48 +87,39 @@ The older low-level `Simulator` implementation and `DeterministicSimulator` are 
 
 ## RHDL Studio
 
-Rewired includes the experimental **RHDL Studio** source-driven circuit generator. The current language frontend is **RHDL v0.4**, designed around a beginner-first, Python-like syntax.
+Rewired includes the experimental **RHDL Studio** source-driven circuit generator.
 
-RHDL still generates ordinary Rewired topology (NAND gates, buses, split/merge chips, pins and wires) and compiles it into a normal `ChipDescription`. There is no separate RHDL simulation path.
-
-Preferred syntax:
+The current frontend is **RHDL v0.5**. It intentionally uses a small, hardware-oriented vocabulary rather than accumulating aliases from earlier development versions.
 
 ```text
-chip AluMini(WIDTH=8):
+circuit AluMini:
+    constant WIDTH = 8
+
     input A: WIDTH
     input B: WIDTH
     input select
 
-    let sum = A + B
-    let mixed = concat(A[7:4], B[3:0])
+    signal sum = A + B
+    signal mixed = join(A[7:4], B[3:0])
 
-    output Y: WIDTH = sum if select else mixed
+    output Y = sum if select else mixed
     output equal = A == B
-    output ready = true
+    output ready = high
 ```
 
-RHDL v0.4 adds a more approachable authoring layer:
+The canonical vocabulary is `circuit`, `input`, `output`, `signal`, `constant`, `component`, and `connect`. Logic is written with `and`, `or`, `xor`, `not`; one-bit levels are `high` and `low`; buses are combined with `join(...)`; value selection uses `A if condition else B`.
 
-- Python-style `chip Name:` blocks with indentation
-- four-space editor indentation and automatic indent after `:`
-- Python-style `# comments`
-- readable `and`, `or`, `xor`, `not`
-- `true/false`, `high/low`, and `on/off` logic constants
-- conditional expressions such as `A if select else B`
-- explicit `mux(select, A, B)`
-- readable `concat(...)` / `join(...)`
-- concise internal values with `let`
-- inline outputs such as `output Y = A + B`
-- Python-like chip instances such as `n = NAND(A=A, B=B, OUT=Y)`
-- friendly aliases for common `IN A` / `IN B` style pin names
+Existing Rewired circuits can be instantiated explicitly:
 
-Existing RHDL v0.3 source remains compatible, including braces, `//` comments, `condition ? A : B`, brace concatenation, explicit `wire`, and structural `connect` statements.
+```text
+component nand_gate = NAND(A=A, B=B, OUT=Y)
+```
 
-Current data widths remain **1, 4 and 8 bits**, matching the underlying Rewired pin types. Output and internal widths can be inferred when possible.
+RHDL source is lowered into normal Rewired topology and then compiled into a standard `ChipDescription`. There is no separate RHDL simulation runtime.
 
-RHDL Studio also includes syntax highlighting, undo/redo, whole-document formatting, comment toggling, line duplication and movement, smart Home/Backspace behaviour, matching-bracket highlighting, diagnostic-line highlighting, and F8 diagnostic navigation.
+Current signal widths are **1, 4 and 8 bits**, matching Rewired pin types. RHDL Studio provides syntax highlighting, automatic indentation, whole-document formatting, undo/redo, line movement, diagnostic highlighting and F8 diagnostic navigation.
 
-For the language reference and examples, see `Docs/RHDL_GUIDE.md` and `Examples/RHDL/`.
+RHDL is still experimental, so the language may intentionally make breaking changes when that produces a clearer design. See `Docs/RHDL_GUIDE.md` and `Examples/RHDL/` for the current syntax.
 
 ## Current development
 
