@@ -114,7 +114,7 @@ For exact topology, `component` plus `connect` exposes the structural level dire
 
 RHDL lowers into ordinary Rewired topology and a standard `ChipDescription`; there is no separate RHDL simulation runtime.
 
-Current bus widths are **1, 4 and 8 bits**, matching the underlying Rewired pin types. See `Docs/RHDL_GUIDE.md` and `Examples/RHDL/` for the canonical syntax.
+Current bus widths are **1, 4 and 8 bits**, matching the underlying Rewired pin types. See `Docs/RHDL_GUIDE.md` for the canonical syntax. A new curated example set will be added separately.
 
 ## Current development
 
