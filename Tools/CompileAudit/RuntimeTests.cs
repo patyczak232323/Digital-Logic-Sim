@@ -20,6 +20,7 @@ namespace DLS.Simulation
 			Run("RHDL structural HalfAdder compilation", TestRhdlHalfAdderCompilation);
 			Run("RHDL readable logic synthesis", TestRhdlReadableLogicSynthesis);
 			Run("RHDL concise authoring sugar", TestRhdlConciseAuthoringSugar);
+			Run("RHDL v0.4 Python-like beginner syntax", TestRhdlPythonLikeSyntax);
 			Run("RHDL v0.3 buses, arithmetic, slices and mux", TestRhdlV3BusExpressions);
 			Run("RHDL implicit width inference", TestRhdlImplicitWidthInference);
 			Run("RHDL block layout and orthogonal routing", TestRhdlBlockLayout);
@@ -306,6 +307,88 @@ namespace DLS.Simulation
 			Assert(!duplicateConst.Success, "duplicate RHDL const should fail");
 			Assert(duplicateConst.Diagnostics.Any(d => d.Message.Contains("declared more than once")),
 				"duplicate RHDL const diagnostic missing");
+		}
+
+
+		static void TestRhdlPythonLikeSyntax()
+		{
+			PinDescription PinNamed(string name, int id) =>
+				new(name, id, new UnityEngine.Vector2(), PinBitCount.Bit1, PinColour.Red, PinValueDisplayMode.Off);
+
+			ChipDescription nand = new()
+			{
+				Name = "NAND",
+				ChipType = ChipType.Nand,
+				InputPins = new[] { PinNamed("IN B", 0), PinNamed("IN A", 1) },
+				OutputPins = new[] { PinNamed("OUT", 2) },
+				SubChips = Array.Empty<SubChipDescription>(),
+				Wires = Array.Empty<WireDescription>(),
+				Displays = Array.Empty<DisplayDescription>()
+			};
+
+			ChipLibrary library = new(nand);
+			string source =
+@"chip Friendly:
+    # Inputs are simply named signals.
+    input A
+    input B
+    input select
+
+    let both = A and B
+    let either = A or B
+
+    output Y = both if select else either
+    output enabled = true";
+
+			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
+			Assert(result.Success,
+				"Python-like RHDL compile failed: " + string.Join(" | ", result.Diagnostics.Select(d => d.ToString())));
+			Assert(result.Description != null, "Python-like RHDL returned no description");
+			Assert(result.Description.InputPins.Length == 3, "Python-like RHDL input count mismatch");
+			Assert(result.Description.OutputPins.Length == 2, "Python-like RHDL output count mismatch");
+
+			Simulator.Reset();
+			DeterministicSimulator.Reset();
+			SimChip root = Simulator.BuildSimChip(result.Description, library);
+			DevPinInstance[] inputs = { new DevPinInstance(), new DevPinInstance(), new DevPinInstance() };
+			for (int input = 0; input < inputs.Length; input++)
+				inputs[input].Pin.Address = new PinAddress(result.Description.InputPins[input].ID, 0);
+
+			for (uint a = 0; a <= 1; a++)
+			{
+				for (uint b = 0; b <= 1; b++)
+				{
+					for (uint select = 0; select <= 1; select++)
+					{
+						inputs[0].Pin.PlayerInputState = a;
+						inputs[1].Pin.PlayerInputState = b;
+						inputs[2].Pin.PlayerInputState = select;
+						DeterministicSimulator.RunSimulationStep(root, inputs, new SimAudio());
+
+						uint expectedY = select != 0 ? (a & b) : (a | b);
+						Assert(Bit(root.OutputPins[0].State) == expectedY,
+							$"Python-like mux mismatch for A={a} B={b} select={select}");
+						Assert(Bit(root.OutputPins[1].State) == 1,
+							"Python-like true constant should produce logic high");
+					}
+				}
+			}
+
+			DeterministicSimulator.Reset();
+			Simulator.Reset();
+
+			string instanceSource =
+@"chip FriendlyInstance:
+    input A
+    input B
+    output Y
+
+    n = NAND(IN_A=A, IN_B=B, OUT=Y)";
+
+			RhdlCompileResult instance = RhdlCompiler.Compile(instanceSource, library);
+			Assert(instance.Success,
+				"Python-like instance syntax failed: " + string.Join(" | ", instance.Diagnostics.Select(d => d.ToString())));
+			Assert(instance.Description.SubChips.Length == 1, "Python-like instance syntax should create one NAND");
 		}
 
 		static void TestRhdlV3BusExpressions()
