@@ -164,6 +164,7 @@ PlayerSettings:
   androidMinAspectRatio: 1
   applicationIdentifier:
     Standalone: com.DefaultCompany.2DProject
+    Android: com.patyczak232323.rewired
   buildNumber:
     Standalone: 0
     VisionOS: 0
@@ -261,7 +262,7 @@ PlayerSettings:
   useCustomGradlePropertiesTemplate: 0
   useCustomGradleSettingsTemplate: 0
   useCustomProguardFile: 0
-  AndroidTargetArchitectures: 1
+  AndroidTargetArchitectures: 2
   AndroidSplashScreenScale: 0
   androidSplashScreen: {fileID: 0}
   AndroidKeystoreName: 
@@ -618,6 +619,7 @@ PlayerSettings:
   platformArchitecture: {}
   scriptingBackend:
     Standalone: 0
+    Android: 1
   il2cppCompilerConfiguration:
     Standalone: 1
   il2cppCodeGeneration:
