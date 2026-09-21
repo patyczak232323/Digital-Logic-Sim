@@ -31,8 +31,8 @@ namespace DLS.Graphics
 
 		static readonly HashSet<string> SyntaxKeywords = new(StringComparer.OrdinalIgnoreCase)
 		{
-			"circuit", "input", "output", "signal", "constant", "component", "connect",
-			"if", "else", "and", "or", "xor", "not", "join", "high", "low"
+			"circuit", "end", "input", "output", "signal", "constant", "component", "connect",
+			"and", "or", "xor", "not", "join", "choose", "high", "low"
 		};
 
 		readonly UIHandle scrollID = new("RHDL_DocumentScroll");
@@ -797,12 +797,24 @@ namespace DLS.Graphics
 					continue;
 				}
 
-				string code = StripEditorComment(trimmed).TrimEnd();
-				bool isCircuitHeader = code.StartsWith("circuit ", StringComparison.OrdinalIgnoreCase) &&
-				                       code.EndsWith(":", StringComparison.Ordinal);
+				string code = StripEditorComment(trimmed).Trim();
+				bool isCircuitHeader = code.StartsWith("circuit ", StringComparison.OrdinalIgnoreCase);
+				bool isEnd = code.Equals("end", StringComparison.OrdinalIgnoreCase);
 
-				work[i] = (insideCircuit && !isCircuitHeader ? Indent : string.Empty) + trimmed;
-				if (isCircuitHeader) insideCircuit = true;
+				if (isCircuitHeader)
+				{
+					work[i] = trimmed;
+					insideCircuit = true;
+				}
+				else if (isEnd)
+				{
+					work[i] = "end";
+					insideCircuit = false;
+				}
+				else
+				{
+					work[i] = (insideCircuit ? Indent : string.Empty) + trimmed;
+				}
 			}
 
 			string formatted = string.Join("\n", work);
@@ -893,8 +905,12 @@ namespace DLS.Graphics
 			int whitespaceCount = 0;
 			while (whitespaceCount < beforeCaret.Length && char.IsWhiteSpace(beforeCaret[whitespaceCount])) whitespaceCount++;
 			string indent = beforeCaret.Substring(0, whitespaceCount);
-			string codeBeforeCaret = beforeCaret.TrimEnd();
-			if (codeBeforeCaret.EndsWith(":")) indent += Indent;
+			string codeBeforeCaret = StripEditorComment(beforeCaret).Trim();
+
+			if (codeBeforeCaret.StartsWith("circuit ", StringComparison.OrdinalIgnoreCase))
+				indent = Indent;
+			else if (codeBeforeCaret.Equals("end", StringComparison.OrdinalIgnoreCase))
+				indent = string.Empty;
 
 			ReplaceSelection("\n" + indent);
 		}
