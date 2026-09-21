@@ -1,4 +1,4 @@
-# 8-bit arithmetic, logic and a mux.
+# 8-bit arithmetic, logic and value selection.
 circuit BusAlu:
     constant WIDTH = 8
 
