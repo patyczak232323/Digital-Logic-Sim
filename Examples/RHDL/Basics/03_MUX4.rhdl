@@ -1,0 +1,10 @@
+# 4-bit 2:1 multiplexer.
+# SEL=1 selects A, SEL=0 selects B.
+circuit Mux4
+    input A: 4
+    input B: 4
+    input SEL
+    output Y: 4
+
+    Y = choose(SEL, A, B)
+end

@@ -1,0 +1,23 @@
+# 4-bit rising-edge register built from four DffBit instances.
+# RESET is synchronous.
+circuit Reg4
+    input D: 4
+    input WE, CLK, RESET
+    output Q: 4
+
+    signal q0, q1, q2, q3
+    signal d0, d1, d2, d3
+    signal unused0, unused1, unused2, unused3
+
+    d0 = choose(RESET, 0, choose(WE, D[0], q0))
+    d1 = choose(RESET, 0, choose(WE, D[1], q1))
+    d2 = choose(RESET, 0, choose(WE, D[2], q2))
+    d3 = choose(RESET, 0, choose(WE, D[3], q3))
+
+    component b0 : DffBit(D=d0, CLK=CLK, Q=q0, NOT_Q=unused0)
+    component b1 : DffBit(D=d1, CLK=CLK, Q=q1, NOT_Q=unused1)
+    component b2 : DffBit(D=d2, CLK=CLK, Q=q2, NOT_Q=unused2)
+    component b3 : DffBit(D=d3, CLK=CLK, Q=q3, NOT_Q=unused3)
+
+    Q = join(q3, q2, q1, q0)
+end

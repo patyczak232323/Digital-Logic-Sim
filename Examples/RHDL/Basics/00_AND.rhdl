@@ -1,0 +1,7 @@
+# Minimal two-input AND gate.
+circuit And2
+    input A, B
+    output Y
+
+    Y = A and B
+end
