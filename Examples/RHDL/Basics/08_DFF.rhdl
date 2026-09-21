@@ -1,0 +1,37 @@
+# Rising-edge D flip-flop built from NAND feedback.
+# No RAM primitive and no hidden state component is used.
+circuit DffBit
+    input D, CLK
+    output Q, NOT_Q
+
+    signal not_clk
+    signal not_d
+
+    signal master_set_n
+    signal master_reset_n
+    signal master_q
+    signal master_nq
+
+    signal slave_set_n
+    signal slave_reset_n
+    signal slave_q
+    signal slave_nq
+
+    not_clk = not CLK
+    not_d = not D
+
+    # Master latch is transparent while CLK=0.
+    component master_set : NAND(IN_A=D, IN_B=not_clk, OUT=master_set_n)
+    component master_reset : NAND(IN_A=not_d, IN_B=not_clk, OUT=master_reset_n)
+    component master_q_gate : NAND(IN_A=master_set_n, IN_B=master_nq, OUT=master_q)
+    component master_nq_gate : NAND(IN_A=master_reset_n, IN_B=master_q, OUT=master_nq)
+
+    # Slave latch is transparent while CLK=1.
+    component slave_set : NAND(IN_A=master_q, IN_B=CLK, OUT=slave_set_n)
+    component slave_reset : NAND(IN_A=master_nq, IN_B=CLK, OUT=slave_reset_n)
+    component slave_q_gate : NAND(IN_A=slave_set_n, IN_B=slave_nq, OUT=slave_q)
+    component slave_nq_gate : NAND(IN_A=slave_reset_n, IN_B=slave_q, OUT=slave_nq)
+
+    Q = slave_q
+    NOT_Q = slave_nq
+end
