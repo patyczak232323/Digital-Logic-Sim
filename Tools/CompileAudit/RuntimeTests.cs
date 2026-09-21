@@ -20,11 +20,11 @@ namespace DLS.Simulation
 			Run("RHDL structural HalfAdder compilation", TestRhdlHalfAdderCompilation);
 			Run("RHDL readable logic synthesis", TestRhdlReadableLogicSynthesis);
 			Run("RHDL concise authoring sugar", TestRhdlConciseAuthoringSugar);
-			Run("RHDL v0.4 Python-like beginner syntax", TestRhdlPythonLikeSyntax);
-			Run("RHDL v0.3 buses, arithmetic, slices and mux", TestRhdlV3BusExpressions);
+			Run("RHDL v0.5 clear beginner syntax", TestRhdlClearSyntax);
+			Run("RHDL buses, arithmetic, slices and mux", TestRhdlV3BusExpressions);
 			Run("RHDL implicit width inference", TestRhdlImplicitWidthInference);
 			Run("RHDL block layout and orthogonal routing", TestRhdlBlockLayout);
-			Run("RHDL v0.3 operators, constants and named ports", TestRhdlV3OperatorsAndNamedPorts);
+			Run("RHDL operators, constants and named ports", TestRhdlV3OperatorsAndNamedPorts);
 			Run("RHDL examples and Rewired-8 source pack compile", TestRewired8RhdlPackCompilation);
 			Run("feedback NAND latch", TestFeedbackNandLatch);
 			Run("feedback unchanged-input zero sweep", TestFeedbackZeroSweep);
@@ -80,29 +80,28 @@ namespace DLS.Simulation
 
 			ChipLibrary library = new(nand);
 			string source =
-@"chip HalfAdder {
-  input a
-  input b
-  output sum
-  output carry
-  NAND n1
-  NAND n2
-  NAND n3
-  NAND n4
-  NAND n5
-  connect a -> n1.IN_A
-  connect b -> n1.IN_B
-  connect a -> n2.IN_A
-  connect n1.OUT -> n2.IN_B
-  connect b -> n3.IN_A
-  connect n1.OUT -> n3.IN_B
-  connect n2.OUT -> n4.IN_A
-  connect n3.OUT -> n4.IN_B
-  connect n4.OUT -> sum
-  connect n1.OUT -> n5.IN_A
-  connect n1.OUT -> n5.IN_B
-  connect n5.OUT -> carry
-}";
+@"circuit HalfAdder:
+    input a
+    input b
+    output sum
+    output carry
+    component n1 = NAND
+    component n2 = NAND
+    component n3 = NAND
+    component n4 = NAND
+    component n5 = NAND
+    connect a -> n1.IN_A
+    connect b -> n1.IN_B
+    connect a -> n2.IN_A
+    connect n1.OUT -> n2.IN_B
+    connect b -> n3.IN_A
+    connect n1.OUT -> n3.IN_B
+    connect n2.OUT -> n4.IN_A
+    connect n3.OUT -> n4.IN_B
+    connect n4.OUT -> sum
+    connect n1.OUT -> n5.IN_A
+    connect n1.OUT -> n5.IN_B
+    connect n5.OUT -> carry";
 
 			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
 			Assert(result.Success, "RHDL compile failed: " + string.Join(" | ", result.Diagnostics.Select(d => d.ToString())));
@@ -163,13 +162,12 @@ namespace DLS.Simulation
 
 			ChipLibrary library = new(nand);
 			string source =
-@"chip HalfAdderReadable {
-  input a, b
-  output sum, carry
+@"circuit HalfAdderReadable:
+    input a, b
+    output sum, carry
 
-  sum = a XOR b
-  carry = a AND b
-}";
+    sum = a XOR b
+    carry = a AND b";
 
 			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
 			Assert(result.Success, "Readable RHDL compile failed: " + string.Join(" | ", result.Diagnostics.Select(d => d.ToString())));
@@ -202,22 +200,20 @@ namespace DLS.Simulation
 			}
 
 			string typoSource =
-@"chip TypoDemo {
-  input alpha
-  output y
-  y = alhpa
-}";
+@"circuit TypoDemo:
+    input alpha
+    output y
+    y = alhpa";
 			RhdlCompileResult typo = RhdlCompiler.Compile(typoSource, library);
 			Assert(!typo.Success, "RHDL typo sample should fail");
 			Assert(typo.Diagnostics.Any(d => d.Message.Contains("Did you mean 'alpha'?")),
 				"RHDL typo diagnostic did not suggest the nearest signal");
 
 			string chipTypoSource =
-@"chip ChipTypo {
-  input a, b
-  output y
-  NANND n(IN_A=a, IN_B=b, OUT=y)
-}";
+@"circuit ChipTypo:
+    input a, b
+    output y
+    component n = NANND(IN_A=a, IN_B=b, OUT=y)";
 			RhdlCompileResult chipTypo = RhdlCompiler.Compile(chipTypoSource, library);
 			Assert(!chipTypo.Success, "Unknown chip typo sample should fail");
 			Assert(chipTypo.Diagnostics.Any(d => d.Message.Contains("Did you mean 'NAND'?")),
@@ -256,13 +252,12 @@ namespace DLS.Simulation
 
 			ChipLibrary library = new(nand, bus1);
 			string source =
-@"chip Concise {
-  const ONE = 1
-  input A, B
+@"circuit Concise:
+    constant ONE = 1
+    input A, B
 
-  let x = A XOR B
-  output Y = x XOR ONE
-}";
+    signal x = A XOR B
+    output Y = x XOR ONE";
 
 			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
 			Assert(result.Success,
@@ -297,31 +292,29 @@ namespace DLS.Simulation
 			Simulator.Reset();
 
 			string doubleDriveSource =
-@"chip DoubleDrive {
-  input A, B
-  output Y = A
-  Y = B
-}";
+@"circuit DoubleDrive:
+    input A, B
+    output Y = A
+    Y = B";
 			RhdlCompileResult doubleDrive = RhdlCompiler.Compile(doubleDriveSource, library);
 			Assert(!doubleDrive.Success, "RHDL double-drive sample should fail");
 			Assert(doubleDrive.Diagnostics.Any(d => d.Message.Contains("driven more than once") && d.Message.Contains("line 3")),
 				"RHDL double-drive diagnostic should identify the first source line");
 
 			string duplicateConstSource =
-@"chip DuplicateConst {
-  const X = 0
-  const X = 1
-  input A
-  output Y = A
-}";
+@"circuit DuplicateConst:
+    constant X = 0
+    constant X = 1
+    input A
+    output Y = A";
 			RhdlCompileResult duplicateConst = RhdlCompiler.Compile(duplicateConstSource, library);
-			Assert(!duplicateConst.Success, "duplicate RHDL const should fail");
+			Assert(!duplicateConst.Success, "duplicate RHDL constant should fail");
 			Assert(duplicateConst.Diagnostics.Any(d => d.Message.Contains("declared more than once")),
-				"duplicate RHDL const diagnostic missing");
+				"duplicate RHDL constant diagnostic missing");
 		}
 
 
-		static void TestRhdlPythonLikeSyntax()
+		static void TestRhdlClearSyntax()
 		{
 			PinDescription PinNamed(string name, int id) =>
 				new(name, id, new UnityEngine.Vector2(), PinBitCount.Bit1, PinColour.Red, PinValueDisplayMode.Off);
@@ -350,25 +343,25 @@ namespace DLS.Simulation
 
 			ChipLibrary library = new(nand, bus1);
 			string source =
-@"chip Friendly:
+@"circuit Friendly:
     # Inputs are simply named signals.
     input A
     input B
     input select
 
-    let both = A and B
-    let either = A or B
+    signal both = A and B
+    signal either = A or B
 
     output Y = both if select else either
-    output Y_mux = mux(select, both, either)
-    output enabled = true";
+    output Y_mux = (both if select else either)
+    output enabled = high";
 
 			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
 			Assert(result.Success,
-				"Python-like RHDL compile failed: " + string.Join(" | ", result.Diagnostics.Select(d => d.ToString())));
-			Assert(result.Description != null, "Python-like RHDL returned no description");
-			Assert(result.Description.InputPins.Length == 3, "Python-like RHDL input count mismatch");
-			Assert(result.Description.OutputPins.Length == 3, "Python-like RHDL output count mismatch");
+				"RHDL v0.5 compile failed: " + string.Join(" | ", result.Diagnostics.Select(d => d.ToString())));
+			Assert(result.Description != null, "RHDL v0.5 returned no description");
+			Assert(result.Description.InputPins.Length == 3, "RHDL v0.5 input count mismatch");
+			Assert(result.Description.OutputPins.Length == 3, "RHDL v0.5 output count mismatch");
 
 			Simulator.Reset();
 			DeterministicSimulator.Reset();
@@ -390,11 +383,11 @@ namespace DLS.Simulation
 
 						uint expectedY = select != 0 ? (a & b) : (a | b);
 						Assert(Bit(root.OutputPins[0].State) == expectedY,
-							$"Python-like conditional mismatch for A={a} B={b} select={select}");
+							$"RHDL v0.5 conditional mismatch for A={a} B={b} select={select}");
 						Assert(Bit(root.OutputPins[1].State) == expectedY,
-							$"Python-like mux(...) mismatch for A={a} B={b} select={select}");
+							$"RHDL v0.5 mux(...) mismatch for A={a} B={b} select={select}");
 						Assert(Bit(root.OutputPins[2].State) == 1,
-							"Python-like true constant should produce logic high");
+							"RHDL v0.5 true constant should produce logic high");
 					}
 				}
 			}
@@ -403,17 +396,17 @@ namespace DLS.Simulation
 			Simulator.Reset();
 
 			string instanceSource =
-@"chip FriendlyInstance:
+@"circuit FriendlyInstance:
     input A
     input B
     output Y
 
-    n = NAND(A=A, B=B, OUT=Y)";
+    component n = NAND(A=A, B=B, OUT=Y)";
 
 			RhdlCompileResult instance = RhdlCompiler.Compile(instanceSource, library);
 			Assert(instance.Success,
-				"Python-like instance syntax failed: " + string.Join(" | ", instance.Diagnostics.Select(d => d.ToString())));
-			Assert(instance.Description.SubChips.Length == 1, "Python-like instance syntax should create one NAND");
+				"RHDL v0.5 instance syntax failed: " + string.Join(" | ", instance.Diagnostics.Select(d => d.ToString())));
+			Assert(instance.Description.SubChips.Length == 1, "RHDL v0.5 instance syntax should create one NAND");
 		}
 
 		static void TestRhdlV3BusExpressions()
@@ -484,27 +477,28 @@ namespace DLS.Simulation
 			ChipLibrary library = new(nand, bus8, split8, split4, merge8, merge4);
 
 			string source =
-@"chip V3Demo(WIDTH=8) {
-  input A: WIDTH, B: WIDTH
-  input sel
-  output Y: WIDTH
-  output equal
+@"circuit V3Demo:
+    constant WIDTH = 8
 
-  wire sum: WIDTH
-  wire mixed: WIDTH
+    input A: WIDTH, B: WIDTH
+    input sel
+    output Y: WIDTH
+    output equal
 
-  sum = A + B
-  mixed = {A[7:4], B[3:0]}
-  Y = sel ? sum : mixed
-  equal = A == B
-}";
+    signal sum: WIDTH
+    signal mixed: WIDTH
+
+    sum = A + B
+    mixed = join(A[7:4], B[3:0])
+    Y = (sum if sel else mixed)
+    equal = A == B";
 
 			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
 			Assert(result.Success,
-				"RHDL v0.3 compile failed: " + string.Join(" | ", result.Diagnostics.Select(d => d.ToString())));
-			Assert(result.Description != null, "RHDL v0.3 returned no description");
-			Assert(result.Description.InputPins.Length == 3, "RHDL v0.3 input count mismatch");
-			Assert(result.Description.OutputPins.Length == 2, "RHDL v0.3 output count mismatch");
+				"RHDL compile failed: " + string.Join(" | ", result.Diagnostics.Select(d => d.ToString())));
+			Assert(result.Description != null, "RHDL returned no description");
+			Assert(result.Description.InputPins.Length == 3, "RHDL input count mismatch");
+			Assert(result.Description.OutputPins.Length == 2, "RHDL output count mismatch");
 			Assert(result.Description.InputPins[0].BitCount == PinBitCount.Bit8, "A is not 8-bit");
 			Assert(result.Description.OutputPins[0].BitCount == PinBitCount.Bit8, "Y is not 8-bit");
 
@@ -531,8 +525,8 @@ namespace DLS.Simulation
 
 				uint y = PinState.GetBitStates(root.OutputPins[0].State) & 0xFFu;
 				uint eq = Bit(root.OutputPins[1].State);
-				Assert(y == expectedY, $"RHDL v0.3 Y mismatch: A={a:X2} B={b:X2} sel={sel} got={y:X2} expected={expectedY:X2}");
-				Assert(eq == expectedEqual, $"RHDL v0.3 equality mismatch: A={a:X2} B={b:X2} got={eq} expected={expectedEqual}");
+				Assert(y == expectedY, $"RHDL Y mismatch: A={a:X2} B={b:X2} sel={sel} got={y:X2} expected={expectedY:X2}");
+				Assert(eq == expectedEqual, $"RHDL equality mismatch: A={a:X2} B={b:X2} got={eq} expected={expectedEqual}");
 			}
 
 			RunCase(0x12, 0x34, 0, 0x14, 0);
@@ -585,16 +579,15 @@ namespace DLS.Simulation
 
 			ChipLibrary library = new(nand, bus1);
 			string source =
-@"chip BlockLayout {
-  input A, B, C
-  output Y
+@"circuit BlockLayout:
+    input A, B, C
+    output Y
 
-  wire ab
-  wire bc
-  ab = A & B
-  bc = B ^ C
-  Y = ab | bc
-}";
+    signal ab
+    signal bc
+    ab = A and B
+    bc = B xor C
+    Y = ab or bc";
 
 			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
 			Assert(result.Success,
@@ -677,13 +670,12 @@ namespace DLS.Simulation
 			ChipLibrary library = new(nand, bus8, split8, merge8, split4, merge4);
 
 			string minimalSource =
-@"chip Adder {
-  input A:8
-  input B:8
-  output Y
+@"circuit Adder:
+    input A:8
+    input B:8
+    output Y
 
-  Y = A + B
-}";
+    Y = A + B";
 			RhdlCompileResult minimal = RhdlCompiler.Compile(minimalSource, library);
 			Assert(minimal.Success,
 				"Minimal inferred adder failed: " + string.Join(" | ", minimal.Diagnostics.Select(d => d.ToString())));
@@ -692,19 +684,18 @@ namespace DLS.Simulation
 				"Minimal 'output Y' should infer to 8 bits from A + B");
 
 			string source =
-@"chip Adder {
-  input A:8
-  input B:8
-  output Y
-  output equal
-  output low
+@"circuit Adder:
+    input A:8
+    input B:8
+    output Y
+    output equal
+    output low
 
-  wire sum
-  sum = A + B
-  Y = sum
-  equal = A == B
-  low = A[3:0]
-}";
+    signal sum
+    sum = A + B
+    Y = sum
+    equal = A == B
+    low = A[3:0]";
 
 			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
 			Assert(result.Success,
@@ -788,31 +779,30 @@ namespace DLS.Simulation
 			ChipLibrary library = new(nand, split8, merge8);
 
 			string source =
-@"chip V3Ops {
-  input A: 8, B: 8
-  input flag
+@"circuit V3Ops:
+    input A: 8, B: 8
+    input flag
 
-  output sub: 8
-  output shl: 8
-  output shr: 8
-  output neq, less, ge
-  output literal: 8
-  output nand_named
+    output sub: 8
+    output shl: 8
+    output shr: 8
+    output neq, less, ge
+    output literal: 8
+    output nand_named
 
-  sub = A - B
-  shl = A << 1
-  shr = A >> 2
-  neq = A != B
-  less = A < B
-  ge = A >= B
-  literal = 0xA5
+    sub = A - B
+    shl = A << 1
+    shr = A >> 2
+    neq = A != B
+    less = A < B
+    ge = A >= B
+    literal = 0xA5
 
-  NAND named(IN_A=flag, IN_B=flag, OUT=nand_named)
-}";
+    component named = NAND(IN_A=flag, IN_B=flag, OUT=nand_named)";
 
 			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
 			Assert(result.Success,
-				"RHDL v0.3 operator compile failed: " + string.Join(" | ", result.Diagnostics.Select(d => d.ToString())));
+				"RHDL operator compile failed: " + string.Join(" | ", result.Diagnostics.Select(d => d.ToString())));
 
 			Simulator.Reset();
 			DeterministicSimulator.Reset();
