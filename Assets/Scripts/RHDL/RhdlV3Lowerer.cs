@@ -320,6 +320,8 @@ namespace DLS.RHDL
 
 					if (line.StartsWith("param ", StringComparison.OrdinalIgnoreCase))
 						ParseParameter(line.Substring(6).Trim(), lineNo);
+					else if (line.StartsWith("const ", StringComparison.OrdinalIgnoreCase))
+						ParseParameter(line.Substring(6).Trim(), lineNo);
 				}
 			}
 
@@ -358,6 +360,7 @@ namespace DLS.RHDL
 					if (line.Length == 0 || line == "{" || line == "}") continue;
 					if (line.StartsWith("chip ", StringComparison.OrdinalIgnoreCase)) continue;
 					if (line.StartsWith("param ", StringComparison.OrdinalIgnoreCase)) continue;
+					if (line.StartsWith("const ", StringComparison.OrdinalIgnoreCase)) continue;
 
 					if (line.StartsWith("input ", StringComparison.OrdinalIgnoreCase))
 					{
@@ -374,6 +377,14 @@ namespace DLS.RHDL
 					if (line.StartsWith("wire ", StringComparison.OrdinalIgnoreCase))
 					{
 						ParseWire(line.Substring(5).Trim(), lineNo);
+						continue;
+					}
+
+					// 'let' is ergonomic sugar for an inferred wire declaration.
+					// Example: let sum = A + B
+					if (line.StartsWith("let ", StringComparison.OrdinalIgnoreCase))
+					{
+						ParseWire(line.Substring(4).Trim(), lineNo);
 						continue;
 					}
 
@@ -418,7 +429,7 @@ namespace DLS.RHDL
 					}
 
 					string firstWord = line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? line;
-					string hint = Suggestion(firstWord, new[] { "input", "output", "wire", "connect", "param", "use" });
+					string hint = Suggestion(firstWord, new[] { "input", "output", "wire", "let", "connect", "param", "const", "use" });
 					diagnostics.Add(new RhdlDiagnostic(lineNo,
 						$"Unrecognized statement: {line}. Expected a declaration, chip instance, connect statement, or TARGET = expression.{hint}"));
 				}
@@ -469,7 +480,30 @@ namespace DLS.RHDL
 
 			void ParseSignalList(string rest, SignalKind kind, int line)
 			{
-				foreach (string part in SplitTopLevel(rest, ','))
+				// Outputs may be declared and driven in one statement:
+				//   output Y = A + B
+				//   output Y:8 = A + B
+				// Inputs deliberately remain declaration-only.
+				int eq = kind == SignalKind.Output ? FindAssignmentEquals(rest) : -1;
+				string declaration = eq >= 0 ? rest.Substring(0, eq).Trim() : rest;
+				string initializer = eq >= 0 ? rest.Substring(eq + 1).Trim() : null;
+				List<string> parts = SplitTopLevel(declaration, ',');
+
+				if (initializer != null)
+				{
+					if (parts.Count != 1)
+					{
+						diagnostics.Add(new RhdlDiagnostic(line, "An output initializer can only be used with one output declaration."));
+						return;
+					}
+					if (initializer.Length == 0)
+					{
+						diagnostics.Add(new RhdlDiagnostic(line, "Expected an expression after '=' in output declaration."));
+						return;
+					}
+				}
+
+				foreach (string part in parts)
 				{
 					if (!TryParseSignalDecl(part.Trim(), out string name, out int width, out bool widthExplicit, out string error))
 					{
@@ -485,6 +519,16 @@ namespace DLS.RHDL
 						Kind = kind,
 						Line = line
 					});
+
+					if (initializer != null)
+					{
+						assignments.Add(new AssignmentDecl
+						{
+							Target = name,
+							Expression = initializer,
+							Line = line
+						});
+					}
 				}
 			}
 
