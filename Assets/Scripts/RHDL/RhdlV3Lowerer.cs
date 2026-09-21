@@ -42,7 +42,12 @@ namespace DLS.RHDL
 		static readonly HashSet<string> ReservedWords = new(StringComparer.OrdinalIgnoreCase)
 		{
 			"circuit", "input", "output", "signal", "constant", "component", "connect",
-			"if", "else", "and", "or", "xor", "not", "join", "high", "low"
+			"if", "else", "and", "or", "xor", "not", "join", "high", "low",
+
+			// Removed development-era words stay reserved so source never becomes
+			// ambiguous if one of them appears in an old snippet.
+			"chip", "wire", "let", "const", "param", "use",
+			"mux", "concat", "true", "false", "on", "off"
 		};
 
 		sealed class SignalDecl
@@ -1861,6 +1866,29 @@ namespace DLS.RHDL
 
 					Token token = tokens[index++];
 
+					if (token.Text.Equals("mux", StringComparison.OrdinalIgnoreCase))
+					{
+						Error("mux(...) is not part of RHDL v0.5. Write: A if select else B.", token.Position);
+						return null;
+					}
+					if (token.Text.Equals("concat", StringComparison.OrdinalIgnoreCase))
+					{
+						Error("Use join(...) to combine bits.", token.Position);
+						return null;
+					}
+					if (token.Text.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+					    token.Text.Equals("on", StringComparison.OrdinalIgnoreCase))
+					{
+						Error("Use 'high' for logic 1.", token.Position);
+						return null;
+					}
+					if (token.Text.Equals("false", StringComparison.OrdinalIgnoreCase) ||
+					    token.Text.Equals("off", StringComparison.OrdinalIgnoreCase))
+					{
+						Error("Use 'low' for logic 0.", token.Position);
+						return null;
+					}
+
 					if (token.Text.Equals("join", StringComparison.OrdinalIgnoreCase) && Match("("))
 					{
 						ConcatExpr joined = new() { Position = token.Position };
@@ -1988,7 +2016,19 @@ namespace DLS.RHDL
 						continue;
 					}
 
-					diagnostics.Add(new RhdlDiagnostic(line, i + 1, $"Unexpected character '{c}' in expression."));
+					string message = c switch
+					{
+						'&' => "Use 'and' instead of '&'.",
+						'|' => "Use 'or' instead of '|'.",
+						'^' => "Use 'xor' instead of '^'.",
+						'!' => "Use 'not' instead of '!'.",
+						'~' => "Use 'not' instead of '~'.",
+						'?' => "Use: A if condition else B.",
+						'{' or '}' => "Use join(...) to combine bits; braces are not part of RHDL v0.5.",
+						';' => "Semicolons are not used in RHDL.",
+						_ => $"Unexpected character '{c}' in expression."
+					};
+					diagnostics.Add(new RhdlDiagnostic(line, i + 1, message));
 					return null;
 				}
 				return tokens;
