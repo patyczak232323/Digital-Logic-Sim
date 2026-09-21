@@ -41,13 +41,13 @@ namespace DLS.RHDL
 
 		static readonly HashSet<string> ReservedWords = new(StringComparer.OrdinalIgnoreCase)
 		{
-			"circuit", "input", "output", "signal", "constant", "component", "connect",
-			"if", "else", "and", "or", "xor", "not", "join", "high", "low",
+			"circuit", "end", "input", "output", "signal", "constant", "component", "connect",
+			"and", "or", "xor", "not", "join", "choose", "high", "low",
 
-			// Removed development-era words stay reserved so source never becomes
-			// ambiguous if one of them appears in an old snippet.
+			// Removed development-era words remain reserved so old snippets fail
+			// clearly instead of silently changing meaning.
 			"chip", "wire", "let", "const", "param", "use",
-			"mux", "concat", "true", "false", "on", "off"
+			"mux", "concat", "true", "false", "on", "off", "if", "else"
 		};
 
 		sealed class SignalDecl
@@ -226,7 +226,7 @@ namespace DLS.RHDL
 
 				ParseStatements();
 				if (string.IsNullOrWhiteSpace(chipName))
-					diagnostics.Add(new RhdlDiagnostic(0, "Missing circuit declaration. Example: circuit Adder:"));
+					diagnostics.Add(new RhdlDiagnostic(0, "Missing circuit declaration. Example: circuit Adder"));
 				if (diagnostics.Count != 0) return;
 
 				ValidateAndResolveNames();
@@ -282,17 +282,26 @@ namespace DLS.RHDL
 
 			void PreScanParametersAndChip()
 			{
+				bool sawEnd = false;
+				int endLine = 0;
+
 				for (int i = 0; i < lines.Length; i++)
 				{
 					int lineNo = i + 1;
 					string line = CleanLine(lines[i]);
 					if (line.Length == 0) continue;
 
+					if (sawEnd)
+					{
+						diagnostics.Add(new RhdlDiagnostic(lineNo, "Nothing may appear after 'end'."));
+						continue;
+					}
+
 					if (line.StartsWith("chip ", StringComparison.OrdinalIgnoreCase))
 					{
 						diagnostics.Add(new RhdlDiagnostic(
 							lineNo,
-							"'chip' was removed from RHDL v0.5. Start a design with: circuit Name:"));
+							"'chip' is not RHDL v0.6 syntax. Start with: circuit Name"));
 						continue;
 					}
 
@@ -305,13 +314,14 @@ namespace DLS.RHDL
 						}
 
 						string rest = line.Substring(8).Trim();
-						if (!rest.EndsWith(":", StringComparison.Ordinal))
+						if (rest.EndsWith(":", StringComparison.Ordinal))
 						{
-							diagnostics.Add(new RhdlDiagnostic(lineNo, "A circuit header must end with ':'. Example: circuit Adder:"));
+							diagnostics.Add(new RhdlDiagnostic(
+								lineNo,
+								"RHDL v0.6 does not use ':' after a circuit name. Write: circuit " +
+								rest.Substring(0, rest.Length - 1).Trim()));
 							continue;
 						}
-
-						rest = rest.Substring(0, rest.Length - 1).Trim();
 						if (!ValidIdentifier(rest))
 						{
 							diagnostics.Add(new RhdlDiagnostic(lineNo, "Invalid circuit name. Use letters, digits and underscore."));
@@ -323,9 +333,21 @@ namespace DLS.RHDL
 						continue;
 					}
 
+					if (line.Equals("end", StringComparison.OrdinalIgnoreCase))
+					{
+						if (chipName == null)
+							diagnostics.Add(new RhdlDiagnostic(lineNo, "'end' appears before the circuit declaration."));
+						sawEnd = true;
+						endLine = lineNo;
+						continue;
+					}
+
 					if (line.StartsWith("constant ", StringComparison.OrdinalIgnoreCase))
 						ParseParameter(line.Substring(9).Trim(), lineNo);
 				}
+
+				if (chipName != null && !sawEnd)
+					diagnostics.Add(new RhdlDiagnostic(lines.Length, $"Circuit '{chipName}' is missing its final 'end'."));
 			}
 
 			void ParseParameter(string declaration, int line)
@@ -373,6 +395,7 @@ namespace DLS.RHDL
 					string line = CleanLine(lines[i]);
 					if (line.Length == 0) continue;
 					if (line.StartsWith("circuit ", StringComparison.OrdinalIgnoreCase)) continue;
+					if (line.Equals("end", StringComparison.OrdinalIgnoreCase)) continue;
 					if (line.StartsWith("constant ", StringComparison.OrdinalIgnoreCase)) continue;
 
 					if (line.StartsWith("input ", StringComparison.OrdinalIgnoreCase))
@@ -431,7 +454,7 @@ namespace DLS.RHDL
 					}
 					if (line.StartsWith("use ", StringComparison.OrdinalIgnoreCase))
 					{
-						diagnostics.Add(new RhdlDiagnostic(lineNo, "Use 'component name = Type(...)'."));
+						diagnostics.Add(new RhdlDiagnostic(lineNo, "Use 'component name : Type(...)'."));
 						continue;
 					}
 
@@ -612,15 +635,18 @@ namespace DLS.RHDL
 					return false;
 
 				string declaration = line.Substring(10).Trim();
-				int instanceEq = FindAssignmentEquals(declaration);
-				if (instanceEq <= 0)
+				int colon = declaration.IndexOf(':');
+				if (colon <= 0)
 				{
-					diagnostics.Add(new RhdlDiagnostic(lineNo, "Expected: component name = Type(...)"));
+					if (FindAssignmentEquals(declaration) > 0)
+						diagnostics.Add(new RhdlDiagnostic(lineNo, "RHDL v0.6 component syntax is: component name : Type(...)"));
+					else
+						diagnostics.Add(new RhdlDiagnostic(lineNo, "Expected: component name : Type(...)"));
 					return true;
 				}
 
-				string instanceName = declaration.Substring(0, instanceEq).Trim();
-				string rhs = declaration.Substring(instanceEq + 1).Trim();
+				string instanceName = declaration.Substring(0, colon).Trim();
+				string rhs = declaration.Substring(colon + 1).Trim();
 				if (!ValidIdentifier(instanceName))
 				{
 					diagnostics.Add(new RhdlDiagnostic(lineNo, $"Invalid component name '{instanceName}'."));
@@ -628,7 +654,7 @@ namespace DLS.RHDL
 				}
 				if (rhs.Length == 0)
 				{
-					diagnostics.Add(new RhdlDiagnostic(lineNo, "Missing component type after '='."));
+					diagnostics.Add(new RhdlDiagnostic(lineNo, "Missing component type after ':'."));
 					return true;
 				}
 
@@ -636,7 +662,7 @@ namespace DLS.RHDL
 				string typeName = open >= 0 ? rhs.Substring(0, open).Trim() : rhs;
 				if (typeName.Length == 0)
 				{
-					diagnostics.Add(new RhdlDiagnostic(lineNo, "Missing component type after '='."));
+					diagnostics.Add(new RhdlDiagnostic(lineNo, "Missing component type after ':'."));
 					return true;
 				}
 
@@ -653,7 +679,7 @@ namespace DLS.RHDL
 					int close = rhs.LastIndexOf(')');
 					if (close < open)
 					{
-						diagnostics.Add(new RhdlDiagnostic(lineNo, open + 1, "Missing ')' in component connection list."));
+						diagnostics.Add(new RhdlDiagnostic(lineNo, open + 1, "Missing ')' in component pin list."));
 						return true;
 					}
 					string trailing = rhs.Substring(close + 1).Trim();
@@ -673,7 +699,7 @@ namespace DLS.RHDL
 						{
 							diagnostics.Add(new RhdlDiagnostic(
 								lineNo,
-								$"Expected PIN = value inside component connections, got '{binding.Trim()}'."));
+								$"Expected PIN = value inside component pin list, got '{binding.Trim()}'."));
 							continue;
 						}
 						named.Bindings.Add(new NamedBinding
@@ -1689,28 +1715,7 @@ namespace DLS.RHDL
 				int index = 0;
 				ExprNode ParseTernary()
 				{
-					ExprNode whenTrue = ParseComparison();
-					if (whenTrue == null) return null;
-
-					if (!Match("IF")) return whenTrue;
-
-					ExprNode condition = ParseComparison();
-					if (condition == null) return null;
-					if (!Match("ELSE"))
-					{
-						Error("Expected 'else'. Write: value_if_true if condition else value_if_false.");
-						return null;
-					}
-					ExprNode whenFalse = ParseTernary();
-					if (whenFalse == null) return null;
-
-					return new TernaryExpr
-					{
-						Condition = condition,
-						WhenTrue = whenTrue,
-						WhenFalse = whenFalse,
-						Position = condition.Position
-					};
+					return ParseComparison();
 				}
 
 				ExprNode ParseComparison()
@@ -1868,7 +1873,7 @@ namespace DLS.RHDL
 
 					if (token.Text.Equals("mux", StringComparison.OrdinalIgnoreCase))
 					{
-						Error("mux(...) is not part of RHDL v0.5. Write: A if select else B.", token.Position);
+						Error("mux(...) is not part of RHDL v0.6. Use choose(condition, when_high, when_low).", token.Position);
 						return null;
 					}
 					if (token.Text.Equals("concat", StringComparison.OrdinalIgnoreCase))
@@ -1887,6 +1892,38 @@ namespace DLS.RHDL
 					{
 						Error("Use 'low' for logic 0.", token.Position);
 						return null;
+					}
+
+					if (token.Text.Equals("choose", StringComparison.OrdinalIgnoreCase) && Match("("))
+					{
+						ExprNode condition = ParseTernary();
+						if (condition == null) return null;
+						if (!Match(","))
+						{
+							Error("choose(...) expects: choose(condition, when_high, when_low)");
+							return null;
+						}
+						ExprNode whenHigh = ParseTernary();
+						if (whenHigh == null) return null;
+						if (!Match(","))
+						{
+							Error("choose(...) expects: choose(condition, when_high, when_low)");
+							return null;
+						}
+						ExprNode whenLow = ParseTernary();
+						if (whenLow == null) return null;
+						if (!Match(")"))
+						{
+							Error("Missing ')' after choose(...).");
+							return null;
+						}
+						return new TernaryExpr
+						{
+							Condition = condition,
+							WhenTrue = whenHigh,
+							WhenFalse = whenLow,
+							Position = token.Position
+						};
 					}
 
 					if (token.Text.Equals("join", StringComparison.OrdinalIgnoreCase) && Match("("))
@@ -2023,8 +2060,8 @@ namespace DLS.RHDL
 						'^' => "Use 'xor' instead of '^'.",
 						'!' => "Use 'not' instead of '!'.",
 						'~' => "Use 'not' instead of '~'.",
-						'?' => "Use: A if condition else B.",
-						'{' or '}' => "Use join(...) to combine bits; braces are not part of RHDL v0.5.",
+						'?' => "Use choose(condition, when_high, when_low).",
+						'{' or '}' => "Use join(...) to combine bits; braces are not part of RHDL v0.6.",
 						';' => "Semicolons are not used in RHDL.",
 						_ => $"Unexpected character '{c}' in expression."
 					};
