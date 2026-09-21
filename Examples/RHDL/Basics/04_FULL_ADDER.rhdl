@@ -1,0 +1,11 @@
+# One-bit full adder.
+circuit FullAdder
+    input A, B, CIN
+    output SUM, COUT
+
+    signal ab_xor
+    ab_xor = A xor B
+
+    SUM = ab_xor xor CIN
+    COUT = (A and B) or (CIN and ab_xor)
+end
