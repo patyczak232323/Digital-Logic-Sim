@@ -1,4 +1,4 @@
-# Rewired-8 CPU core for RW8 ISA v1, written for RHDL v0.5.
+# Rewired-8 CPU core for RW8 ISA v1, written for RHDL v0.6.
 #
 # External interfaces:
 #   IMEM_* : Harvard instruction memory, 16-bit word split into HI/LO bytes.
@@ -19,7 +19,7 @@
 #   - Shift/rotate update Z,N,C and preserve V.
 #   - SWAP/BSET/BCLR/BTGL update Z,N and preserve C,V.
 #   - BTST updates Z only.
-circuit RW8_CORE:
+circuit RW8_CORE
     input CLK, RESET
     input IMEM_HI: 8, IMEM_LO: 8
     input DMEM_IN: 8
@@ -55,49 +55,49 @@ circuit RW8_CORE:
     ret2 = state_q == 0x03
     halted_state = state_q == 0x04
 
-    component state_reg = RW8_REG8(D=state_d, WE=1, CLK=CLK, RESET=RESET, Q=state_q)
+    component state_reg : RW8_REG8(D=state_d, WE=1, CLK=CLK, RESET=RESET, Q=state_q)
 
     signal ir_hi: 8
     signal ir_lo: 8
-    component irh = RW8_REG8(D=IMEM_HI, WE=fetch, CLK=CLK, RESET=RESET, Q=ir_hi)
-    component irl = RW8_REG8(D=IMEM_LO, WE=fetch, CLK=CLK, RESET=RESET, Q=ir_lo)
+    component irh : RW8_REG8(D=IMEM_HI, WE=fetch, CLK=CLK, RESET=RESET, Q=ir_hi)
+    component irl : RW8_REG8(D=IMEM_LO, WE=fetch, CLK=CLK, RESET=RESET, Q=ir_lo)
 
     signal pc_hi: 8
     signal pc_lo: 8
     signal next_pc_hi: 8
     signal next_pc_lo: 8
     signal pc_write
-    component pc = RW8_REG16(D_LO=next_pc_lo, D_HI=next_pc_hi, WE=pc_write, CLK=CLK, RESET=RESET, Q_LO=pc_lo, Q_HI=pc_hi)
+    component pc : RW8_REG16(D_LO=next_pc_lo, D_HI=next_pc_hi, WE=pc_write, CLK=CLK, RESET=RESET, Q_LO=pc_lo, Q_HI=pc_hi)
 
     signal x_hi: 8
     signal x_lo: 8
     signal x_d_hi: 8
     signal x_d_lo: 8
     signal x_we
-    component xreg = RW8_REG16(D_LO=x_d_lo, D_HI=x_d_hi, WE=x_we, CLK=CLK, RESET=RESET, Q_LO=x_lo, Q_HI=x_hi)
+    component xreg : RW8_REG16(D_LO=x_d_lo, D_HI=x_d_hi, WE=x_we, CLK=CLK, RESET=RESET, Q_LO=x_lo, Q_HI=x_hi)
 
     signal y_hi: 8
     signal y_lo: 8
     signal y_d_hi: 8
     signal y_d_lo: 8
     signal y_we
-    component yreg = RW8_REG16(D_LO=y_d_lo, D_HI=y_d_hi, WE=y_we, CLK=CLK, RESET=RESET, Q_LO=y_lo, Q_HI=y_hi)
+    component yreg : RW8_REG16(D_LO=y_d_lo, D_HI=y_d_hi, WE=y_we, CLK=CLK, RESET=RESET, Q_LO=y_lo, Q_HI=y_hi)
 
     signal sp_hi: 8
     signal sp_lo: 8
     signal sp_d_hi: 8
     signal sp_d_lo: 8
     signal sp_we
-    component spreg = RW8_REG16(D_LO=sp_d_lo, D_HI=sp_d_hi, WE=sp_we, CLK=CLK, RESET=RESET, Q_LO=sp_lo, Q_HI=sp_hi)
+    component spreg : RW8_REG16(D_LO=sp_d_lo, D_HI=sp_d_hi, WE=sp_we, CLK=CLK, RESET=RESET, Q_LO=sp_lo, Q_HI=sp_hi)
 
     signal return_lo_saved: 8
     signal ret_capture
-    component retlo = RW8_REG8(D=DMEM_IN, WE=ret_capture, CLK=CLK, RESET=RESET, Q=return_lo_saved)
+    component retlo : RW8_REG8(D=DMEM_IN, WE=ret_capture, CLK=CLK, RESET=RESET, Q=return_lo_saved)
 
     signal flags_q: 8
     signal flags_d: 8
     signal flags_we
-    component flagsreg = RW8_REG8(D=flags_d, WE=flags_we, CLK=CLK, RESET=RESET, Q=flags_q)
+    component flagsreg : RW8_REG8(D=flags_d, WE=flags_we, CLK=CLK, RESET=RESET, Q=flags_q)
 
     signal flag_z
     signal flag_c
@@ -334,7 +334,7 @@ circuit RW8_CORE:
     signal r6q: 8
     signal r7q: 8
 
-    component regs = RW8_REGFILE8(D=reg_wb, WE=reg_we, RD0=rd0, RD1=rd1, RD2=rd2, RA0=rd0, RA1=rd1, RA2=rd2, RB0=rs0, RB1=rs1, RB2=rs2, CLK=CLK, RESET=RESET, A=reg_a, B=reg_b, R0=r0q, R1=r1q, R2=r2q, R3=r3q, R4=r4q, R5=r5q, R6=r6q, R7=r7q)
+    component regs : RW8_REGFILE8(D=reg_wb, WE=reg_we, RD0=rd0, RD1=rd1, RD2=rd2, RA0=rd0, RA1=rd1, RA2=rd2, RB0=rs0, RB1=rs1, RB2=rs2, CLK=CLK, RESET=RESET, A=reg_a, B=reg_b, R0=r0q, R1=r1q, R2=r2q, R3=r3q, R4=r4q, R5=r5q, R6=r6q, R7=r7q)
 
     # ---- ALU and shift/bit units ----
     signal alu_resulths: 8
@@ -344,15 +344,15 @@ circuit RW8_CORE:
     signal alu_flag_n
     signal alu_flag_v
 
-    alu_resulths = (imm7_se if (i_ADDI or i_SUBI or i_CMPI) else reg_b)
-    component alu = RW8_ALU8(A=reg_a, B=alu_resulths, OP=op4, CIN=flag_c, R=alu_result, Z=alu_flag_z, C=alu_flag_c, N=alu_flag_n, V=alu_flag_v)
+    alu_resulths = choose(i_ADDI or i_SUBI or i_CMPI, imm7_se, reg_b)
+    component alu : RW8_ALU8(A=reg_a, B=alu_resulths, OP=op4, CIN=flag_c, R=alu_result, Z=alu_flag_z, C=alu_flag_c, N=alu_flag_n, V=alu_flag_v)
 
     signal shift_r: 8
     signal shift_z
     signal shift_n
     signal shift_c
     signal bit_zero
-    component shiftbit = RW8_SHIFTBIT8(A=reg_a, OP=op4, OLD_C=flag_c, BIT0=rs0, BIT1=rs1, BIT2=rs2, R=shift_r, Z_RESULT=shift_z, N_RESULT=shift_n, C_SHIFT=shift_c, BIT_ZERO=bit_zero)
+    component shiftbit : RW8_SHIFTBIT8(A=reg_a, OP=op4, OLD_C=flag_c, BIT0=rs0, BIT1=rs1, BIT2=rs2, R=shift_r, Z_RESULT=shift_z, N_RESULT=shift_n, C_SHIFT=shift_c, BIT_ZERO=bit_zero)
 
     # ---- Register writeback ----
     signal data_reg_write
@@ -365,9 +365,9 @@ circuit RW8_CORE:
     alu_resulteg_write = g1 and not i_CMP and not i_CMPI and not i_TEST
     shift_reg_write = i_SHL or i_SHR or i_SAR or i_ROL or i_ROR or i_RCL or i_RCR or i_SWAP or i_BSET or i_BCLR or i_BTGL or i_POP
 
-    data_wb = (reg_b if i_MOV else (ldi0_value if i_LDI0 else (ldi1_value if i_LDI1 else (DMEM_IN if (i_LDX or i_LDY or i_LDXP or i_LDYP) else 0x00))))
-    shift_wb = (DMEM_IN if i_POP else shift_r)
-    reg_wb = (data_wb if g0 else (alu_result if g1 else (shift_wb if g2 else 0x00)))
+    data_wb = choose(i_MOV, reg_b, choose(i_LDI0, ldi0_value, choose(i_LDI1, ldi1_value, choose(i_LDX or i_LDY or i_LDXP or i_LDYP, DMEM_IN, 0x00))))
+    shift_wb = choose(i_POP, DMEM_IN, shift_r)
+    reg_wb = choose(g0, data_wb, choose(g1, alu_result, choose(g2, shift_wb, 0x00)))
     reg_we = exec and (data_reg_write or alu_resulteg_write or shift_reg_write)
 
     # ---- X / Y increments and writes ----
@@ -382,10 +382,10 @@ circuit RW8_CORE:
 
     x_inc_lo = x_lo + 0x01
     x_inc_c = x_inc_lo < x_lo
-    x_inc_hi = x_hi + ((0x01 if x_inc_c else 0x00))
+    x_inc_hi = x_hi + (choose(x_inc_c, 0x01, 0x00))
     y_inc_lo = y_lo + 0x01
     y_inc_c = y_inc_lo < y_lo
-    y_inc_hi = y_hi + ((0x01 if y_inc_c else 0x00))
+    y_inc_hi = y_hi + (choose(y_inc_c, 0x01, 0x00))
 
     x_auto = exec and (i_LDXP or i_STXP)
     y_auto = exec and (i_LDYP or i_STYP)
@@ -393,10 +393,10 @@ circuit RW8_CORE:
     x_we = x_auto or (exec and (i_SETXL or i_SETXH))
     y_we = y_auto or (exec and (i_SETYL or i_SETYH))
 
-    x_d_lo = (reg_b if (exec and i_SETXL) else (x_inc_lo if x_auto else x_lo))
-    x_d_hi = (reg_b if (exec and i_SETXH) else (x_inc_hi if x_auto else x_hi))
-    y_d_lo = (reg_b if (exec and i_SETYL) else (y_inc_lo if y_auto else y_lo))
-    y_d_hi = (reg_b if (exec and i_SETYH) else (y_inc_hi if y_auto else y_hi))
+    x_d_lo = choose(exec and i_SETXL, reg_b, choose(x_auto, x_inc_lo, x_lo))
+    x_d_hi = choose(exec and i_SETXH, reg_b, choose(x_auto, x_inc_hi, x_hi))
+    y_d_lo = choose(exec and i_SETYL, reg_b, choose(y_auto, y_inc_lo, y_lo))
+    y_d_hi = choose(exec and i_SETYH, reg_b, choose(y_auto, y_inc_hi, y_hi))
 
     # ---- Stack pointer arithmetic ----
     signal sp_inc_lo: 8
@@ -410,17 +410,17 @@ circuit RW8_CORE:
 
     sp_inc_lo = sp_lo + 0x01
     sp_inc_c = sp_inc_lo < sp_lo
-    sp_inc_hi = sp_hi + ((0x01 if sp_inc_c else 0x00))
+    sp_inc_hi = sp_hi + (choose(sp_inc_c, 0x01, 0x00))
 
     sp_dec_lo = sp_lo - 0x01
     sp_dec_b = sp_lo == 0x00
-    sp_dec_hi = sp_hi - ((0x01 if sp_dec_b else 0x00))
+    sp_dec_hi = sp_hi - (choose(sp_dec_b, 0x01, 0x00))
 
     sp_dec_event = (exec and i_PUSH) or (exec and (i_CALL or i_CALLX)) or call2
     sp_inc_event = (exec and i_POP) or (exec and i_RET) or ret2
     sp_we = sp_dec_event or sp_inc_event
-    sp_d_lo = (sp_dec_lo if sp_dec_event else sp_inc_lo)
-    sp_d_hi = (sp_dec_hi if sp_dec_event else sp_inc_hi)
+    sp_d_lo = choose(sp_dec_event, sp_dec_lo, sp_inc_lo)
+    sp_d_hi = choose(sp_dec_event, sp_dec_hi, sp_inc_hi)
 
     ret_capture = exec and i_RET
 
@@ -445,10 +445,10 @@ circuit RW8_CORE:
     stack_write = (exec and i_PUSH) or (exec and (i_CALL or i_CALLX)) or call2
     stack_read = (exec and (i_POP or i_RET)) or ret2
 
-    dmem_addr_lo_i = (sp_dec_lo if stack_write else (sp_lo if stack_read else (y_lo if y_mem else (x_lo if x_mem else 0x00))))
-    dmem_addr_hi_i = (sp_dec_hi if stack_write else (sp_hi if stack_read else (y_hi if y_mem else (x_hi if x_mem else 0x00))))
+    dmem_addr_lo_i = choose(stack_write, sp_dec_lo, choose(stack_read, sp_lo, choose(y_mem, y_lo, choose(x_mem, x_lo, 0x00))))
+    dmem_addr_hi_i = choose(stack_write, sp_dec_hi, choose(stack_read, sp_hi, choose(y_mem, y_hi, choose(x_mem, x_hi, 0x00))))
 
-    dmem_out_i = (pc_lo if call2 else (pc_hi if (exec and (i_CALL or i_CALLX)) else (reg_b if (exec and i_PUSH) else (reg_b if store_mem else 0x00))))
+    dmem_out_i = choose(call2, pc_lo, choose(exec and (i_CALL or i_CALLX), pc_hi, choose(exec and i_PUSH, reg_b, choose(store_mem, reg_b, 0x00))))
     dmem_write_i = store_mem or stack_write
     dmem_read_i = load_mem or stack_read
 
@@ -462,11 +462,11 @@ circuit RW8_CORE:
 
     pc_inc_lo = pc_lo + 0x01
     pc_inc_c = pc_inc_lo < pc_lo
-    pc_inc_hi = pc_hi + ((0x01 if pc_inc_c else 0x00))
+    pc_inc_hi = pc_hi + (choose(pc_inc_c, 0x01, 0x00))
 
     rel_lo = pc_lo + ir_lo
     rel_c = rel_lo < pc_lo
-    rel_hi = pc_hi + rel_off_hi + ((0x01 if rel_c else 0x00))
+    rel_hi = pc_hi + rel_off_hi + (choose(rel_c, 0x01, 0x00))
 
     # ---- Branch conditions ----
     signal signed_less
@@ -478,8 +478,8 @@ circuit RW8_CORE:
     take_x = exec and i_JMPX
 
     pc_write = fetch or take_rel or take_x or call2 or ret2
-    next_pc_lo = (return_lo_saved if ret2 else (((x_lo if i_CALLX else rel_lo)) if call2 else (x_lo if take_x else (rel_lo if take_rel else pc_inc_lo))))
-    next_pc_hi = (DMEM_IN if ret2 else (((x_hi if i_CALLX else rel_hi)) if call2 else (x_hi if take_x else (rel_hi if take_rel else pc_inc_hi))))
+    next_pc_lo = choose(ret2, return_lo_saved, choose(call2, choose(i_CALLX, x_lo, rel_lo), choose(take_x, x_lo, choose(take_rel, rel_lo, pc_inc_lo))))
+    next_pc_hi = choose(ret2, DMEM_IN, choose(call2, choose(i_CALLX, x_hi, rel_hi), choose(take_x, x_hi, choose(take_rel, rel_hi, pc_inc_hi))))
 
     # ---- Flags ----
     signal shift_zn_we
@@ -496,16 +496,16 @@ circuit RW8_CORE:
     shift_c_we = g2 and (o0 or o1 or o2 or o3 or o4 or o5 or o6)
     shift_any_flag_we = g2 and (o0 or o1 or o2 or o3 or o4 or o5 or o6 or o7 or o8 or o9 or oA or oB or oC or oD)
 
-    next_z = (alu_flag_z if g1 else (bit_zero if (g2 and o8) else (shift_z if shift_zn_we else flag_z)))
-    next_n = (alu_flag_n if g1 else (shift_n if shift_n_we else flag_n))
-    next_c = (alu_flag_c if g1 else (shift_c if shift_c_we else (0 if i_CLC else (1 if i_SEC else flag_c))))
-    next_v = (alu_flag_v if g1 else flag_v)
+    next_z = choose(g1, alu_flag_z, choose(g2 and o8, bit_zero, choose(shift_zn_we, shift_z, flag_z)))
+    next_n = choose(g1, alu_flag_n, choose(shift_n_we, shift_n, flag_n))
+    next_c = choose(g1, alu_flag_c, choose(shift_c_we, shift_c, choose(i_CLC, 0, choose(i_SEC, 1, flag_c))))
+    next_v = choose(g1, alu_flag_v, flag_v)
 
     flags_d = join(0, 0, 0, 0, next_v, next_n, next_c, next_z)
     flags_we = exec and (g1 or shift_any_flag_we)
 
     # ---- Sequencer next state ----
-    state_d = (0x01 if fetch else (((0x04 if i_HALT else ((0x02 if (i_CALL or i_CALLX) else ((0x03 if i_RET else 0x00)))))) if exec else (0x00 if call2 else (0x00 if ret2 else 0x04))))
+    state_d = choose(fetch, 0x01, choose(exec, choose(i_HALT, 0x04, choose(i_CALL or i_CALLX, 0x02, choose(i_RET, 0x03, 0x00))), choose(call2, 0x00, choose(ret2, 0x00, 0x04))))
 
     # ---- External and debug outputs ----
     IMEM_ADDR_LO = pc_lo
@@ -540,3 +540,4 @@ circuit RW8_CORE:
     DBG_R5 = r5q
     DBG_R6 = r6q
     DBG_R7 = r7q
+end
