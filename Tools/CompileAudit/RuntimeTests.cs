@@ -980,11 +980,13 @@ end";
 				"Examples/RHDL/Rewired8/02_RW8_REGFILE8.rhdl",
 				"Examples/RHDL/Rewired8/03_RW8_ALU8.rhdl",
 				"Examples/RHDL/Rewired8/04_RW8_SHIFTBIT8.rhdl",
-				"Examples/RHDL/Rewired8/05_RW8_CORE.rhdl"
+				"Examples/RHDL/Rewired8/05_RW8_CORE.rhdl",
+				"Examples/RHDL/Intel4004/00_INTEL4004.rhdl"
 			};
 
 			ChipDescription cpu4 = null;
 			ChipDescription core = null;
+			ChipDescription intel4004 = null;
 			foreach (string sourcePath in sources)
 			{
 				Assert(File.Exists(sourcePath), "Missing RHDL source: " + sourcePath);
@@ -1002,6 +1004,7 @@ end";
 				descriptions.Add(result.Description);
 				if (result.Description.Name == "CPU4") cpu4 = result.Description;
 				if (result.Description.Name == "RW8_CORE") core = result.Description;
+				if (result.Description.Name == "Intel4004") intel4004 = result.Description;
 			}
 
 			Assert(cpu4 != null, "CPU4 source did not compile into a CPU4 chip");
@@ -1015,6 +1018,18 @@ end";
 			Assert(core.OutputPins.Any(p => p.Name == "DMEM_ADDR_HI" && p.BitCount == PinBitCount.Bit8), "RW8_CORE missing 16-bit data address high byte");
 			Assert(core.OutputPins.Any(p => p.Name == "HALTED"), "RW8_CORE missing HALTED output");
 			Assert(core.SubChips.Length > 100, "RW8_CORE unexpectedly small; high-level logic was not lowered");
+
+			Assert(intel4004 != null && intel4004.Name == "Intel4004", "Intel 4004 RHDL source did not compile");
+			Assert(intel4004.InputPins.Any(p => p.Name == "ROM_DATA" && p.BitCount == PinBitCount.Bit8),
+				"Intel4004 missing 8-bit ROM_DATA input");
+			Assert(intel4004.OutputPins.Any(p => p.Name == "ROM_ADDR_LOW" && p.BitCount == PinBitCount.Bit8),
+				"Intel4004 missing low 8 bits of program address");
+			Assert(intel4004.OutputPins.Any(p => p.Name == "ROM_ADDR_HIGH" && p.BitCount == PinBitCount.Bit4),
+				"Intel4004 missing high 4 bits of program address");
+			Assert(intel4004.OutputPins.Any(p => p.Name == "R15_OUT" && p.BitCount == PinBitCount.Bit4),
+				"Intel4004 missing 16-register debug surface");
+			Assert(intel4004.SubChips.Length > 1000,
+				"Intel4004 unexpectedly small; monolithic NAND state/logic was not lowered");
 
 			// Execute a real program on RAM-free CPU4 using its internal ROM:
 			//   LDI 3
