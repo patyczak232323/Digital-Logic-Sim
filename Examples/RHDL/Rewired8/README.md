@@ -2,11 +2,13 @@
 
 This directory contains a complete Rewired-8 CPU core written in the current RHDL v0.6 language.
 
-The CPU uses only ordinary Rewired chips and generated RHDL topology. There is no simulator-side CPU implementation.
+The CPU uses only ordinary Rewired chips, NAND-built state and generated RHDL topology. There is no simulator-side CPU implementation and the source pack does not depend on the hidden development-only `dev.RAM-8` primitive.
 
 ## Build order in RHDL Studio
 
-Build these sources in order because later chips instantiate the earlier ones:
+First build `../Basics/08_DFF.rhdl`. `RW8_REG8` uses that NAND-based flip-flop as its only state primitive.
+
+Then build these sources in order because later chips instantiate the earlier ones:
 
 1. `00_RW8_REG8.rhdl`
 2. `01_RW8_REG16.rhdl`
@@ -178,7 +180,7 @@ DMEM_READ
 DMEM_WRITE
 ```
 
-This exposes the complete 16-bit address required for 64 KiB RAM and memory-mapped I/O.
+This exposes the complete 16-bit address required for a future/user-built 64 KiB RAM and memory-mapped I/O. Rewired currently has no public general-purpose RAM primitive, so the CPU core deliberately keeps data memory external.
 
 ## Implementation conventions completed by this core
 
