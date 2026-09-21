@@ -12,6 +12,7 @@ circuit DffBit
     signal master_q
     signal master_nq
 
+    signal not_master_q
     signal slave_set_n
     signal slave_reset_n
     signal slave_q
@@ -27,8 +28,11 @@ circuit DffBit
     component master_nq_gate : NAND(IN_A=master_reset_n, IN_B=master_q, OUT=master_nq)
 
     # Slave latch is transparent while CLK=1.
+    # Keep the explicit inverter here: this exactly mirrors the DFF topology
+    # exercised by the simulation regression suite.
+    not_master_q = not master_q
     component slave_set : NAND(IN_A=master_q, IN_B=CLK, OUT=slave_set_n)
-    component slave_reset : NAND(IN_A=master_nq, IN_B=CLK, OUT=slave_reset_n)
+    component slave_reset : NAND(IN_A=not_master_q, IN_B=CLK, OUT=slave_reset_n)
     component slave_q_gate : NAND(IN_A=slave_set_n, IN_B=slave_nq, OUT=slave_q)
     component slave_nq_gate : NAND(IN_A=slave_reset_n, IN_B=slave_q, OUT=slave_nq)
 
