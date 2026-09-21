@@ -158,6 +158,7 @@ RHDL Studio includes:
 - `Ctrl+Shift+Z` — redo
 - `Ctrl+/` — comment/uncomment selected lines
 - `Ctrl+D` — duplicate current/selected lines
+- `Ctrl+Shift+F` — format the whole document
 - `Alt+Up` / `Alt+Down` — move current/selected lines
 - `Ctrl+Backspace` / `Ctrl+Delete` — delete by word
 - `Ctrl+Enter` — build
