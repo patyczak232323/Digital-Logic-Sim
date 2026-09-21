@@ -31,7 +31,7 @@ namespace DLS.Graphics
 
 		static readonly HashSet<string> SyntaxKeywords = new(StringComparer.OrdinalIgnoreCase)
 		{
-			"chip", "input", "output", "wire", "param", "connect", "use",
+			"chip", "input", "output", "wire", "let", "param", "const", "connect", "use",
 			"AND", "OR", "XOR", "NOT"
 		};
 
@@ -66,6 +66,8 @@ namespace DLS.Graphics
 		int caret;
 		int anchor;
 		int preferredColumn = -1;
+		int matchingBracketA = -1;
+		int matchingBracketB = -1;
 		bool focused;
 		bool mouseSelecting;
 		float lastInputTime;
@@ -149,6 +151,7 @@ namespace DLS.Graphics
 			commands = RhdlEditorCommand.None;
 			activeTheme = textTheme;
 			EnsureLineCache();
+			UpdateBracketMatch();
 
 			UI.DrawScrollView(
 				scrollID,
@@ -179,7 +182,9 @@ namespace DLS.Graphics
 			if (!isLayoutPass)
 			{
 				bool diagnosticLine = diagnosticLines.Contains(lineIndex + 1);
+				bool currentLine = focused && FindLineForIndex(caret) == lineIndex;
 				Color rowCol = lineIndex % 2 == 0 ? RewiredUI.Surface : RewiredUI.SurfaceRaised;
+				if (currentLine) rowCol = Color.Lerp(rowCol, RewiredUI.Accent, 0.075f);
 				if (diagnosticLine) rowCol = Color.Lerp(rowCol, new Color(0.55f, 0.12f, 0.12f, 1f), 0.22f);
 				UI.DrawPanel(row, rowCol);
 
@@ -211,6 +216,7 @@ namespace DLS.Graphics
 				Vector2 textPos = new(textX, row.Centre.y);
 
 				DrawSelectionForLine(lineIndex, row, textX);
+				DrawMatchingBracketsForLine(lineIndex, row, textX);
 				DrawSyntaxLine(line, textPos);
 				DrawCaretForLine(lineIndex, row, textX);
 
@@ -315,6 +321,29 @@ namespace DLS.Graphics
 				Anchor.CentreLeft);
 		}
 
+		void DrawMatchingBracketsForLine(int lineIndex, Bounds2D row, float textX)
+		{
+			DrawMatchingBracket(matchingBracketA, lineIndex, row, textX);
+			DrawMatchingBracket(matchingBracketB, lineIndex, row, textX);
+		}
+
+		void DrawMatchingBracket(int index, int lineIndex, Bounds2D row, float textX)
+		{
+			if (index < 0) return;
+			int start = lineStarts[lineIndex];
+			int local = index - start;
+			if (local < 0 || local >= lines[lineIndex].Length) return;
+
+			float x0 = PrefixWidth(lines[lineIndex], local);
+			float x1 = PrefixWidth(lines[lineIndex], local + 1);
+			float width = Mathf.Max(activeTheme.fontSize * 0.28f, x1 - x0);
+			UI.DrawPanel(
+				new Vector2(textX + x0, row.Centre.y),
+				new Vector2(width, RowHeight * 0.78f),
+				new Color(0.38f, 0.66f, 1f, 0.25f),
+				Anchor.CentreLeft);
+		}
+
 		void DrawCaretForLine(int lineIndex, Bounds2D row, float textX)
 		{
 			if (!focused || HasSelection) return;
@@ -337,14 +366,27 @@ namespace DLS.Graphics
 			bool inside = UI.MouseInsideBounds(row);
 			if (inside && InputHelper.IsMouseDownThisFrame(MouseButton.Left))
 			{
-				int index = IndexAtMouseX(lineIndex, textX);
 				focused = true;
 				mouseSelecting = true;
 
+				float mouseX = UI.ScreenToUISpace(InputHelper.MousePos).x;
+				if (mouseX < textX)
+				{
+					int start = lineStarts[lineIndex];
+					int end = start + lines[lineIndex].Length;
+					if (lineIndex < lines.Length - 1) end++;
+					anchor = start;
+					caret = end;
+					preferredColumn = -1;
+					Touch();
+					return;
+				}
+
+				int index = IndexAtMouseX(lineIndex, textX);
 				if (InputHelper.ShiftIsHeld)
 					SetCaret(index, true);
 				else
-				SetCaret(index, false);
+					SetCaret(index, false);
 			}
 
 			if (focused && mouseSelecting && inside && InputHelper.IsMouseHeld(MouseButton.Left))
@@ -393,6 +435,7 @@ namespace DLS.Graphics
 
 			bool ctrl = InputHelper.CtrlIsHeld;
 			bool shift = InputHelper.ShiftIsHeld;
+			bool alt = InputHelper.AltIsHeld;
 
 			if (ctrl && InputHelper.IsKeyDownThisFrame(KeyCode.Z))
 			{
@@ -454,6 +497,12 @@ namespace DLS.Graphics
 			if (InputHelper.IsKeyDownThisFrame(KeyCode.F5))
 				commands |= RhdlEditorCommand.BuildAndOpen;
 
+			if (ctrl && (InputHelper.IsKeyDownThisFrame(KeyCode.Return) || InputHelper.IsKeyDownThisFrame(KeyCode.KeypadEnter)))
+			{
+				commands |= RhdlEditorCommand.Build;
+				return;
+			}
+
 			if (InputHelper.IsKeyDownThisFrame(KeyCode.Return) || InputHelper.IsKeyDownThisFrame(KeyCode.KeypadEnter))
 			{
 				if (!TryExpandBracePair()) InsertNewlineWithIndent();
@@ -470,6 +519,7 @@ namespace DLS.Graphics
 			if (InputHelper.IsKeyDownThisFrame(KeyCode.Backspace))
 			{
 				if (HasSelection) DeleteSelection();
+				else if (ctrl) DeleteWordBackward();
 				else if (!TryDeleteEmptyPair() && !TrySmartIndentBackspace() && caret > 0)
 					ReplaceRange(caret - 1, caret, string.Empty);
 				return;
@@ -478,6 +528,7 @@ namespace DLS.Graphics
 			if (InputHelper.IsKeyDownThisFrame(KeyCode.Delete))
 			{
 				if (HasSelection) DeleteSelection();
+				else if (ctrl) DeleteWordForward();
 				else if (caret < text.Length) ReplaceRange(caret, caret + 1, string.Empty);
 				return;
 			}
@@ -491,6 +542,18 @@ namespace DLS.Graphics
 			if (InputHelper.IsKeyDownThisFrame(KeyCode.RightArrow))
 			{
 				MoveHorizontal(1, shift, ctrl);
+				return;
+			}
+
+			if (alt && InputHelper.IsKeyDownThisFrame(KeyCode.UpArrow))
+			{
+				MoveSelectedLines(-1);
+				return;
+			}
+
+			if (alt && InputHelper.IsKeyDownThisFrame(KeyCode.DownArrow))
+			{
+				MoveSelectedLines(1);
 				return;
 			}
 
@@ -864,17 +927,136 @@ namespace DLS.Graphics
 		{
 			int i = Mathf.Clamp(from, 0, text.Length);
 			while (i > 0 && char.IsWhiteSpace(text[i - 1])) i--;
-			while (i > 0 && !char.IsWhiteSpace(text[i - 1])) i--;
+			if (i > 0 && IsWordChar(text[i - 1]))
+				while (i > 0 && IsWordChar(text[i - 1])) i--;
+			else
+				while (i > 0 && !char.IsWhiteSpace(text[i - 1]) && !IsWordChar(text[i - 1])) i--;
 			return i;
 		}
 
 		int NextWordIndex(int from)
 		{
 			int i = Mathf.Clamp(from, 0, text.Length);
-			while (i < text.Length && !char.IsWhiteSpace(text[i])) i++;
+			if (i < text.Length && IsWordChar(text[i]))
+				while (i < text.Length && IsWordChar(text[i])) i++;
+			else
+				while (i < text.Length && !char.IsWhiteSpace(text[i]) && !IsWordChar(text[i])) i++;
 			while (i < text.Length && char.IsWhiteSpace(text[i])) i++;
 			return i;
 		}
+
+		static bool IsWordChar(char c) => char.IsLetterOrDigit(c) || c is '_' or '.';
+
+		void DeleteWordBackward()
+		{
+			if (caret <= 0) return;
+			int start = PreviousWordIndex(caret);
+			ReplaceRange(start, caret, string.Empty);
+		}
+
+		void DeleteWordForward()
+		{
+			if (caret >= text.Length) return;
+			int end = NextWordIndex(caret);
+			ReplaceRange(caret, end, string.Empty);
+		}
+
+		void MoveSelectedLines(int delta)
+		{
+			if (delta == 0) return;
+			EnsureLineCache();
+
+			int firstLine = FindLineForIndex(SelectionMin);
+			int lastLine = HasSelection ? FindLineForIndex(Mathf.Max(SelectionMin, SelectionMax - 1)) : firstLine;
+			if (delta < 0 && firstLine == 0) return;
+			if (delta > 0 && lastLine >= lines.Length - 1) return;
+
+			bool hadSelection = HasSelection;
+			int currentLine = FindLineForIndex(caret);
+			int currentColumn = Mathf.Clamp(caret - lineStarts[currentLine], 0, lines[currentLine].Length);
+
+			CaptureUndo();
+			string[] work = (string[])lines.Clone();
+
+			if (delta < 0)
+			{
+				string above = work[firstLine - 1];
+				for (int i = firstLine - 1; i < lastLine; i++) work[i] = work[i + 1];
+				work[lastLine] = above;
+			}
+			else
+			{
+				string below = work[lastLine + 1];
+				for (int i = lastLine + 1; i > firstLine; i--) work[i] = work[i - 1];
+				work[firstLine] = below;
+			}
+
+			text = string.Join("\n", work);
+			cacheDirty = true;
+			EnsureLineCache();
+
+			int newFirst = firstLine + Math.Sign(delta);
+			int newLast = lastLine + Math.Sign(delta);
+			if (hadSelection)
+			{
+				anchor = lineStarts[newFirst];
+				caret = lineStarts[newLast] + lines[newLast].Length;
+			}
+			else
+			{
+				int newLine = currentLine + Math.Sign(delta);
+				caret = lineStarts[newLine] + Mathf.Min(currentColumn, lines[newLine].Length);
+				anchor = caret;
+			}
+
+			preferredColumn = -1;
+			Touch();
+		}
+
+		void UpdateBracketMatch()
+		{
+			matchingBracketA = -1;
+			matchingBracketB = -1;
+			if (HasSelection || text.Length == 0) return;
+
+			int index = -1;
+			if (caret < text.Length && IsBracket(text[caret])) index = caret;
+			else if (caret > 0 && IsBracket(text[caret - 1])) index = caret - 1;
+			if (index < 0) return;
+
+			char c = text[index];
+			char mate = c switch
+			{
+				'(' => ')',
+				'[' => ']',
+				'{' => '}',
+				')' => '(',
+				']' => '[',
+				'}' => '{',
+				_ => '\0'
+			};
+			if (mate == '\0') return;
+
+			bool forward = c is '(' or '[' or '{';
+			int depth = 0;
+			for (int i = index; forward ? i < text.Length : i >= 0; i += forward ? 1 : -1)
+			{
+				char ch = text[i];
+				if (ch == c) depth++;
+				else if (ch == mate)
+				{
+					depth--;
+					if (depth == 0)
+					{
+						matchingBracketA = index;
+						matchingBracketB = i;
+						return;
+					}
+				}
+			}
+		}
+
+		static bool IsBracket(char c) => c is '(' or ')' or '[' or ']' or '{' or '}';
 
 		void ReplaceSelection(string replacement)
 		{
