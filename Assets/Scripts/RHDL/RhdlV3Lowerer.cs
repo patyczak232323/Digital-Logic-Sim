@@ -794,7 +794,8 @@ namespace DLS.RHDL
 						{
 							assignments.Add(new AssignmentDecl
 							{
-								Target = instance.Name + "." + binding.Pin,
+								// Use the canonical pin name after resolving a friendly alias.
+								Target = instance.Name + "." + input.Value.Name,
 								Expression = binding.Value,
 								Line = binding.Line
 							});
@@ -803,7 +804,8 @@ namespace DLS.RHDL
 						{
 							connections.Add(new ConnectionDecl
 							{
-								Source = instance.Name + "." + binding.Pin,
+								// Use the canonical pin name after resolving a friendly alias.
+								Source = instance.Name + "." + output.Value.Name,
 								Target = binding.Value,
 								Line = binding.Line
 							});
