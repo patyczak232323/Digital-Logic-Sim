@@ -215,7 +215,7 @@ namespace DLS.RHDL
 
 				ParseStatements();
 				if (string.IsNullOrWhiteSpace(chipName))
-					diagnostics.Add(new RhdlDiagnostic(0, "Missing chip declaration. Example: chip Adder:"));
+					diagnostics.Add(new RhdlDiagnostic(0, "Missing circuit declaration. Example: circuit Adder:"));
 				if (diagnostics.Count != 0) return;
 
 				ValidateAndResolveNames();
@@ -279,54 +279,41 @@ namespace DLS.RHDL
 
 					if (line.StartsWith("chip ", StringComparison.OrdinalIgnoreCase))
 					{
+						diagnostics.Add(new RhdlDiagnostic(
+							lineNo,
+							"'chip' was removed from RHDL v0.5. Start a design with: circuit Name:"));
+						continue;
+					}
+
+					if (line.StartsWith("circuit ", StringComparison.OrdinalIgnoreCase))
+					{
 						if (chipName != null)
 						{
-							diagnostics.Add(new RhdlDiagnostic(lineNo, "Only one chip declaration is allowed per source."));
+							diagnostics.Add(new RhdlDiagnostic(lineNo, "Only one circuit declaration is allowed per source file."));
 							continue;
 						}
 
-						string rest = line.Substring(5).Trim();
-						// RHDL v0.4 accepts the beginner-friendly Python-style header:
-						//   chip Adder:
-						if (rest.EndsWith(":", StringComparison.Ordinal))
-							rest = rest.Substring(0, rest.Length - 1).Trim();
-						int brace = rest.IndexOf('{');
-						if (brace >= 0) rest = rest.Substring(0, brace).Trim();
-
-						string paramText = null;
-						int paren = rest.IndexOf('(');
-						if (paren >= 0)
+						string rest = line.Substring(8).Trim();
+						if (!rest.EndsWith(":", StringComparison.Ordinal))
 						{
-							int close = rest.LastIndexOf(')');
-							if (close < paren)
-							{
-								diagnostics.Add(new RhdlDiagnostic(lineNo, paren + 1, "Missing ')' in chip parameter list."));
-								continue;
-							}
-							paramText = rest.Substring(paren + 1, close - paren - 1);
-							rest = rest.Substring(0, paren).Trim();
+							diagnostics.Add(new RhdlDiagnostic(lineNo, "A circuit header must end with ':'. Example: circuit Adder:"));
+							continue;
 						}
 
+						rest = rest.Substring(0, rest.Length - 1).Trim();
 						if (!ValidIdentifier(rest))
 						{
-							diagnostics.Add(new RhdlDiagnostic(lineNo, "Invalid chip name. Use letters, digits and underscore."));
+							diagnostics.Add(new RhdlDiagnostic(lineNo, "Invalid circuit name. Use letters, digits and underscore."));
 							continue;
 						}
 
 						chipName = rest;
 						chipLine = lineNo;
-						if (!string.IsNullOrWhiteSpace(paramText))
-						{
-							foreach (string entry in SplitTopLevel(paramText, ','))
-								ParseParameter(entry.Trim(), lineNo);
-						}
 						continue;
 					}
 
-					if (line.StartsWith("param ", StringComparison.OrdinalIgnoreCase))
-						ParseParameter(line.Substring(6).Trim(), lineNo);
-					else if (line.StartsWith("const ", StringComparison.OrdinalIgnoreCase))
-						ParseParameter(line.Substring(6).Trim(), lineNo);
+					if (line.StartsWith("constant ", StringComparison.OrdinalIgnoreCase))
+						ParseParameter(line.Substring(9).Trim(), lineNo);
 				}
 			}
 
@@ -335,7 +322,7 @@ namespace DLS.RHDL
 				int eq = declaration.IndexOf('=');
 				if (eq <= 0)
 				{
-					diagnostics.Add(new RhdlDiagnostic(line, "Expected: param/const NAME = VALUE"));
+					diagnostics.Add(new RhdlDiagnostic(line, "Expected: constant NAME = VALUE"));
 					return;
 				}
 
@@ -343,19 +330,24 @@ namespace DLS.RHDL
 				string valueText = declaration.Substring(eq + 1).Trim();
 				if (!ValidIdentifier(name))
 				{
-					diagnostics.Add(new RhdlDiagnostic(line, $"Invalid parameter name '{name}'."));
+					diagnostics.Add(new RhdlDiagnostic(line, $"Invalid constant name '{name}'."));
 					return;
 				}
 
-				if (!TryParseIntegerLiteral(valueText, out ulong value, out _))
+				ulong value;
+				if (valueText.Equals("high", StringComparison.OrdinalIgnoreCase))
+					value = 1;
+				else if (valueText.Equals("low", StringComparison.OrdinalIgnoreCase))
+					value = 0;
+				else if (!TryParseIntegerLiteral(valueText, out value, out _))
 				{
-					diagnostics.Add(new RhdlDiagnostic(line, $"Invalid parameter value '{valueText}'."));
+					diagnostics.Add(new RhdlDiagnostic(line, $"Invalid constant value '{valueText}'. Use a number, high or low."));
 					return;
 				}
 
 				if (parameters.ContainsKey(name))
 				{
-					diagnostics.Add(new RhdlDiagnostic(line, $"Parameter/constant '{name}' is declared more than once."));
+					diagnostics.Add(new RhdlDiagnostic(line, $"Constant '{name}' is declared more than once."));
 					return;
 				}
 
@@ -368,10 +360,9 @@ namespace DLS.RHDL
 				{
 					int lineNo = i + 1;
 					string line = CleanLine(lines[i]);
-					if (line.Length == 0 || line == "{" || line == "}") continue;
-					if (line.StartsWith("chip ", StringComparison.OrdinalIgnoreCase)) continue;
-					if (line.StartsWith("param ", StringComparison.OrdinalIgnoreCase)) continue;
-					if (line.StartsWith("const ", StringComparison.OrdinalIgnoreCase)) continue;
+					if (line.Length == 0) continue;
+					if (line.StartsWith("circuit ", StringComparison.OrdinalIgnoreCase)) continue;
+					if (line.StartsWith("constant ", StringComparison.OrdinalIgnoreCase)) continue;
 
 					if (line.StartsWith("input ", StringComparison.OrdinalIgnoreCase))
 					{
@@ -385,17 +376,9 @@ namespace DLS.RHDL
 						continue;
 					}
 
-					if (line.StartsWith("wire ", StringComparison.OrdinalIgnoreCase))
+					if (line.StartsWith("signal ", StringComparison.OrdinalIgnoreCase))
 					{
-						ParseWire(line.Substring(5).Trim(), lineNo);
-						continue;
-					}
-
-					// 'let' is ergonomic sugar for an inferred wire declaration.
-					// Example: let sum = A + B
-					if (line.StartsWith("let ", StringComparison.OrdinalIgnoreCase))
-					{
-						ParseWire(line.Substring(4).Trim(), lineNo);
+						ParseWire(line.Substring(7).Trim(), lineNo);
 						continue;
 					}
 
@@ -417,7 +400,29 @@ namespace DLS.RHDL
 						continue;
 					}
 
-					if (TryParseInstance(line, lineNo)) continue;
+					if (line.StartsWith("component ", StringComparison.OrdinalIgnoreCase))
+					{
+						TryParseInstance(line, lineNo);
+						continue;
+					}
+
+					if (line.StartsWith("let ", StringComparison.OrdinalIgnoreCase) ||
+					    line.StartsWith("wire ", StringComparison.OrdinalIgnoreCase))
+					{
+						diagnostics.Add(new RhdlDiagnostic(lineNo, "Use 'signal NAME = expression' for internal signals."));
+						continue;
+					}
+					if (line.StartsWith("const ", StringComparison.OrdinalIgnoreCase) ||
+					    line.StartsWith("param ", StringComparison.OrdinalIgnoreCase))
+					{
+						diagnostics.Add(new RhdlDiagnostic(lineNo, "Use 'constant NAME = value'."));
+						continue;
+					}
+					if (line.StartsWith("use ", StringComparison.OrdinalIgnoreCase))
+					{
+						diagnostics.Add(new RhdlDiagnostic(lineNo, "Use 'component name = Type(...)'."));
+						continue;
+					}
 
 					int assignmentEq = FindAssignmentEquals(line);
 					if (assignmentEq > 0)
@@ -440,9 +445,10 @@ namespace DLS.RHDL
 					}
 
 					string firstWord = line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? line;
-					string hint = Suggestion(firstWord, new[] { "input", "output", "wire", "let", "connect", "param", "const", "use" });
-					diagnostics.Add(new RhdlDiagnostic(lineNo,
-						$"Unrecognized statement: {line}. Expected a declaration, chip instance, connect statement, or TARGET = expression.{hint}"));
+					string hint = Suggestion(firstWord, new[] { "circuit", "input", "output", "signal", "constant", "component", "connect" });
+					diagnostics.Add(new RhdlDiagnostic(
+						lineNo,
+						$"Unrecognized statement: {line}. Expected input/output/signal/constant/component/connect or TARGET = expression.{hint}"));
 				}
 			}
 
@@ -603,69 +609,72 @@ namespace DLS.RHDL
 
 			bool TryParseInstance(string line, int lineNo)
 			{
-				string declaration = line;
-				if (declaration.StartsWith("use ", StringComparison.OrdinalIgnoreCase))
-					declaration = declaration.Substring(4).Trim();
+				if (!line.StartsWith("component ", StringComparison.OrdinalIgnoreCase))
+					return false;
 
-				// Python-like instance form:
-				//   n = NAND(IN_A=A, IN_B=B)
-				// lowers to the existing structural form NAND n(...).
+				string declaration = line.Substring(10).Trim();
 				int instanceEq = FindAssignmentEquals(declaration);
-				if (instanceEq > 0)
+				if (instanceEq <= 0)
 				{
-					string instanceName = declaration.Substring(0, instanceEq).Trim();
-					string rhs = declaration.Substring(instanceEq + 1).Trim();
-					int rhsOpen = rhs.IndexOf('(');
-					int rhsClose = rhs.LastIndexOf(')');
-					if (ValidIdentifier(instanceName) && rhsOpen > 0 && rhsClose == rhs.Length - 1)
-					{
-						string typeName = rhs.Substring(0, rhsOpen).Trim();
-						if (ValidIdentifier(typeName))
-							declaration = typeName + " " + instanceName + rhs.Substring(rhsOpen);
-					}
+					diagnostics.Add(new RhdlDiagnostic(lineNo, "Expected: component name = Type(...)"));
+					return true;
 				}
 
-				int open = declaration.IndexOf('(');
-				string head = open >= 0 ? declaration.Substring(0, open).Trim() : declaration;
-				string[] parts = head.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-				if (parts.Length != 2 || !ValidIdentifier(parts[1])) return false;
+				string instanceName = declaration.Substring(0, instanceEq).Trim();
+				string rhs = declaration.Substring(instanceEq + 1).Trim();
+				if (!ValidIdentifier(instanceName))
+				{
+					diagnostics.Add(new RhdlDiagnostic(lineNo, $"Invalid component name '{instanceName}'."));
+					return true;
+				}
+				if (rhs.Length == 0)
+				{
+					diagnostics.Add(new RhdlDiagnostic(lineNo, "Missing component type after '='."));
+					return true;
+				}
 
-				// Avoid treating arithmetic expressions such as "a + b" as instances.
-				if (parts[0] is "+" or "-" or "!" or "~") return false;
+				int open = rhs.IndexOf('(');
+				string typeName = open >= 0 ? rhs.Substring(0, open).Trim() : rhs;
+				if (typeName.Length == 0)
+				{
+					diagnostics.Add(new RhdlDiagnostic(lineNo, "Missing component type after '='."));
+					return true;
+				}
 
 				InstanceDecl instance = new()
 				{
-					TypeName = parts[0],
-					Name = parts[1],
+					TypeName = typeName,
+					Name = instanceName,
 					Line = lineNo
 				};
 				instances.Add(instance);
 
 				if (open >= 0)
 				{
-					int close = declaration.LastIndexOf(')');
+					int close = rhs.LastIndexOf(')');
 					if (close < open)
 					{
-						diagnostics.Add(new RhdlDiagnostic(lineNo, open + 1, "Missing ')' in instance binding list."));
+						diagnostics.Add(new RhdlDiagnostic(lineNo, open + 1, "Missing ')' in component connection list."));
 						return true;
 					}
-
-					string trailing = declaration.Substring(close + 1).Trim();
+					string trailing = rhs.Substring(close + 1).Trim();
 					if (trailing.Length != 0)
 					{
-						diagnostics.Add(new RhdlDiagnostic(lineNo, close + 2, $"Unexpected text after instance binding list: {trailing}"));
+						diagnostics.Add(new RhdlDiagnostic(lineNo, close + 2, $"Unexpected text after component: {trailing}"));
 						return true;
 					}
 
 					NamedInstance named = new() { Instance = instance };
-					string body = declaration.Substring(open + 1, close - open - 1);
+					string body = rhs.Substring(open + 1, close - open - 1);
 					foreach (string binding in SplitTopLevel(body, ','))
 					{
 						if (string.IsNullOrWhiteSpace(binding)) continue;
 						int eq = FindAssignmentEquals(binding);
 						if (eq <= 0)
 						{
-							diagnostics.Add(new RhdlDiagnostic(lineNo, $"Expected named binding PIN = signal/expression, got '{binding.Trim()}'."));
+							diagnostics.Add(new RhdlDiagnostic(
+								lineNo,
+								$"Expected PIN = value inside component connections, got '{binding.Trim()}'."));
 							continue;
 						}
 						named.Bindings.Add(new NamedBinding
