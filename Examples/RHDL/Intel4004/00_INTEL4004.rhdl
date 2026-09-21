@@ -322,7 +322,11 @@ circuit Intel4004
     r15_d = choose(RESET, 0x0, choose(r15_write_pair, ROM_DATA[3:0], choose(r15_write_inc, r15_inc, choose(r15_write_xch, acc_q, r15_q))))
 
     src_d = choose(RESET, 0x00, choose(ex_src, pair_sel, src_q))
-    bank_d = choose(RESET, 0x0, choose(f_dcl, acc_q and 0x7, bank_q))
+    # DCL stores the low three accumulator bits as CM-RAM command lines.
+    # For this clean external interface expose the resulting logical bank 0..7.
+    signal dcl_code: 4 = acc_q and 0x7
+    signal dcl_bank: 4 = choose(dcl_code == 0x3, 0x4, choose(dcl_code == 0x4, 0x3, dcl_code))
+    bank_d = choose(RESET, 0x0, choose(f_dcl, dcl_bank, bank_q))
     pending_group_d = choose(RESET, 0x0, choose(latch_pending, op, pending_group_q))
     pending_opa_d = choose(RESET, 0x0, choose(latch_pending, opa, pending_opa_q))
     phase_d = choose(RESET, 0x0, choose(phase0, choose(enter_fin, 0x2, choose(enter_two, 0x1, 0x0)), 0x0))
