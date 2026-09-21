@@ -642,7 +642,6 @@ namespace DLS.Simulation
 					break;
 
 				case ChipType.Pulse:
-				case ChipType.dev_Ram_8Bit:
 				case ChipType.DisplayRGB:
 				case ChipType.DisplayDot:
 					sequentialChips.Add(runtimeChip);
@@ -666,7 +665,6 @@ namespace DLS.Simulation
 				ChipType.Merge_1To8Bit or
 				ChipType.Merge_4To8Bit or
 				ChipType.Rom_256x16 or
-				ChipType.dev_Ram_8Bit or
 				ChipType.DisplayRGB or
 				ChipType.DisplayDot or
 				ChipType.Bus_1Bit or
@@ -789,10 +787,6 @@ namespace DLS.Simulation
 						AdvancePulse(runtimeChip);
 						break;
 
-					case ChipType.dev_Ram_8Bit:
-						if (AdvanceRam(chip)) MarkDirty(runtimeChip.CombinationalIndex);
-						break;
-
 					case ChipType.DisplayRGB:
 						if (AdvanceDisplayRgb(chip)) MarkDirty(runtimeChip.CombinationalIndex);
 						break;
@@ -840,35 +834,6 @@ namespace DLS.Simulation
 
 			chip.InternalState[pulseInputOldIndex] = pulseInputHigh ? 1u : 0;
 			StageOutput(runtimeChip.OutputStart, outputState);
-		}
-
-		static bool AdvanceRam(SimChip chip)
-		{
-			uint addressPin = chip.InputPins[0].State;
-			uint dataPin = chip.InputPins[1].State;
-			uint writeEnablePin = chip.InputPins[2].State;
-			uint resetPin = chip.InputPins[3].State;
-			uint clockPin = chip.InputPins[4].State;
-
-			bool clockHigh = PinState.FirstBitHigh(clockPin);
-			bool isRisingEdge = clockHigh && chip.InternalState[^1] == 0;
-			chip.InternalState[^1] = clockHigh ? 1u : 0;
-
-			if (!isRisingEdge) return false;
-
-			if (PinState.FirstBitHigh(resetPin))
-			{
-				for (int i = 0; i < 256; i++) chip.InternalState[i] = 0;
-				return true;
-			}
-
-			if (PinState.FirstBitHigh(writeEnablePin))
-			{
-				chip.InternalState[GetAddress8Bit(addressPin)] = (uint)(PinState.GetBitStates(dataPin) & Address8BitMask);
-				return true;
-			}
-
-			return false;
 		}
 
 		static bool AdvanceDisplayRgb(SimChip chip)
@@ -1367,13 +1332,6 @@ namespace DLS.Simulation
 
 					StageOutput(outputStart, (data >> 8) & byteMask);
 					StageOutput(outputStart + 1, data & byteMask);
-					break;
-				}
-
-				case ChipType.dev_Ram_8Bit:
-				{
-					int address = GetAddress8Bit(chip.InputPins[0].State);
-					StageOutput(outputStart, chip.InternalState[address]);
 					break;
 				}
 
