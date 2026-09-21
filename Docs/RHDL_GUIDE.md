@@ -148,7 +148,7 @@ circuit StructuralNand
 end
 ```
 
-This structural level is the escape hatch that keeps RHDL general: if a topology can be represented by Rewired components and wires, RHDL can describe it. That includes feedback networks, latches, flip-flops, registers, clocks, custom chips and complete CPUs. The current public Rewired palette has no general-purpose RAM primitive; RAM can be attached later as a user-built/custom component.
+This structural level is the escape hatch that keeps RHDL general: if a topology can be represented by Rewired components and wires, RHDL can describe it. That includes feedback networks, latches, flip-flops, registers, clocks, custom chips and complete CPUs. The current public Rewired palette has no general-purpose RAM primitive; the example set therefore includes a small `Ram4x4` built from four `Reg4` components.
 
 ## Complete example
 
@@ -190,4 +190,4 @@ RHDL is experimental. v0.6 intentionally makes breaking syntax changes instead o
 
 ## Examples
 
-The curated `Examples/RHDL/` set progresses through `AND -> HalfAdder -> FullAdder -> Mux4 -> DffBit -> Reg4 -> CPU4`. CPU4 is intentionally the largest processor example and uses a 4-bit datapath.
+The curated `Examples/RHDL/` set progresses through `AND -> HalfAdder -> FullAdder -> Mux4 -> DffBit -> Reg4`, then adds a separate `Ram4x4` memory example and `CPU4`. CPU4 is intentionally the largest processor example and uses a 4-bit datapath.
