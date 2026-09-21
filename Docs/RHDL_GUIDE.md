@@ -79,8 +79,7 @@ This describes selection hardware. It is intentionally not Python's `A if condit
 Nested selection is valid:
 
 ```text
-result = choose(do_add, add_result,
-         choose(do_sub, sub_result, A))
+result = choose(do_add, add_result, choose(do_sub, sub_result, A))
 ```
 
 ## Bits and buses
