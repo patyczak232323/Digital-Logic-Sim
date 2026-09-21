@@ -1,6 +1,6 @@
 # Rewired-8: R0-R7, two asynchronous read ports and one clocked write port.
-# Register addresses are three individual bits because RHDL v0.5 buses are 1/4/8-bit.
-circuit RW8_REGFILE8:
+# Register addresses are three individual bits because RHDL v0.6 buses are 1/4/8-bit.
+circuit RW8_REGFILE8
     input D: 8
     input WE
     input RD0, RD1, RD2
@@ -39,17 +39,17 @@ circuit RW8_REGFILE8:
     we6 = WE and RD2 and RD1 and not RD0
     we7 = WE and RD2 and RD1 and RD0
 
-    component cell0 = RW8_REG8(D=D, WE=we0, CLK=CLK, RESET=RESET, Q=q0)
-    component cell1 = RW8_REG8(D=D, WE=we1, CLK=CLK, RESET=RESET, Q=q1)
-    component cell2 = RW8_REG8(D=D, WE=we2, CLK=CLK, RESET=RESET, Q=q2)
-    component cell3 = RW8_REG8(D=D, WE=we3, CLK=CLK, RESET=RESET, Q=q3)
-    component cell4 = RW8_REG8(D=D, WE=we4, CLK=CLK, RESET=RESET, Q=q4)
-    component cell5 = RW8_REG8(D=D, WE=we5, CLK=CLK, RESET=RESET, Q=q5)
-    component cell6 = RW8_REG8(D=D, WE=we6, CLK=CLK, RESET=RESET, Q=q6)
-    component cell7 = RW8_REG8(D=D, WE=we7, CLK=CLK, RESET=RESET, Q=q7)
+    component cell0 : RW8_REG8(D=D, WE=we0, CLK=CLK, RESET=RESET, Q=q0)
+    component cell1 : RW8_REG8(D=D, WE=we1, CLK=CLK, RESET=RESET, Q=q1)
+    component cell2 : RW8_REG8(D=D, WE=we2, CLK=CLK, RESET=RESET, Q=q2)
+    component cell3 : RW8_REG8(D=D, WE=we3, CLK=CLK, RESET=RESET, Q=q3)
+    component cell4 : RW8_REG8(D=D, WE=we4, CLK=CLK, RESET=RESET, Q=q4)
+    component cell5 : RW8_REG8(D=D, WE=we5, CLK=CLK, RESET=RESET, Q=q5)
+    component cell6 : RW8_REG8(D=D, WE=we6, CLK=CLK, RESET=RESET, Q=q6)
+    component cell7 : RW8_REG8(D=D, WE=we7, CLK=CLK, RESET=RESET, Q=q7)
 
-    A = (((((q7 if RA0 else q6)) if RA1 else ((q5 if RA0 else q4)))) if RA2 else ((((q3 if RA0 else q2)) if RA1 else ((q1 if RA0 else q0)))))
-    B = (((((q7 if RB0 else q6)) if RB1 else ((q5 if RB0 else q4)))) if RB2 else ((((q3 if RB0 else q2)) if RB1 else ((q1 if RB0 else q0)))))
+    A = choose(RA2, choose(RA1, choose(RA0, q7, q6), choose(RA0, q5, q4)), choose(RA1, choose(RA0, q3, q2), choose(RA0, q1, q0)))
+    B = choose(RB2, choose(RB1, choose(RB0, q7, q6), choose(RB0, q5, q4)), choose(RB1, choose(RB0, q3, q2), choose(RB0, q1, q0)))
 
     R0 = q0
     R1 = q1
@@ -59,3 +59,4 @@ circuit RW8_REGFILE8:
     R5 = q5
     R6 = q6
     R7 = q7
+end
