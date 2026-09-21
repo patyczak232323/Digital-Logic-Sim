@@ -85,7 +85,7 @@ namespace DLS.Simulation
 			List<ChipDescription> nested = CreateNestedWrappers(comb4, 8);
 			ChipDescription cachedComb4 = CreateFourInverterIdentity(builtinByType[ChipType.Nand]);
 			cachedComb4.Name = "COMPAT_CACHE4";
-			cachedComb4.CacheMode = ChipCacheMode.Cached;
+			cachedComb4.CacheMode = ChipCacheMode.Auto;
 			ChipDescription cacheRoot = WrapCustom(cachedComb4, "COMPAT_CACHE_ROOT");
 
 			List<ChipDescription> customs = new()
