@@ -161,8 +161,7 @@ namespace DLS.Simulation
 			ChipLibrary library,
 			IReadOnlyList<CompatibilityStep> steps,
 			int stepsPerClockTransition = 1,
-			int maxFailures = 256,
-			bool waitForFullLut = false)
+			int maxFailures = 256)
 		{
 			if (description == null) return Unsupported("missing chip description");
 			if (library == null) return Unsupported("missing chip library");
@@ -278,7 +277,8 @@ namespace DLS.Simulation
 			ChipLibrary library,
 			IReadOnlyList<uint[]> inputVectors,
 			int stepsPerClockTransition = 1,
-			int maxFailures = 256)
+			int maxFailures = 256,
+			bool waitForFullLut = false)
 		{
 			if (description == null) return Unsupported("missing chip description");
 			if (library == null) return Unsupported("missing chip library");
