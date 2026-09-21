@@ -89,37 +89,32 @@ The older low-level `Simulator` implementation and `DeterministicSimulator` are 
 
 Rewired includes the experimental **RHDL Studio** source-driven circuit generator.
 
-The current frontend is **RHDL v0.5**. It intentionally uses a small, hardware-oriented vocabulary rather than accumulating aliases from earlier development versions.
+The current frontend is **RHDL v0.6**. Its syntax is intentionally hardware-oriented rather than Python-like:
 
 ```text
-circuit AluMini:
-    constant WIDTH = 8
-
-    input A: WIDTH
-    input B: WIDTH
+circuit AluMini
+    input A: 8
+    input B: 8
     input select
 
     signal sum = A + B
-    signal mixed = join(A[7:4], B[3:0])
-
-    output Y = sum if select else mixed
-    output equal = A == B
-    output ready = high
+    output Y: 8 = choose(select, sum, B)
+end
 ```
 
-The canonical vocabulary is `circuit`, `input`, `output`, `signal`, `constant`, `component`, and `connect`. Logic is written with `and`, `or`, `xor`, `not`; one-bit levels are `high` and `low`; buses are combined with `join(...)`; value selection uses `A if condition else B`.
+Equations are concurrent hardware descriptions, not sequential software statements. Logic uses `and`, `or`, `xor`, `not`; buses use slices and `join(...)`; selection uses `choose(condition, when_high, when_low)`.
 
-Existing Rewired circuits can be instantiated explicitly:
+Existing Rewired components can be instantiated with HDL-style instance syntax:
 
 ```text
-component nand_gate = NAND(A=A, B=B, OUT=Y)
+component gate : NAND(A=A, B=B, OUT=Y)
 ```
 
-RHDL source is lowered into normal Rewired topology and then compiled into a standard `ChipDescription`. There is no separate RHDL simulation runtime.
+For exact topology, `component` plus `connect` exposes the structural level directly. This keeps the language general enough to describe feedback/stateful circuits and complete CPUs, not just combinational expressions.
 
-Current signal widths are **1, 4 and 8 bits**, matching Rewired pin types. RHDL Studio provides syntax highlighting, automatic indentation, whole-document formatting, undo/redo, line movement, diagnostic highlighting and F8 diagnostic navigation.
+RHDL lowers into ordinary Rewired topology and a standard `ChipDescription`; there is no separate RHDL simulation runtime.
 
-RHDL is still experimental, so the language may intentionally make breaking changes when that produces a clearer design. See `Docs/RHDL_GUIDE.md` and `Examples/RHDL/` for the current syntax.
+Current bus widths are **1, 4 and 8 bits**, matching the underlying Rewired pin types. See `Docs/RHDL_GUIDE.md` and `Examples/RHDL/` for the canonical syntax.
 
 ## Current development
 
