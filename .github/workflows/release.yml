@@ -90,10 +90,88 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+
+  build_android:
+    name: Build Android ARM64 APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify Unity CI secrets
+        shell: bash
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          missing=0
+          for name in UNITY_LICENSE UNITY_EMAIL UNITY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing GitHub Actions secret: $name"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-Android-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-Android-
+
+      - name: Build Android APK with Unity
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: auto
+          targetPlatform: Android
+          androidExportType: androidPackage
+          buildName: DLSRewired
+          buildsPath: build
+
+      - name: Collect APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="$(find build -type f -name '*.apk' -print -quit)"
+          if [ -z "$apk" ]; then
+            echo "::error::Android APK not found"
+            find build -maxdepth 4 -type f -print || true
+            exit 1
+          fi
+          cp "$apk" DLSRewired-Android-arm64.apk
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-DLSRewired-Android-arm64
+          path: DLSRewired-Android-arm64.apk
+          if-no-files-found: error
+          retention-days: 7
+
   release:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, build_android]
 
     steps:
       - name: Download packaged builds
@@ -122,5 +200,6 @@ jobs:
           gh release upload "$TAG" \
             release-assets/DLSRewired-Windows-x64.zip \
             release-assets/DLSRewired-Linux-x86_64.zip \
+            release-assets/DLSRewired-Android-arm64.apk \
             --repo "$REPOSITORY" \
             --clobber
