@@ -11,8 +11,9 @@ namespace DLS.Description
 		Pulse,
 
 		// ---- Memory ----
-		dev_Ram_8Bit,
-		Rom_256x16,
+		// Numeric value 5 is intentionally unused (removed built-in dev RAM).
+		// RAM is user-defined circuitry in Rewired, not a simulator primitive.
+		Rom_256x16 = 6,
 
 		// ---- Displays ----
 		SevenSegmentDisplay,
