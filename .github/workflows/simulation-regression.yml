@@ -2,7 +2,7 @@ name: Full simulation and computer regression
 
 on:
   push:
-    branches: [ main, 'fix/**', 'perf/**', 'exp/**' ]
+    branches: [ main, 'fix/**', 'perf/**', 'exp/**', 'feature/**' ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -19,6 +19,9 @@ jobs:
 
       - name: Run deterministic propagation stress suite
         run: python3 Tools/SimulationRegression/regression.py
+
+      - name: Run compatibility contract suite
+        run: python3 Tools/CompatibilityRegression/regression.py
 
       - name: Run 8-bit computer behavioral suite
         run: python3 Tools/ComputerRegression/regression.py
