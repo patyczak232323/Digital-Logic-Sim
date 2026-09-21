@@ -55,7 +55,7 @@ namespace DLS.Graphics
 			SetEditorSource(source);
 			if (loadedTemplate) CodeEditor.MarkDirty();
 			statusText = loadedTemplate
-				? "New RHDL chip template. Rename it and start coding."
+				? "New RHDL circuit template. Rename it and start coding."
 				: "Ready. Edit source and press BUILD.";
 			statusSuccess = false;
 			buildAttempted = false;
@@ -185,9 +185,9 @@ namespace DLS.Graphics
 			string summary = statusText;
 			if (statusSuccess && latestResult?.Description != null)
 			{
-				summary += $"\n\nchip: {latestResult.Description.Name}" +
-				           $"\nsubchips: {lastBuildSubChipCount}" +
-				           $"\nwires: {lastBuildWireCount}";
+				summary += $"\n\ncircuit: {latestResult.Description.Name}" +
+				           $"\ncomponents: {lastBuildSubChipCount}" +
+				           $"\nconnections: {lastBuildWireCount}";
 			}
 
 			UI.DrawText(
@@ -236,7 +236,7 @@ namespace DLS.Graphics
 
 			cursor = syntaxCard.BottomLeft + Vector2.down * 0.6f;
 			int templateAction = UI.HorizontalButtonGroup(
-				new[] { "NEW CHIP", "LOAD EXAMPLE" },
+				new[] { "NEW CIRCUIT", "LOAD EXAMPLE" },
 				theme.MainMenuButtonTheme,
 				cursor,
 				RightWidth,
@@ -251,7 +251,7 @@ namespace DLS.Graphics
 				latestResult = null;
 				buildAttempted = false;
 				statusSuccess = false;
-				statusText = "New chip template loaded.";
+				statusText = "New circuit template loaded.";
 			}
 			else if (templateAction == 1)
 			{
@@ -296,7 +296,7 @@ namespace DLS.Graphics
 			if (project.chipLibrary.IsBuiltinChip(description.Name))
 			{
 				statusSuccess = false;
-				statusText = $"Cannot overwrite builtin chip '{description.Name}'.";
+				statusText = $"Cannot overwrite builtin component '{description.Name}'.";
 				return;
 			}
 
@@ -318,7 +318,7 @@ namespace DLS.Graphics
 
 			lastBuildSubChipCount = description.SubChips?.Length ?? 0;
 			lastBuildWireCount = description.Wires?.Length ?? 0;
-			statusText = existed ? "Rebuilt existing RHDL chip." : "Generated and saved new RHDL chip.";
+			statusText = existed ? "Rebuilt existing RHDL circuit." : "Generated and saved new RHDL circuit.";
 			statusSuccess = true;
 			CodeEditor.SetDiagnosticLines(Array.Empty<int>());
 			CodeEditor.MarkSaved();
