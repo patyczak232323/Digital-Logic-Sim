@@ -160,22 +160,23 @@ circuit Intel4004
     signal isz_take = isz_result != 0x0
 
     signal carry4: 4 = choose(carry_q, 0x1, 0x0)
+    signal borrow4: 4 = choose(carry_q, 0x0, 0x1)
     signal add_s1: 4 = acc_q + reg_sel
     signal add_c1 = add_s1 < acc_q
     signal add_result: 4 = add_s1 + carry4
     signal add_c2 = add_result < add_s1
     signal add_carry = add_c1 or add_c2
     signal sub_s1: 4 = acc_q - reg_sel
-    signal sub_result: 4 = sub_s1 - carry4
-    signal sub_carry = choose(carry_q, acc_q > reg_sel, acc_q >= reg_sel)
+    signal sub_result: 4 = sub_s1 - borrow4
+    signal sub_carry = choose(carry_q, acc_q >= reg_sel, acc_q > reg_sel)
     signal adm_s1: 4 = acc_q + RAM_DATA_IN
     signal adm_c1 = adm_s1 < acc_q
     signal adm_result: 4 = adm_s1 + carry4
     signal adm_c2 = adm_result < adm_s1
     signal adm_carry = adm_c1 or adm_c2
     signal sbm_s1: 4 = acc_q - RAM_DATA_IN
-    signal sbm_result: 4 = sbm_s1 - carry4
-    signal sbm_carry = choose(carry_q, acc_q > RAM_DATA_IN, acc_q >= RAM_DATA_IN)
+    signal sbm_result: 4 = sbm_s1 - borrow4
+    signal sbm_carry = choose(carry_q, acc_q >= RAM_DATA_IN, acc_q > RAM_DATA_IN)
     signal iac_result: 4 = acc_q + 0x1
     signal iac_carry = acc_q == 0xF
     signal dac_result: 4 = acc_q - 0x1
