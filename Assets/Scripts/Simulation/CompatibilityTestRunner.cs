@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Threading;
 using DLS.Description;
 using DLS.Game;
 
@@ -107,6 +109,9 @@ namespace DLS.Simulation
 		public readonly CompatibilitySample[] AcceleratedSamples;
 		public readonly CompatibilityFailure[] Failures;
 		public readonly bool AccelerationObserved;
+		public readonly bool CacheObserved;
+		public readonly bool JitObserved;
+		public readonly bool FeedbackJitObserved;
 
 		public bool Passed => Supported && Failures.Length == 0;
 
@@ -116,7 +121,10 @@ namespace DLS.Simulation
 			CompatibilitySample[] liveSamples,
 			CompatibilitySample[] acceleratedSamples,
 			CompatibilityFailure[] failures,
-			bool accelerationObserved)
+			bool accelerationObserved,
+			bool cacheObserved = false,
+			bool jitObserved = false,
+			bool feedbackJitObserved = false)
 		{
 			Supported = supported;
 			UnsupportedReason = unsupportedReason ?? string.Empty;
@@ -124,6 +132,9 @@ namespace DLS.Simulation
 			AcceleratedSamples = acceleratedSamples ?? Array.Empty<CompatibilitySample>();
 			Failures = failures ?? Array.Empty<CompatibilityFailure>();
 			AccelerationObserved = accelerationObserved;
+			CacheObserved = cacheObserved;
+			JitObserved = jitObserved;
+			FeedbackJitObserved = feedbackJitObserved;
 		}
 	}
 
@@ -150,7 +161,8 @@ namespace DLS.Simulation
 			ChipLibrary library,
 			IReadOnlyList<CompatibilityStep> steps,
 			int stepsPerClockTransition = 1,
-			int maxFailures = 256)
+			int maxFailures = 256,
+			bool waitForFullLut = false)
 		{
 			if (description == null) return Unsupported("missing chip description");
 			if (library == null) return Unsupported("missing chip library");
@@ -167,6 +179,7 @@ namespace DLS.Simulation
 				vectors,
 				stepsPerClockTransition,
 				disableAcceleration: false,
+				waitForFullLut: false,
 				out samples);
 
 			if (!string.IsNullOrEmpty(error))
@@ -253,6 +266,7 @@ namespace DLS.Simulation
 				inputVectors,
 				stepsPerClockTransition,
 				disableAcceleration: false,
+				waitForFullLut: false,
 				out CompatibilitySample[] samples);
 
 			if (!string.IsNullOrEmpty(error)) throw new InvalidOperationException(error);
@@ -277,6 +291,7 @@ namespace DLS.Simulation
 				inputVectors,
 				stepsPerClockTransition,
 				disableAcceleration: true,
+				waitForFullLut: false,
 				out CompatibilitySample[] live);
 
 			if (!string.IsNullOrEmpty(liveError))
@@ -296,6 +311,7 @@ namespace DLS.Simulation
 				inputVectors,
 				stepsPerClockTransition,
 				disableAcceleration: false,
+				waitForFullLut,
 				out CompatibilitySample[] accelerated);
 
 			if (!string.IsNullOrEmpty(acceleratedError))
@@ -310,15 +326,18 @@ namespace DLS.Simulation
 			}
 
 			List<CompatibilityFailure> failures = new();
+			bool cacheObserved = false;
+			bool jitObserved = false;
+			bool feedbackJitObserved = false;
 			bool accelerationObserved = false;
 
 			for (int stepIndex = 0; stepIndex < accelerated.Length && failures.Count < maxFailures; stepIndex++)
 			{
 				RewiredEngine.DiagnosticsSnapshot diagnostics = accelerated[stepIndex].Diagnostics;
-				accelerationObserved |=
-					diagnostics.CacheHits > 0 ||
-					diagnostics.JitHits > 0 ||
-					diagnostics.FeedbackJitHits > 0;
+				cacheObserved |= diagnostics.CacheHits > 0;
+				jitObserved |= diagnostics.JitHits > 0;
+				feedbackJitObserved |= diagnostics.FeedbackJitHits > 0;
+				accelerationObserved |= cacheObserved || jitObserved || feedbackJitObserved;
 
 				uint[] expected = live[stepIndex].Outputs;
 				uint[] actual = accelerated[stepIndex].Outputs;
@@ -359,7 +378,10 @@ namespace DLS.Simulation
 				live,
 				accelerated,
 				failures.ToArray(),
-				accelerationObserved);
+				accelerationObserved,
+				cacheObserved,
+				jitObserved,
+				feedbackJitObserved);
 
 			CompatibilityParityResult Unsupported(string reason) =>
 				new(
@@ -377,6 +399,7 @@ namespace DLS.Simulation
 			IReadOnlyList<uint[]> vectors,
 			int stepsPerClockTransition,
 			bool disableAcceleration,
+			bool waitForFullLut,
 			out CompatibilitySample[] samples)
 		{
 			samples = Array.Empty<CompatibilitySample>();
@@ -394,6 +417,12 @@ namespace DLS.Simulation
 					if (disableAcceleration)
 					{
 						DisableAccelerationRecursive(root);
+						RewiredEngine.InvalidateTopology();
+					}
+					else if (waitForFullLut)
+					{
+						string cacheError = WaitForFullLutReady(description, library, 5000);
+						if (cacheError != null) return cacheError;
 						RewiredEngine.InvalidateTopology();
 					}
 
@@ -444,6 +473,72 @@ namespace DLS.Simulation
 					RewiredEngine.StepsPerClockTransition = oldClockSteps;
 				}
 			}
+		}
+
+
+		static string WaitForFullLutReady(
+			ChipDescription root,
+			ChipLibrary library,
+			int timeoutMilliseconds)
+		{
+			List<ChipDescription> expectedCaches = new();
+			HashSet<string> visited = new(ChipDescription.NameComparer);
+
+			void Visit(ChipDescription description)
+			{
+				if (description == null || description.ChipType != ChipType.Custom) return;
+				if (!visited.Add(description.Name ?? string.Empty)) return;
+
+				if (description.CacheMode != ChipCacheMode.Normal)
+				{
+					ChipCacheAnalysis analysis = CombinationalChipCacheManager.Analyze(description, library);
+					if (CombinationalChipCacheManager.CanBuildFullCache(description, analysis, out _))
+					{
+						expectedCaches.Add(description);
+					}
+				}
+
+				SubChipDescription[] subChips = description.SubChips ?? Array.Empty<SubChipDescription>();
+				for (int i = 0; i < subChips.Length; i++)
+				{
+					if (library.TryGetChipDescription(subChips[i].Name, out ChipDescription child)) Visit(child);
+				}
+			}
+
+			Visit(root);
+			if (expectedCaches.Count == 0) return "FULL LUT requested but no cacheable Cached/Auto Custom Chip exists in the test graph";
+
+			Stopwatch timer = Stopwatch.StartNew();
+			while (timer.ElapsedMilliseconds < timeoutMilliseconds)
+			{
+				bool allReady = true;
+				for (int i = 0; i < expectedCaches.Count; i++)
+				{
+					ChipDescription description = expectedCaches[i];
+					if (!CombinationalChipCacheManager.TryGetBuildInfo(
+						    description,
+						    out bool ready,
+						    out _,
+						    out _,
+						    out string failureReason))
+					{
+						allReady = false;
+						continue;
+					}
+
+					if (!string.IsNullOrWhiteSpace(failureReason))
+					{
+						return $"FULL LUT failed for {description.Name}: {failureReason}";
+					}
+
+					if (!ready) allReady = false;
+				}
+
+				if (allReady) return null;
+				Thread.Sleep(5);
+			}
+
+			return $"FULL LUT did not become ready within {timeoutMilliseconds} ms";
 		}
 
 		static DevPinInstance[] CreateInputPins(ChipDescription description)
