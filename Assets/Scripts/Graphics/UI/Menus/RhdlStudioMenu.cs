@@ -225,7 +225,7 @@ namespace DLS.Graphics
 				"TAB / SHIFT+TAB indent   ALT+UP/DOWN move lines\n" +
 				"CTRL+BACKSPACE/DELETE delete word\n" +
 				"CTRL+Z/Y undo/redo   CTRL+/ comment\n" +
-				"CTRL+SHIFT+F format document\n" +
+				"CTRL+SHIFT+F format document   F8 next error\n" +
 				"CTRL+D duplicate line   HOME smart-home\n" +
 				"CTRL+S save   CTRL+B/ENTER build   F5 build+open";
 
