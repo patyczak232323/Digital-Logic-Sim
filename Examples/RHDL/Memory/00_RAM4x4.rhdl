@@ -1,0 +1,54 @@
+# 4 x 4-bit RAM built from four Reg4 registers.
+#
+# Address:
+#   A1 A0 = 00 -> word 0
+#           01 -> word 1
+#           10 -> word 2
+#           11 -> word 3
+#
+# WE is sampled on the rising CLK edge.
+# RESET clears all four words synchronously.
+circuit Ram4x4
+    input D: 4
+    input A0, A1
+    input WE, CLK, RESET
+    output Q: 4
+
+    signal not_a0
+    signal not_a1
+
+    signal sel0
+    signal sel1
+    signal sel2
+    signal sel3
+
+    signal we0
+    signal we1
+    signal we2
+    signal we3
+
+    signal q0: 4
+    signal q1: 4
+    signal q2: 4
+    signal q3: 4
+
+    not_a0 = not A0
+    not_a1 = not A1
+
+    sel0 = not_a1 and not_a0
+    sel1 = not_a1 and A0
+    sel2 = A1 and not_a0
+    sel3 = A1 and A0
+
+    we0 = WE and sel0
+    we1 = WE and sel1
+    we2 = WE and sel2
+    we3 = WE and sel3
+
+    component word0 : Reg4(D=D, WE=we0, CLK=CLK, RESET=RESET, Q=q0)
+    component word1 : Reg4(D=D, WE=we1, CLK=CLK, RESET=RESET, Q=q1)
+    component word2 : Reg4(D=D, WE=we2, CLK=CLK, RESET=RESET, Q=q2)
+    component word3 : Reg4(D=D, WE=we3, CLK=CLK, RESET=RESET, Q=q3)
+
+    Q = choose(A1, choose(A0, q3, q2), choose(A0, q1, q0))
+end
