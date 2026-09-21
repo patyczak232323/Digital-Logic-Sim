@@ -1074,7 +1074,7 @@ namespace DLS.RHDL
 					float baseMidX = (source.x + target.x) * 0.5f;
 					float margin = Math.Min(1.0f, dx * 0.25f);
 					float midX = baseMidX + AlternatingLaneOffset(lane, 0.55f);
-					midX = SnapScalar(Mathf.Clamp(midX, source.x + margin, target.x - margin));
+					midX = SnapScalar(Math.Clamp(midX, source.x + margin, target.x - margin));
 					points = new[]
 					{
 						new Vector2(),
