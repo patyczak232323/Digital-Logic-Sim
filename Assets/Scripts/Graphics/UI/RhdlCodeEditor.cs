@@ -456,6 +456,12 @@ namespace DLS.Graphics
 				return;
 			}
 
+			if (ctrl && shift && InputHelper.IsKeyDownThisFrame(KeyCode.F))
+			{
+				FormatDocument();
+				return;
+			}
+
 			if (ctrl && InputHelper.IsKeyDownThisFrame(KeyCode.D))
 			{
 				DuplicateLines();
@@ -733,6 +739,62 @@ namespace DLS.Graphics
 			anchor = lineStarts[firstLine];
 			caret = lineStarts[lastLine] + lines[lastLine].Length;
 			Touch();
+		}
+
+		void FormatDocument()
+		{
+			EnsureLineCache();
+			int oldLine = FindLineForIndex(caret);
+			int oldColumn = caret - lineStarts[oldLine];
+			string[] work = new string[lines.Length];
+			int indentLevel = 0;
+
+			for (int i = 0; i < lines.Length; i++)
+			{
+				string raw = lines[i].TrimEnd();
+				string trimmed = raw.TrimStart();
+				if (trimmed.Length == 0)
+				{
+					work[i] = string.Empty;
+					continue;
+				}
+
+				string code = StripEditorComment(trimmed);
+				int opens = 0;
+				int closes = 0;
+				for (int c = 0; c < code.Length; c++)
+				{
+					if (code[c] == '{') opens++;
+					else if (code[c] == '}') closes++;
+				}
+
+				int leadingCloses = 0;
+				while (leadingCloses < code.Length && code[leadingCloses] == '}') leadingCloses++;
+				int lineIndent = Math.Max(0, indentLevel - leadingCloses);
+				work[i] = new string(' ', lineIndent * Indent.Length) + trimmed;
+				indentLevel = Math.Max(0, indentLevel + opens - closes);
+			}
+
+			string formatted = string.Join("\n", work);
+			if (formatted == text) return;
+
+			CaptureUndo();
+			text = formatted;
+			cacheDirty = true;
+			EnsureLineCache();
+
+			int line = Mathf.Clamp(oldLine, 0, lines.Length - 1);
+			int column = Mathf.Clamp(oldColumn, 0, lines[line].Length);
+			caret = lineStarts[line] + column;
+			anchor = caret;
+			preferredColumn = -1;
+			Touch();
+		}
+
+		static string StripEditorComment(string line)
+		{
+			int comment = line.IndexOf("//", StringComparison.Ordinal);
+			return comment >= 0 ? line.Substring(0, comment).TrimStart() : line;
 		}
 
 		void DuplicateLines()
