@@ -19,6 +19,7 @@ namespace DLS.Simulation
 		{
 			Run("RHDL structural HalfAdder compilation", TestRhdlHalfAdderCompilation);
 			Run("RHDL readable logic synthesis", TestRhdlReadableLogicSynthesis);
+			Run("RHDL concise authoring sugar", TestRhdlConciseAuthoringSugar);
 			Run("RHDL v0.3 buses, arithmetic, slices and mux", TestRhdlV3BusExpressions);
 			Run("RHDL implicit width inference", TestRhdlImplicitWidthInference);
 			Run("RHDL block layout and orthogonal routing", TestRhdlBlockLayout);
@@ -220,6 +221,65 @@ namespace DLS.Simulation
 			Assert(!chipTypo.Success, "Unknown chip typo sample should fail");
 			Assert(chipTypo.Diagnostics.Any(d => d.Message.Contains("Did you mean 'NAND'?")),
 				"RHDL chip-type diagnostic did not suggest NAND");
+
+			DeterministicSimulator.Reset();
+			Simulator.Reset();
+		}
+
+		static void TestRhdlConciseAuthoringSugar()
+		{
+			PinDescription PinNamed(string name, int id) =>
+				new(name, id, new UnityEngine.Vector2(), PinBitCount.Bit1, PinColour.Red, PinValueDisplayMode.Off);
+
+			ChipDescription nand = new()
+			{
+				Name = "NAND",
+				ChipType = ChipType.Nand,
+				InputPins = new[] { PinNamed("IN B", 0), PinNamed("IN A", 1) },
+				OutputPins = new[] { PinNamed("OUT", 2) },
+				SubChips = Array.Empty<SubChipDescription>(),
+				Wires = Array.Empty<WireDescription>(),
+				Displays = Array.Empty<DisplayDescription>()
+			};
+
+			ChipLibrary library = new(nand);
+			string source =
+@"chip Concise {
+  const ONE = 1
+  input A, B
+
+  let x = A XOR B
+  output Y = x XOR ONE
+}";
+
+			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
+			Assert(result.Success,
+				"Concise RHDL compile failed: " + string.Join(" | ", result.Diagnostics.Select(d => d.ToString())));
+			Assert(result.Description != null, "Concise RHDL returned no description");
+			Assert(result.Description.OutputPins.Length == 1, "Concise RHDL output count mismatch");
+			Assert(result.Description.OutputPins[0].BitCount == PinBitCount.Bit1,
+				"Inline output initializer should infer one-bit width");
+
+			Simulator.Reset();
+			DeterministicSimulator.Reset();
+			SimChip root = Simulator.BuildSimChip(result.Description, library);
+			DevPinInstance[] inputs = { new DevPinInstance(), new DevPinInstance() };
+			inputs[0].Pin.Address = new PinAddress(result.Description.InputPins[0].ID, 0);
+			inputs[1].Pin.Address = new PinAddress(result.Description.InputPins[1].ID, 0);
+
+			for (uint a = 0; a <= 1; a++)
+			{
+				for (uint b = 0; b <= 1; b++)
+				{
+					inputs[0].Pin.PlayerInputState = a;
+					inputs[1].Pin.PlayerInputState = b;
+					DeterministicSimulator.RunSimulationStep(root, inputs, new SimAudio());
+
+					uint expected = (a ^ b) ^ 1u;
+					Assert(Bit(root.OutputPins[0].State) == expected,
+						$"Concise RHDL result mismatch for A={a} B={b}");
+				}
+			}
 
 			DeterministicSimulator.Reset();
 			Simulator.Reset();
