@@ -206,13 +206,15 @@ namespace DLS.Graphics
 			Bounds2D syntaxCard = UI.PrevBounds;
 			string help =
 				"chip Name(WIDTH=8) {\n" +
+				"  const MASK = 0xFF\n" +
 				"  input A: WIDTH, B: WIDTH\n" +
 				"  input sel\n" +
-				"  output Y        // width inferred\n" +
-				"  wire sum        // width inferred\n\n" +
-				"  sum = A + B\n" +
-				"  Y = sel ? sum : (A ^ B)\n" +
+				"  let sum = A + B\n" +
+				"  output Y = sel ? sum : (A ^ B)\n" +
 				"}\n\n" +
+				"let name = expr   // inferred internal wire\n" +
+				"output Y = expr   // declare + drive at once\n" +
+				"param/const NAME = value\n" +
 				"Ops: + - & | ^ ! == != < > <= >= << >>\n" +
 				"Bits: A[3]   slice: A[7:4]\n" +
 				"Concat: {A[7:4], B[3:0]}\n" +
@@ -220,10 +222,11 @@ namespace DLS.Graphics
 				"Widths: 1 / 4 / 8 bits; output/wire can infer\n" +
 				"Named ports: NAND n(IN_A=a, IN_B=b, OUT=y)\n\n" +
 				"{} auto-pairs; TAB/ENTER inside {} expands block\n" +
-				"TAB / SHIFT+TAB indent\n" +
+				"TAB / SHIFT+TAB indent   ALT+UP/DOWN move lines\n" +
+				"CTRL+BACKSPACE/DELETE delete word\n" +
 				"CTRL+Z/Y undo/redo   CTRL+/ comment\n" +
 				"CTRL+D duplicate line   HOME smart-home\n" +
-				"CTRL+S save   CTRL+B build   F5 build+open";
+				"CTRL+S save   CTRL+B/ENTER build   F5 build+open";
 
 			UI.DrawText(
 				help,
@@ -351,31 +354,24 @@ namespace DLS.Graphics
 		static void SetEditorSource(string source) => CodeEditor.SetText(source);
 
 		public const string StarterTemplate =
-@"// Widths of outputs and wires can be inferred automatically.
+@"// RHDL can infer widths and create simple internal wires automatically.
 chip Adder {
   input A:8
   input B:8
-  output Y
-
-  Y = A + B
+  output Y = A + B
 }";
 
 		public const string DefaultExample =
-@"// RHDL v0.3 example: 8-bit arithmetic + mux
+@"// RHDL v0.3 example: concise 8-bit arithmetic + mux
 chip AluMini(WIDTH=8) {
   input A: WIDTH, B: WIDTH
   input sel
-  output Y: WIDTH
-  output equal
 
-  wire sum: WIDTH
-  wire mixed: WIDTH
+  let sum = A + B
+  let mixed = {A[7:4], B[3:0]}
 
-  sum = A + B
-  mixed = {A[7:4], B[3:0]}
-
-  Y = sel ? sum : mixed
-  equal = A == B
+  output Y: WIDTH = sel ? sum : mixed
+  output equal = A == B
 }";
 	}
 }
