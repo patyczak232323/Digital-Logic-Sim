@@ -1,7 +1,7 @@
 # Rewired-8 ALU for opcodes 0x10-0x1F.
 # A is Rd. B is Rs or the sign-extended immediate selected by the core.
 # C follows RW8 borrow semantics for subtraction: C=1 means borrow.
-circuit RW8_ALU8:
+circuit RW8_ALU8
     input A: 8, B: 8
     input OP: 4
     input CIN
@@ -43,9 +43,9 @@ circuit RW8_ALU8:
     signal ov_dec
 
     add0 = A + B
-    adc = add0 + ((0x01 if CIN else 0x00))
+    adc = add0 + (choose(CIN, 0x01, 0x00))
     sub = A - B
-    sbc_b = B + ((0x01 if CIN else 0x00))
+    sbc_b = B + (choose(CIN, 0x01, 0x00))
     sbc = A - sbc_b
 
     andv = A and B
@@ -75,12 +75,13 @@ circuit RW8_ALU8:
     ov_inc = A == 0x7F
     ov_dec = A == 0x80
 
-    result = (add0 if OP == 0x0 else (adc if OP == 0x1 else (sub if OP == 0x2 else (sbc if OP == 0x3 else (sub if OP == 0x4 else (andv if OP == 0x5 else (orv if OP == 0x6 else (xorv if OP == 0x7 else (notv if OP == 0x8 else (negv if OP == 0x9 else (incv if OP == 0xA else (decv if OP == 0xB else (add0 if OP == 0xC else (sub if OP == 0xD else (sub if OP == 0xE else andv)))))))))))))))
+    result = choose(OP == 0x0, add0, choose(OP == 0x1, adc, choose(OP == 0x2, sub, choose(OP == 0x3, sbc, choose(OP == 0x4, sub, choose(OP == 0x5, andv, choose(OP == 0x6, orv, choose(OP == 0x7, xorv, choose(OP == 0x8, notv, choose(OP == 0x9, negv, choose(OP == 0xA, incv, choose(OP == 0xB, decv, choose(OP == 0xC, add0, choose(OP == 0xD, sub, choose(OP == 0xE, sub, andv)))))))))))))))
 
     R = result
     Z = result == 0x00
     N = result[7]
 
-    C = (add_c if OP == 0x0 else (adc_c if OP == 0x1 else (sub_c if OP == 0x2 else (sbc_c if OP == 0x3 else (sub_c if OP == 0x4 else (0 if OP == 0x5 else (0 if OP == 0x6 else (0 if OP == 0x7 else (0 if OP == 0x8 else (neg_c if OP == 0x9 else (inc_c if OP == 0xA else (dec_c if OP == 0xB else (add_c if OP == 0xC else (sub_c if OP == 0xD else (sub_c if OP == 0xE else 0)))))))))))))))
+    C = choose(OP == 0x0, add_c, choose(OP == 0x1, adc_c, choose(OP == 0x2, sub_c, choose(OP == 0x3, sbc_c, choose(OP == 0x4, sub_c, choose(OP == 0x5, 0, choose(OP == 0x6, 0, choose(OP == 0x7, 0, choose(OP == 0x8, 0, choose(OP == 0x9, neg_c, choose(OP == 0xA, inc_c, choose(OP == 0xB, dec_c, choose(OP == 0xC, add_c, choose(OP == 0xD, sub_c, choose(OP == 0xE, sub_c, 0)))))))))))))))
 
-    V = (add_v if OP == 0x0 else (adc_v if OP == 0x1 else (sub_v if OP == 0x2 else (sbc_v if OP == 0x3 else (sub_v if OP == 0x4 else (0 if OP == 0x5 else (0 if OP == 0x6 else (0 if OP == 0x7 else (0 if OP == 0x8 else (ov_neg if OP == 0x9 else (ov_inc if OP == 0xA else (ov_dec if OP == 0xB else (add_v if OP == 0xC else (sub_v if OP == 0xD else (sub_v if OP == 0xE else 0)))))))))))))))
+    V = choose(OP == 0x0, add_v, choose(OP == 0x1, adc_v, choose(OP == 0x2, sub_v, choose(OP == 0x3, sbc_v, choose(OP == 0x4, sub_v, choose(OP == 0x5, 0, choose(OP == 0x6, 0, choose(OP == 0x7, 0, choose(OP == 0x8, 0, choose(OP == 0x9, ov_neg, choose(OP == 0xA, ov_inc, choose(OP == 0xB, ov_dec, choose(OP == 0xC, add_v, choose(OP == 0xD, sub_v, choose(OP == 0xE, sub_v, 0)))))))))))))))
+end
