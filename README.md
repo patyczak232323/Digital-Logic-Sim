@@ -87,64 +87,48 @@ The older low-level `Simulator` implementation and `DeterministicSimulator` are 
 
 ## RHDL Studio
 
-Rewired **0.3.0** includes the experimental **RHDL Studio** source-driven circuit generator.
+Rewired includes the experimental **RHDL Studio** source-driven circuit generator. The current language frontend is **RHDL v0.4**, designed around a beginner-first, Python-like syntax.
 
-RHDL v0.3 is a frontend for ordinary Rewired circuits: readable expressions are lowered into normal structural topology (NAND gates, split/merge chips, buses, pins and wires), then compiled into a standard `ChipDescription`. There is no separate RHDL simulation path.
+RHDL still generates ordinary Rewired topology (NAND gates, buses, split/merge chips, pins and wires) and compiles it into a normal `ChipDescription`. There is no separate RHDL simulation path.
 
-Current features include:
-
-- `chip`, `input`, `output`, `wire`, `let`, `param`/`const`, instance and `connect` statements
-- 1-bit, 4-bit and 8-bit signals using either `A[8]` or `A: 8` declaration syntax
-- compile-time constants: binary (`0b1010`), hexadecimal (`0xA5`) and decimal
-- compile-time parameters/defaults such as `chip Name(WIDTH=8)` and `const MASK = 0xFF`
-- concise inferred wires with `let sum = A + B`
-- inline output declaration/drive such as `output Y = A + B`
-- bitwise logic: `AND`, `OR`, `XOR`, `NOT` and `& | ^ ! ~`
-- arithmetic: `+` and `-`
-- unsigned comparisons: `== != < > <= >=`
-- constant shifts: `<<` and `>>`
-- ternary mux expressions: `sel ? A : B`
-- bit selection and slicing: `A[3]`, `A[7:4]`
-- concatenation: `{A[7:4], B[3:0]}`
-- named instance bindings, for example `NAND n(IN_A=a, IN_B=b, OUT=y)`
-- structural authoring with existing builtin or custom chips
-- diagnostics for invalid references, width mismatches, multiple drivers and assignment loops
-- line and column information for expression diagnostics
-- automatic dependency-based placement of generated topology
-- project-local source persistence under `HDL/`
-- `BUILD`, `BUILD & OPEN` and `OPEN SOURCE`
-
-Example:
+Preferred syntax:
 
 ```text
-chip AluMini(WIDTH=8) {
-  input A: WIDTH, B: WIDTH
-  input sel
+chip AluMini(WIDTH=8):
+    input A: WIDTH
+    input B: WIDTH
+    input select
 
-  let sum = A + B
-  let mixed = {A[7:4], B[3:0]}
+    let sum = A + B
+    let mixed = concat(A[7:4], B[3:0])
 
-  output Y: WIDTH = sel ? sum : mixed
-  output equal = A == B
-}
+    output Y: WIDTH = sum if select else mixed
+    output equal = A == B
+    output ready = true
 ```
 
-The structural form remains available when exact topology is desired:
+RHDL v0.4 adds a more approachable authoring layer:
 
-```text
-NAND n1
-connect a -> n1.IN_A
-connect b -> n1.IN_B
-connect n1.OUT -> y
-```
+- Python-style `chip Name:` blocks with indentation
+- four-space editor indentation and automatic indent after `:`
+- Python-style `# comments`
+- readable `and`, `or`, `xor`, `not`
+- `true/false`, `high/low`, and `on/off` logic constants
+- conditional expressions such as `A if select else B`
+- explicit `mux(select, A, B)`
+- readable `concat(...)` / `join(...)`
+- concise internal values with `let`
+- inline outputs such as `output Y = A + B`
+- Python-like chip instances such as `n = NAND(A=A, B=B, OUT=Y)`
+- friendly aliases for common `IN A` / `IN B` style pin names
 
-Pin names containing spaces can be written with underscores, for example `IN_A` resolves to `IN A`.
+Existing RHDL v0.3 source remains compatible, including braces, `//` comments, `condition ? A : B`, brace concatenation, explicit `wire`, and structural `connect` statements.
 
-RHDL Studio also provides document-wide selection/clipboard editing, syntax highlighting, undo/redo, comment toggling, line duplication and movement, word-wise deletion, smart Home/Backspace behaviour, matching-bracket highlighting, whole-document formatting, automatic `{}`, `()` and `[]` pairing, automatic indentation, and block expansion: pressing **Tab** or **Enter** with the caret between `{}` expands the pair onto separate indented lines. Compiler diagnostics highlight affected source lines, move the caret to the first reported error, and can be traversed with **F8 / Shift+F8**.
+Current data widths remain **1, 4 and 8 bits**, matching the underlying Rewired pin types. Output and internal widths can be inferred when possible.
 
-For a practical language reference and beginner examples, see `Docs/RHDL_GUIDE.md` and `Examples/RHDL/Basics/`.
+RHDL Studio also includes syntax highlighting, undo/redo, whole-document formatting, comment toggling, line duplication and movement, smart Home/Backspace behaviour, matching-bracket highlighting, diagnostic-line highlighting, and F8 diagnostic navigation.
 
-Current bus widths are intentionally limited to **1, 4 and 8 bits**, matching the underlying Rewired pin types. Shift counts are compile-time constants/parameters. Chip parameters are currently compile-time defaults within one source unit rather than fully generic parameterized saved-chip instances.
+For the language reference and examples, see `Docs/RHDL_GUIDE.md` and `Examples/RHDL/`.
 
 ## Current development
 
