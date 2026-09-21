@@ -33,3 +33,10 @@ CPU4 intentionally has no data RAM. It is a compact accumulator CPU intended to 
 Build `Basics/08_DFF.rhdl` first, then build the files in `Rewired8/` in the order listed in its README.
 
 The Rewired-8 core exposes instruction-memory and data-memory interfaces. A real RAM implementation can be attached externally when one exists as a user-built Rewired chip.
+
+
+## Intel 4004
+
+`Intel4004/00_INTEL4004.rhdl` is a monolithic Intel 4004 compatible CPU example.
+Unlike the staged CPU examples, it is intentionally self-contained: build that one RHDL
+file directly; no custom RHDL dependency has to be built first.
