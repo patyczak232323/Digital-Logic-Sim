@@ -1,4 +1,4 @@
-# Rewired-8 CPU core for RW8 ISA v1, written for RHDL v0.3.
+# Rewired-8 CPU core for RW8 ISA v1, written for RHDL v0.5.
 #
 # External interfaces:
 #   IMEM_* : Harvard instruction memory, 16-bit word split into HI/LO bytes.
