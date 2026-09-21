@@ -80,8 +80,13 @@ namespace DLS.Simulation
 
 			ChipDescription ramWrapper = WrapBuiltin(builtinByType[ChipType.dev_Ram_8Bit], "COMPAT_RAM");
 			ChipDescription srLatch = CreateSrLatch(builtinByType[ChipType.Nand]);
+			ChipDescription srRoot = WrapCustom(srLatch, "COMPAT_SR_ROOT");
 			ChipDescription comb4 = CreateFourInverterIdentity(builtinByType[ChipType.Nand]);
 			List<ChipDescription> nested = CreateNestedWrappers(comb4, 8);
+			ChipDescription cachedComb4 = CreateFourInverterIdentity(builtinByType[ChipType.Nand]);
+			cachedComb4.Name = "COMPAT_CACHE4";
+			cachedComb4.CacheMode = ChipCacheMode.Cached;
+			ChipDescription cacheRoot = WrapCustom(cachedComb4, "COMPAT_CACHE_ROOT");
 
 			List<ChipDescription> customs = new()
 			{
@@ -92,7 +97,10 @@ namespace DLS.Simulation
 				romWrapper,
 				ramWrapper,
 				srLatch,
-				comb4
+				srRoot,
+				comb4,
+				cachedComb4,
+				cacheRoot
 			};
 			customs.AddRange(nested);
 
@@ -211,7 +219,7 @@ namespace DLS.Simulation
 
 			RunParity(
 				cases,
-				"Live solver vs JIT/LUT parity",
+				"Live solver vs native JIT parity",
 				deepest,
 				library,
 				new uint[][]
@@ -222,12 +230,28 @@ namespace DLS.Simulation
 					new uint[] { 1 },
 					new uint[] { 1 },
 					new uint[] { 0 },
-				});
+				},
+				requiredPath: CompatibilityAccelerationPath.Jit);
+
+			RunParity(
+				cases,
+				"FULL LUT cache vs live solver parity",
+				cacheRoot,
+				library,
+				new uint[][]
+				{
+					new uint[] { 0 },
+					new uint[] { 1 },
+					new uint[] { 0 },
+					new uint[] { 1 },
+				},
+				requiredPath: CompatibilityAccelerationPath.FullLut,
+				waitForFullLut: true);
 
 			RunParity(
 				cases,
 				"Feedback live solver vs feedback-JIT parity",
-				srLatch,
+				srRoot,
 				library,
 				new uint[][]
 				{
@@ -237,7 +261,8 @@ namespace DLS.Simulation
 					new uint[] { 1, 1 },
 					new uint[] { 0, 1 },
 					new uint[] { 1, 1 },
-				});
+				},
+				requiredPath: CompatibilityAccelerationPath.FeedbackJit);
 
 			return new CompatibilitySuiteResult(cases.ToArray());
 		}
@@ -288,19 +313,30 @@ namespace DLS.Simulation
 			}
 		}
 
+		enum CompatibilityAccelerationPath
+		{
+			Any,
+			Jit,
+			FullLut,
+			FeedbackJit
+		}
+
 		static void RunParity(
 			List<CompatibilityCaseResult> cases,
 			string name,
 			ChipDescription description,
 			ChipLibrary library,
-			IReadOnlyList<uint[]> vectors)
+			IReadOnlyList<uint[]> vectors,
+			CompatibilityAccelerationPath requiredPath = CompatibilityAccelerationPath.Any,
+			bool waitForFullLut = false)
 		{
 			try
 			{
 				CompatibilityParityResult result = CompatibilityTestRunner.RunAccelerationParity(
 					description,
 					library,
-					vectors);
+					vectors,
+					waitForFullLut: waitForFullLut);
 
 				if (!result.Supported)
 				{
@@ -318,10 +354,28 @@ namespace DLS.Simulation
 					return;
 				}
 
-				string detail = result.AccelerationObserved
-					? $"{result.AcceleratedSamples.Length} steps; accelerated path observed"
-					: $"{result.AcceleratedSamples.Length} steps; parity OK (accelerator unavailable/not selected on this platform)";
-				cases.Add(new CompatibilityCaseResult(name, true, detail));
+				bool requiredObserved = requiredPath switch
+				{
+					CompatibilityAccelerationPath.Any => result.AccelerationObserved,
+					CompatibilityAccelerationPath.Jit => result.JitObserved,
+					CompatibilityAccelerationPath.FullLut => result.CacheObserved,
+					CompatibilityAccelerationPath.FeedbackJit => result.FeedbackJitObserved,
+					_ => false,
+				};
+
+				if (!requiredObserved)
+				{
+					cases.Add(new CompatibilityCaseResult(
+						name,
+						false,
+						$"output parity passed, but required acceleration path {requiredPath} was not observed"));
+					return;
+				}
+
+				cases.Add(new CompatibilityCaseResult(
+					name,
+					true,
+					$"{result.AcceleratedSamples.Length} steps; {requiredPath} path observed"));
 			}
 			catch (Exception ex)
 			{
@@ -371,6 +425,45 @@ namespace DLS.Simulation
 						Vector2.zero,
 						Array.Empty<OutputPinColourInfo>(),
 						internalData)
+				},
+				wires.ToArray());
+		}
+
+
+		static ChipDescription WrapCustom(ChipDescription child, string name)
+		{
+			PinDescription[] inputs = new PinDescription[child.InputPins?.Length ?? 0];
+			PinDescription[] outputs = new PinDescription[child.OutputPins?.Length ?? 0];
+			List<WireDescription> wires = new();
+
+			for (int i = 0; i < inputs.Length; i++)
+			{
+				PinDescription pin = child.InputPins[i];
+				int rootId = 100 + i;
+				inputs[i] = Pin(pin.Name, rootId, pin.BitCount);
+				wires.Add(Wire(new PinAddress(rootId, 0), new PinAddress(1, pin.ID)));
+			}
+
+			for (int i = 0; i < outputs.Length; i++)
+			{
+				PinDescription pin = child.OutputPins[i];
+				int rootId = 200 + i;
+				outputs[i] = Pin(pin.Name, rootId, pin.BitCount);
+				wires.Add(Wire(new PinAddress(1, pin.ID), new PinAddress(rootId, 0)));
+			}
+
+			return Custom(
+				name,
+				inputs,
+				outputs,
+				new[]
+				{
+					new SubChipDescription(
+						child.Name,
+						1,
+						string.Empty,
+						Vector2.zero,
+						Array.Empty<OutputPinColourInfo>())
 				},
 				wires.ToArray());
 		}
