@@ -26,12 +26,53 @@ namespace DLS.Graphics
 		static ChipInteractionController controller;
 		static bool canEditViewedChip;
 
+		// Rendering culling. Simulation is intentionally unaffected: this only prevents
+		// off-screen world geometry, text and displays from being submitted to SebVis.
+		static Bounds2D viewCullBounds;
+		const float MinViewCullPadding = 0.75f;
+		const float ViewCullPaddingScale = 0.08f;
+
+		static void UpdateViewCullBounds()
+		{
+			Camera cam = InputHelper.WorldCam;
+			float halfHeight = cam.orthographicSize;
+			float halfWidth = halfHeight * cam.aspect;
+			float padding = Mathf.Max(MinViewCullPadding, halfHeight * ViewCullPaddingScale);
+			Vector2 centre = cam.transform.position;
+			Vector2 halfSize = new(halfWidth + padding, halfHeight + padding);
+			viewCullBounds = new Bounds2D(centre - halfSize, centre + halfSize);
+		}
+
+		static bool IsElementVisible(IMoveable element) => element.SelectionBoundingBox.Overlaps(viewCullBounds);
+
+		static bool IsWireVisible(WireInstance wire)
+		{
+			if (wire == null || wire.WirePointCount <= 0) return false;
+
+			Vector2 p = wire.GetWirePoint(0);
+			Vector2 min = p;
+			Vector2 max = p;
+
+			for (int i = 1; i < wire.WirePointCount; i++)
+			{
+				p = wire.GetWirePoint(i);
+				min = Vector2.Min(min, p);
+				max = Vector2.Max(max, p);
+			}
+
+			// Include multi-bit spread and highlight thickness so wires do not pop at the edge.
+			float wirePadding = Mathf.Max(WireHighlightedThickness, (int)wire.bitCount * WireThickness * 0.55f);
+			Vector2 pad = Vector2.one * wirePadding;
+			return new Bounds2D(min - pad, max + pad).Overlaps(viewCullBounds);
+		}
+
 		public static void DrawActiveScene()
 		{
 			WorldDrawer.DrawGridIfActive(ActiveTheme.GridCol);
 
 			controller = Project.ActiveProject.controller;
 			canEditViewedChip = Project.ActiveProject.CanEditViewedChip;
+			UpdateViewCullBounds();
 
 			DrawWires();
 			DrawWireEditPoints(controller.wireToEdit);
@@ -63,10 +104,18 @@ namespace DLS.Graphics
 		{
 			DevChipInstance chip = controller.ActiveDevChip;
 
-			// Create list of wires sorted by draw order
+			// Create list of visible wires sorted by draw order. Off-screen wires remain fully
+			// simulated; they are simply not submitted to the renderer.
 			orderedWires.Clear();
-			orderedWires.AddRange(chip.Wires);
-			if (controller.WireToPlace != null) orderedWires.Add(controller.WireToPlace);
+			foreach (WireInstance wire in chip.Wires)
+			{
+				if (IsWireVisible(wire)) orderedWires.Add(wire);
+			}
+
+			if (controller.WireToPlace != null && IsWireVisible(controller.WireToPlace))
+			{
+				orderedWires.Add(controller.WireToPlace);
+			}
 
 			foreach (WireInstance wire in orderedWires)
 			{
@@ -83,7 +132,7 @@ namespace DLS.Graphics
 
 			foreach (WireInstance wire in controller.DuplicatedWires)
 			{
-				DrawWire(wire);
+				if (IsWireVisible(wire)) DrawWire(wire);
 			}
 		}
 
@@ -98,6 +147,8 @@ namespace DLS.Graphics
 
 			foreach (IMoveable element in chip.Elements)
 			{
+				if (!IsElementVisible(element)) continue;
+
 				if (element is DevPinInstance devPin)
 				{
 					if (drawAllDevPinNames) DrawPinLabel(devPin.Pin);
@@ -141,7 +192,7 @@ namespace DLS.Graphics
 
 			foreach (IMoveable element in elements)
 			{
-				if (element.IsSelected == drawSelectedOnly)
+				if (element.IsSelected == drawSelectedOnly && IsElementVisible(element))
 				{
 					switch (element)
 					{
@@ -164,7 +215,7 @@ namespace DLS.Graphics
 
 			foreach (IMoveable element in elements)
 			{
-				if (element.IsSelected == drawSelectedOnly)
+				if (element.IsSelected == drawSelectedOnly && IsElementVisible(element))
 				{
 					// Draw displays
 					if (element is SubChipInstance subchip)
@@ -795,6 +846,7 @@ namespace DLS.Graphics
 			if (wire == null) return;
 			if (!controller.isMovingWireEditPoint) controller.wireEditPointIndex = -1;
 			controller.wireEditCanInsertPoint = false;
+			if (!IsWireVisible(wire)) return;
 			bool canInteract = controller.CanInteractWithWire(wire);
 
 			// Can't edit first and last point in wire (unless that point connects to another wire instead of a pin)
