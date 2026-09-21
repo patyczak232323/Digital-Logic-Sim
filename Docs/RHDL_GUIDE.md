@@ -190,4 +190,4 @@ RHDL is experimental. v0.6 intentionally makes breaking syntax changes instead o
 
 ## Examples
 
-The previous development example pack has been removed. A new curated example set will be added against the current RHDL v0.6 syntax and Rewired runtime.
+The curated `Examples/RHDL/` set progresses through `AND -> HalfAdder -> FullAdder -> Mux4 -> DffBit -> Reg4 -> CPU4`. CPU4 is intentionally the largest processor example and uses a 4-bit datapath.
