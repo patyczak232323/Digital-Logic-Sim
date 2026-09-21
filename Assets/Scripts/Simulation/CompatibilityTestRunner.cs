@@ -139,7 +139,7 @@ namespace DLS.Simulation
 	}
 
 	/// <summary>
-	/// Step-by-step compatibility harness for Rewired.
+	/// Step-by-step semantic regression harness for Rewired.
 	///
 	/// It is intentionally separate from CombinationalChipTestRunner:
 	/// - sequential state is preserved between vectors,
@@ -148,7 +148,7 @@ namespace DLS.Simulation
 	/// - the same vector stream can be compared against a golden trace,
 	/// - accelerated execution can be compared against the fully expanded live solver.
 	///
-	/// A golden trace can be recorded from a known-good/reference build and then encoded as
+	/// A golden trace can be recorded from a known-good Rewired build and then encoded as
 	/// CompatibilityStep.ExpectedOutputs. The runner compares every output after every step,
 	/// which catches ordering/timing regressions that final-state-only tests miss.
 	/// </summary>
@@ -394,123 +394,6 @@ namespace DLS.Simulation
 		}
 
 
-		public static CompatibilityParityResult RunLegacyParity(
-			ChipDescription description,
-			ChipLibrary library,
-			IReadOnlyList<uint[]> inputVectors,
-			int stepsPerClockTransition = 1,
-			int maxFailures = 256)
-		{
-			if (description == null) return Unsupported("missing chip description");
-			if (library == null) return Unsupported("missing chip library");
-			inputVectors ??= Array.Empty<uint[]>();
-			maxFailures = Math.Max(1, maxFailures);
-
-			string legacyError = CaptureLegacyInternal(
-				description,
-				library,
-				inputVectors,
-				stepsPerClockTransition,
-				out CompatibilitySample[] legacy);
-
-			if (!string.IsNullOrEmpty(legacyError))
-			{
-				return new CompatibilityParityResult(
-					false,
-					"legacy DLS: " + legacyError,
-					legacy ?? Array.Empty<CompatibilitySample>(),
-					Array.Empty<CompatibilitySample>(),
-					Array.Empty<CompatibilityFailure>(),
-					false);
-			}
-
-			string rewiredError = CaptureInternal(
-				description,
-				library,
-				inputVectors,
-				stepsPerClockTransition,
-				disableAcceleration: true,
-				waitForFullLut: false,
-				out CompatibilitySample[] rewired);
-
-			if (!string.IsNullOrEmpty(rewiredError))
-			{
-				return new CompatibilityParityResult(
-					false,
-					"Rewired: " + rewiredError,
-					legacy,
-					rewired ?? Array.Empty<CompatibilitySample>(),
-					Array.Empty<CompatibilityFailure>(),
-					false);
-			}
-
-			List<CompatibilityFailure> failures = new();
-			int stepCount = Math.Min(legacy.Length, rewired.Length);
-			for (int stepIndex = 0; stepIndex < stepCount && failures.Count < maxFailures; stepIndex++)
-			{
-				uint[] expected = legacy[stepIndex].Outputs;
-				uint[] actual = rewired[stepIndex].Outputs;
-
-				if (expected.Length != actual.Length)
-				{
-					failures.Add(new CompatibilityFailure(
-						stepIndex,
-						legacy[stepIndex].StepName,
-						-1,
-						(uint)expected.Length,
-						(uint)actual.Length,
-						uint.MaxValue,
-						"legacy DLS/Rewired output count mismatch"));
-					continue;
-				}
-
-				for (int outputIndex = 0; outputIndex < expected.Length; outputIndex++)
-				{
-					if (expected[outputIndex] == actual[outputIndex]) continue;
-
-					failures.Add(new CompatibilityFailure(
-						stepIndex,
-						legacy[stepIndex].StepName,
-						outputIndex,
-						expected[outputIndex],
-						actual[outputIndex],
-						uint.MaxValue,
-						"legacy DLS/Rewired mismatch"));
-
-					if (failures.Count >= maxFailures) break;
-				}
-			}
-
-			if (legacy.Length != rewired.Length && failures.Count < maxFailures)
-			{
-				failures.Add(new CompatibilityFailure(
-					stepCount,
-					"trace length",
-					-1,
-					(uint)legacy.Length,
-					(uint)rewired.Length,
-					uint.MaxValue,
-					"legacy DLS/Rewired trace length mismatch"));
-			}
-
-			return new CompatibilityParityResult(
-				true,
-				string.Empty,
-				legacy,
-				rewired,
-				failures.ToArray(),
-				false);
-
-			CompatibilityParityResult Unsupported(string reason) =>
-				new(
-					false,
-					reason,
-					Array.Empty<CompatibilitySample>(),
-					Array.Empty<CompatibilitySample>(),
-					Array.Empty<CompatibilityFailure>(),
-					false);
-		}
-
 		static string CaptureInternal(
 			ChipDescription description,
 			ChipLibrary library,
@@ -594,66 +477,6 @@ namespace DLS.Simulation
 		}
 
 
-
-		static string CaptureLegacyInternal(
-			ChipDescription description,
-			ChipLibrary library,
-			IReadOnlyList<uint[]> vectors,
-			int stepsPerClockTransition,
-			out CompatibilitySample[] samples)
-		{
-			samples = Array.Empty<CompatibilitySample>();
-			vectors ??= Array.Empty<uint[]>();
-
-			lock (runLock)
-			{
-				int oldClockSteps = RewiredEngine.StepsPerClockTransition;
-				try
-				{
-					RewiredEngine.Reset();
-					RewiredEngine.StepsPerClockTransition = Math.Max(0, stepsPerClockTransition);
-
-					SimChip root = Simulator.BuildSimChip(description, library);
-					DevPinInstance[] inputPins = CreateInputPins(description);
-					SimAudio audio = new();
-					CompatibilitySample[] captured = new CompatibilitySample[vectors.Count];
-
-					for (int stepIndex = 0; stepIndex < vectors.Count; stepIndex++)
-					{
-						uint[] vector = vectors[stepIndex] ?? Array.Empty<uint>();
-						string vectorError = ApplyInputs(inputPins, vector, stepIndex);
-						if (vectorError != null) return vectorError;
-
-						Simulator.RunSimulationStep(root, inputPins, audio);
-
-						uint[] outputs = new uint[root.OutputPins.Length];
-						for (int outputIndex = 0; outputIndex < outputs.Length; outputIndex++)
-						{
-							outputs[outputIndex] = root.OutputPins[outputIndex].State;
-						}
-
-						captured[stepIndex] = new CompatibilitySample(
-							stepIndex,
-							"step " + stepIndex,
-							(uint[])vector.Clone(),
-							outputs,
-							RewiredEngine.Diagnostics);
-					}
-
-					samples = captured;
-					return string.Empty;
-				}
-				catch (Exception ex)
-				{
-					return ex.GetType().Name + ": " + ex.Message;
-				}
-				finally
-				{
-					RewiredEngine.Reset();
-					RewiredEngine.StepsPerClockTransition = oldClockSteps;
-				}
-			}
-		}
 
 		static string WaitForFullLutReady(
 			ChipDescription root,
