@@ -557,7 +557,6 @@ namespace DLS.RHDL
 				error = null;
 
 				int colon = token.IndexOf(':');
-				int bracket = token.IndexOf('[');
 				if (colon >= 0)
 				{
 					widthExplicit = true;
@@ -565,26 +564,15 @@ namespace DLS.RHDL
 					string widthText = token.Substring(colon + 1).Trim();
 					if (!TryResolveWidth(widthText, out width))
 					{
-						error = $"Unsupported width '{widthText}'. Declare buses as NAME: 4, NAME: 8, NAME[4] or NAME[8]. Ranges such as [7:0] are only used when slicing expressions.";
+						error = $"Unsupported width '{widthText}'. Use NAME: 1, NAME: 4 or NAME: 8.";
 						return false;
 					}
 				}
-				else if (bracket >= 0)
+
+				if (name.Contains('[') || name.Contains(']'))
 				{
-					widthExplicit = true;
-					int close = token.IndexOf(']', bracket + 1);
-					if (close < 0 || close != token.Length - 1)
-					{
-						error = $"Invalid signal declaration '{token}'.";
-						return false;
-					}
-					name = token.Substring(0, bracket).Trim();
-					string widthText = token.Substring(bracket + 1, close - bracket - 1).Trim();
-					if (!TryResolveWidth(widthText, out width))
-					{
-						error = $"Unsupported width '{widthText}'. Declare buses as NAME: 4, NAME: 8, NAME[4] or NAME[8]. Ranges such as [7:0] are only used when slicing expressions.";
-						return false;
-					}
+					error = $"Invalid signal declaration '{token}'. Widths use NAME: 8; brackets are only for reading bits such as A[7:4].";
+					return false;
 				}
 
 				if (!ValidIdentifier(name))
@@ -1690,40 +1678,28 @@ namespace DLS.RHDL
 				int index = 0;
 				ExprNode ParseTernary()
 				{
-					ExprNode first = ParseComparison();
-					if (first == null) return null;
+					ExprNode whenTrue = ParseComparison();
+					if (whenTrue == null) return null;
 
-					// Classic RHDL form: condition ? whenTrue : whenFalse
-					if (Match("?"))
+					if (!Match("IF")) return whenTrue;
+
+					ExprNode condition = ParseComparison();
+					if (condition == null) return null;
+					if (!Match("ELSE"))
 					{
-						ExprNode whenTrue = ParseTernary();
-						if (whenTrue == null) return null;
-						if (!Match(":"))
-						{
-							Error("Missing ':' in ternary expression.");
-							return null;
-						}
-						ExprNode whenFalse = ParseTernary();
-						if (whenFalse == null) return null;
-						return new TernaryExpr { Condition = first, WhenTrue = whenTrue, WhenFalse = whenFalse, Position = first.Position };
+						Error("Expected 'else'. Write: value_if_true if condition else value_if_false.");
+						return null;
 					}
+					ExprNode whenFalse = ParseTernary();
+					if (whenFalse == null) return null;
 
-					// Python-style mux form: whenTrue if condition else whenFalse
-					if (Match("IF"))
+					return new TernaryExpr
 					{
-						ExprNode condition = ParseComparison();
-						if (condition == null) return null;
-						if (!Match("ELSE"))
-						{
-							Error("Expected 'else' in conditional expression.");
-							return null;
-						}
-						ExprNode whenFalse = ParseTernary();
-						if (whenFalse == null) return null;
-						return new TernaryExpr { Condition = condition, WhenTrue = first, WhenFalse = whenFalse, Position = condition.Position };
-					}
-
-					return first;
+						Condition = condition,
+						WhenTrue = whenTrue,
+						WhenFalse = whenFalse,
+						Position = condition.Position
+					};
 				}
 
 				ExprNode ParseComparison()
@@ -1742,7 +1718,7 @@ namespace DLS.RHDL
 				ExprNode ParseOr()
 				{
 					ExprNode left = ParseXor();
-					while (left != null && Peek("OR", "|"))
+					while (left != null && Peek("OR"))
 					{
 						Token op = tokens[index++];
 						ExprNode right = ParseXor();
@@ -1755,7 +1731,7 @@ namespace DLS.RHDL
 				ExprNode ParseXor()
 				{
 					ExprNode left = ParseAnd();
-					while (left != null && Peek("XOR", "^"))
+					while (left != null && Peek("XOR"))
 					{
 						Token op = tokens[index++];
 						ExprNode right = ParseAnd();
@@ -1768,7 +1744,7 @@ namespace DLS.RHDL
 				ExprNode ParseAnd()
 				{
 					ExprNode left = ParseShift();
-					while (left != null && Peek("AND", "&"))
+					while (left != null && Peek("AND"))
 					{
 						Token op = tokens[index++];
 						ExprNode right = ParseShift();
@@ -1806,7 +1782,7 @@ namespace DLS.RHDL
 
 				ExprNode ParseUnary()
 				{
-					if (Peek("NOT", "!", "~"))
+					if (Peek("NOT"))
 					{
 						Token op = tokens[index++];
 						ExprNode value = ParseUnary();
@@ -1871,29 +1847,6 @@ namespace DLS.RHDL
 						return inner;
 					}
 
-					if (Match("{"))
-					{
-						ConcatExpr concat = new() { Position = tokens[Math.Max(0, index - 1)].Position };
-						if (Match("}"))
-						{
-							Error("Empty concatenation is not allowed.");
-							return null;
-						}
-						while (true)
-						{
-							ExprNode part = ParseTernary();
-							if (part == null) return null;
-							concat.Parts.Add(part);
-							if (Match("}")) break;
-							if (!Match(","))
-							{
-								Error("Expected ',' or '}' in concatenation.");
-								return null;
-							}
-						}
-						return concat;
-					}
-
 					if (index >= tokens.Count)
 					{
 						Error("Expected expression.");
@@ -1902,70 +1855,34 @@ namespace DLS.RHDL
 
 					Token token = tokens[index++];
 
-					if ((token.Text.Equals("concat", StringComparison.OrdinalIgnoreCase) ||
-					     token.Text.Equals("join", StringComparison.OrdinalIgnoreCase)) && Match("("))
+					if (token.Text.Equals("join", StringComparison.OrdinalIgnoreCase) && Match("("))
 					{
-						ConcatExpr concat = new() { Position = token.Position };
+						ConcatExpr joined = new() { Position = token.Position };
 						if (Match(")"))
 						{
-							Error("concat(...) needs at least one value.", token.Position);
+							Error("join(...) needs at least one value.", token.Position);
 							return null;
 						}
 						while (true)
 						{
 							ExprNode part = ParseTernary();
 							if (part == null) return null;
-							concat.Parts.Add(part);
+							joined.Parts.Add(part);
 							if (Match(")")) break;
 							if (!Match(","))
 							{
-								Error("Expected ',' or ')' in concat(...).");
+								Error("Expected ',' or ')' in join(...).");
 								return null;
 							}
 						}
-						return concat;
+						return joined;
 					}
 
-					if (token.Text.Equals("mux", StringComparison.OrdinalIgnoreCase) && Match("("))
-					{
-						ExprNode condition = ParseTernary();
-						if (condition == null) return null;
-						if (!Match(","))
-						{
-							Error("mux(...) expects: mux(condition, when_true, when_false)");
-							return null;
-						}
-						ExprNode whenTrue = ParseTernary();
-						if (whenTrue == null) return null;
-						if (!Match(","))
-						{
-							Error("mux(...) expects: mux(condition, when_true, when_false)");
-							return null;
-						}
-						ExprNode whenFalse = ParseTernary();
-						if (whenFalse == null) return null;
-						if (!Match(")"))
-						{
-							Error("Missing ')' after mux(...).");
-							return null;
-						}
-						return new TernaryExpr
-						{
-							Condition = condition,
-							WhenTrue = whenTrue,
-							WhenFalse = whenFalse,
-							Position = token.Position
-						};
-					}
-
-					if (token.Text.Equals("true", StringComparison.OrdinalIgnoreCase) ||
-					    token.Text.Equals("high", StringComparison.OrdinalIgnoreCase) ||
-					    token.Text.Equals("on", StringComparison.OrdinalIgnoreCase))
+					if (token.Text.Equals("high", StringComparison.OrdinalIgnoreCase))
 						return new ConstExpr { Value = 1, WidthHint = 1, Raw = token.Text, Position = token.Position };
-					if (token.Text.Equals("false", StringComparison.OrdinalIgnoreCase) ||
-					    token.Text.Equals("low", StringComparison.OrdinalIgnoreCase) ||
-					    token.Text.Equals("off", StringComparison.OrdinalIgnoreCase))
+					if (token.Text.Equals("low", StringComparison.OrdinalIgnoreCase))
 						return new ConstExpr { Value = 0, WidthHint = 1, Raw = token.Text, Position = token.Position };
+
 					if (TryParseIntegerLiteral(token.Text, out ulong value, out int widthHint))
 						return new ConstExpr { Value = value, WidthHint = widthHint, Raw = token.Text, Position = token.Position };
 
@@ -2033,7 +1950,7 @@ namespace DLS.RHDL
 						}
 					}
 
-					if ("(){}[],:?+-&|^!~<>".IndexOf(c) >= 0)
+					if ("()[],:+-<>".IndexOf(c) >= 0)
 					{
 						tokens.Add(new Token(c.ToString(), i));
 						i++;
@@ -2090,13 +2007,9 @@ namespace DLS.RHDL
 
 		static string CleanLine(string line)
 		{
-			int slashComment = line.IndexOf("//", StringComparison.Ordinal);
-			int hashComment = line.IndexOf('#');
-			int comment = slashComment < 0 ? hashComment : hashComment < 0 ? slashComment : Math.Min(slashComment, hashComment);
+			int comment = line.IndexOf('#');
 			if (comment >= 0) line = line.Substring(0, comment);
-			line = line.Trim();
-			if (line.EndsWith(";")) line = line.Substring(0, line.Length - 1).Trim();
-			return line;
+			return line.Trim();
 		}
 
 		static int FindAssignmentEquals(string text)
