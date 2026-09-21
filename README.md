@@ -39,6 +39,8 @@ The repository includes a compact example progression ending with a **4-bit CPU*
 - simulation diagnostics and profiling
 - waveform capture and deterministic replay
 - non-convergence diagnostics
+- automated compatibility regression and golden-trace testing
+- live solver vs JIT/FULL LUT/feedback-JIT parity checks
 - **RHDL v0.6** hardware description language
 - Windows x64 and Linux x86_64 release builds
 
@@ -150,6 +152,7 @@ The goal is predictable simulation semantics while still allowing acceleration o
 More detail:
 
 - **[Simulation Diagnostics](Docs/SIMULATION_DIAGNOSTICS.md)**
+- **[Compatibility Testing](Docs/COMPATIBILITY_TESTING.md)**
 - **[Native JIT](Docs/NATIVE_JIT.md)**
 - **[Persistent FULL LUT Cache](Docs/PERSISTENT_FULL_LUT_CACHE.md)**
 
@@ -169,6 +172,10 @@ In particular, circuits that depend on:
 may behave differently under Rewired's deterministic simulation model.
 
 Rewired is therefore best considered a separate **digital circuit simulator** derived from the original project.
+
+Compatibility is regression-tested at multiple levels: gate-level sequential logic, built-in Clock/Pulse/RAM/ROM semantics, deep Custom Chip nesting, and live-solver versus acceleration parity. Specific Digital Logic Sim projects can also be checked against recorded step-by-step golden traces.
+
+See **[Compatibility Testing](Docs/COMPATIBILITY_TESTING.md)**.
 
 ## Documentation
 
@@ -195,7 +202,7 @@ git clone https://github.com/patyczak232323/Digital-Logic-Sim.git
 cd Digital-Logic-Sim
 ```
 
-The repository includes regression tooling for the simulation engine and computer-level behaviour.
+The repository includes regression tooling for the simulation engine, built-in timing semantics, acceleration parity and computer-level behaviour.
 
 Release builds are produced automatically by GitHub Actions when a version tag such as `v0.3.0` is pushed.
 
