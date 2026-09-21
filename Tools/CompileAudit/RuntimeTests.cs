@@ -243,7 +243,18 @@ namespace DLS.Simulation
 				Displays = Array.Empty<DisplayDescription>()
 			};
 
-			ChipLibrary library = new(nand);
+			ChipDescription bus1 = new()
+			{
+				Name = "BUS-1",
+				ChipType = ChipType.Bus_1Bit,
+				InputPins = new[] { PinNamed("BUS-1 (Hidden)", 0) },
+				OutputPins = new[] { PinNamed("BUS-1", 1) },
+				SubChips = Array.Empty<SubChipDescription>(),
+				Wires = Array.Empty<WireDescription>(),
+				Displays = Array.Empty<DisplayDescription>()
+			};
+
+			ChipLibrary library = new(nand, bus1);
 			string source =
 @"chip Concise {
   const ONE = 1
@@ -326,7 +337,18 @@ namespace DLS.Simulation
 				Displays = Array.Empty<DisplayDescription>()
 			};
 
-			ChipLibrary library = new(nand);
+			ChipDescription bus1 = new()
+			{
+				Name = "BUS-1",
+				ChipType = ChipType.Bus_1Bit,
+				InputPins = new[] { PinNamed("BUS-1 (Hidden)", 0) },
+				OutputPins = new[] { PinNamed("BUS-1", 1) },
+				SubChips = Array.Empty<SubChipDescription>(),
+				Wires = Array.Empty<WireDescription>(),
+				Displays = Array.Empty<DisplayDescription>()
+			};
+
+			ChipLibrary library = new(nand, bus1);
 			string source =
 @"chip Friendly:
     # Inputs are simply named signals.
