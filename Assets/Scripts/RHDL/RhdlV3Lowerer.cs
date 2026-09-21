@@ -330,7 +330,7 @@ namespace DLS.RHDL
 				int eq = declaration.IndexOf('=');
 				if (eq <= 0)
 				{
-					diagnostics.Add(new RhdlDiagnostic(line, "Expected: param NAME = VALUE"));
+					diagnostics.Add(new RhdlDiagnostic(line, "Expected: param/const NAME = VALUE"));
 					return;
 				}
 
@@ -345,6 +345,12 @@ namespace DLS.RHDL
 				if (!TryParseIntegerLiteral(valueText, out ulong value, out _))
 				{
 					diagnostics.Add(new RhdlDiagnostic(line, $"Invalid parameter value '{valueText}'."));
+					return;
+				}
+
+				if (parameters.ContainsKey(name))
+				{
+					diagnostics.Add(new RhdlDiagnostic(line, $"Parameter/constant '{name}' is declared more than once."));
 					return;
 				}
 
