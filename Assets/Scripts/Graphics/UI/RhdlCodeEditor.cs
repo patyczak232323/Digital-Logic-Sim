@@ -31,9 +31,8 @@ namespace DLS.Graphics
 
 		static readonly HashSet<string> SyntaxKeywords = new(StringComparer.OrdinalIgnoreCase)
 		{
-			"chip", "input", "output", "wire", "let", "param", "const", "connect", "use",
-			"if", "else", "and", "or", "xor", "not",
-			"true", "false", "high", "low", "on", "off"
+			"circuit", "input", "output", "signal", "constant", "component", "connect",
+			"if", "else", "and", "or", "xor", "not", "join", "high", "low"
 		};
 
 		readonly UIHandle scrollID = new("RHDL_DocumentScroll");
@@ -518,13 +517,12 @@ namespace DLS.Graphics
 
 			if (InputHelper.IsKeyDownThisFrame(KeyCode.Return) || InputHelper.IsKeyDownThisFrame(KeyCode.KeypadEnter))
 			{
-				if (!TryExpandBracePair()) InsertNewlineWithIndent();
+				InsertNewlineWithIndent();
 				return;
 			}
 
 			if (InputHelper.IsKeyDownThisFrame(KeyCode.Tab))
 			{
-				if (!shift && TryExpandBracePair()) return;
 				HandleTab(shift);
 				return;
 			}
@@ -787,7 +785,7 @@ namespace DLS.Graphics
 			int oldLine = FindLineForIndex(caret);
 			int oldColumn = caret - lineStarts[oldLine];
 			string[] work = new string[lines.Length];
-			int indentLevel = 0;
+			bool insideCircuit = false;
 
 			for (int i = 0; i < lines.Length; i++)
 			{
@@ -799,22 +797,12 @@ namespace DLS.Graphics
 					continue;
 				}
 
-				string code = StripEditorComment(trimmed);
-				int opens = 0;
-				int closes = 0;
-				for (int c = 0; c < code.Length; c++)
-				{
-					if (code[c] == '{') opens++;
-					else if (code[c] == '}') closes++;
-				}
-				// Python-style block header, primarily "chip Name:".
-				if (code.TrimEnd().EndsWith(":", StringComparison.Ordinal)) opens++;
+				string code = StripEditorComment(trimmed).TrimEnd();
+				bool isCircuitHeader = code.StartsWith("circuit ", StringComparison.OrdinalIgnoreCase) &&
+				                       code.EndsWith(":", StringComparison.Ordinal);
 
-				int leadingCloses = 0;
-				while (leadingCloses < code.Length && code[leadingCloses] == '}') leadingCloses++;
-				int lineIndent = Math.Max(0, indentLevel - leadingCloses);
-				work[i] = new string(' ', lineIndent * Indent.Length) + trimmed;
-				indentLevel = Math.Max(0, indentLevel + opens - closes);
+				work[i] = (insideCircuit && !isCircuitHeader ? Indent : string.Empty) + trimmed;
+				if (isCircuitHeader) insideCircuit = true;
 			}
 
 			string formatted = string.Join("\n", work);
@@ -835,9 +823,7 @@ namespace DLS.Graphics
 
 		static int FindEditorCommentStart(string line)
 		{
-			int slash = line.IndexOf("//", StringComparison.Ordinal);
-			int hash = line.IndexOf('#');
-			return slash < 0 ? hash : hash < 0 ? slash : Math.Min(slash, hash);
+			return line.IndexOf('#');
 		}
 
 		static string StripEditorComment(string line)
@@ -866,9 +852,9 @@ namespace DLS.Graphics
 
 		void HandleTypedCharacter(char c)
 		{
-			if (c is '{' or '(' or '[')
+			if (c is '(' or '[')
 			{
-				char close = c == '{' ? '}' : c == '(' ? ')' : ']';
+				char close = c == '(' ? ')' : ']';
 				if (HasSelection)
 				{
 					int start = SelectionMin;
@@ -885,50 +871,16 @@ namespace DLS.Graphics
 				return;
 			}
 
-			if (c is '}' or ')' or ']')
+			if (c is ')' or ']')
 			{
 				if (!HasSelection && caret < text.Length && text[caret] == c)
 				{
 					SetCaret(caret + 1, false);
 					return;
 				}
-				if (c == '}') DedentBeforeClosingBrace();
 			}
 
 			ReplaceSelection(c.ToString());
-		}
-
-		void DedentBeforeClosingBrace()
-		{
-			if (HasSelection) return;
-			EnsureLineCache();
-			int line = FindLineForIndex(caret);
-			int start = lineStarts[line];
-			if (caret <= start) return;
-			for (int i = start; i < caret; i++)
-				if (text[i] != ' ') return;
-			int remove = Math.Min(Indent.Length, caret - start);
-			if (remove > 0) ReplaceRange(caret - remove, caret, string.Empty);
-		}
-
-		bool TryExpandBracePair()
-		{
-			if (HasSelection || caret <= 0 || caret >= text.Length) return false;
-			if (text[caret - 1] != '{' || text[caret] != '}') return false;
-
-			EnsureLineCache();
-			int lineIndex = FindLineForIndex(caret);
-			string line = lines[lineIndex];
-
-			int leading = 0;
-			while (leading < line.Length && line[leading] == ' ') leading++;
-			string baseIndent = line.Substring(0, leading);
-			string insertion = "\n" + baseIndent + Indent + "\n" + baseIndent;
-			int innerCaret = caret + 1 + baseIndent.Length + Indent.Length;
-
-			ReplaceRange(caret, caret, insertion);
-			SetCaret(innerCaret, false);
-			return true;
 		}
 
 		void InsertNewlineWithIndent()
@@ -942,7 +894,7 @@ namespace DLS.Graphics
 			while (whitespaceCount < beforeCaret.Length && char.IsWhiteSpace(beforeCaret[whitespaceCount])) whitespaceCount++;
 			string indent = beforeCaret.Substring(0, whitespaceCount);
 			string codeBeforeCaret = beforeCaret.TrimEnd();
-			if (codeBeforeCaret.EndsWith("{") || codeBeforeCaret.EndsWith(":")) indent += Indent;
+			if (codeBeforeCaret.EndsWith(":")) indent += Indent;
 
 			ReplaceSelection("\n" + indent);
 		}
