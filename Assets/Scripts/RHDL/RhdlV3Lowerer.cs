@@ -222,6 +222,7 @@ namespace DLS.RHDL
 				if (diagnostics.Count != 0) return;
 
 				ExpandNamedBindings();
+				ValidateSingleDrivers();
 				ParseExpressions();
 				DetectAssignmentCycles();
 				if (diagnostics.Count != 0) return;
@@ -787,6 +788,41 @@ namespace DLS.RHDL
 						}
 					}
 				}
+			}
+
+			void ValidateSingleDrivers()
+			{
+				Dictionary<string, (int Line, string Target)> firstDrive = new(StringComparer.OrdinalIgnoreCase);
+
+				void Register(string target, int line)
+				{
+					if (string.IsNullOrWhiteSpace(target)) return;
+					string key = EndpointKey(target);
+					if (firstDrive.TryGetValue(key, out (int Line, string Target) first))
+					{
+						diagnostics.Add(new RhdlDiagnostic(
+							line,
+							$"Target '{target}' is driven more than once; first drive is on line {first.Line}."));
+						return;
+					}
+					firstDrive[key] = (line, target);
+				}
+
+				foreach (AssignmentDecl assignment in assignments)
+					Register(assignment.Target, assignment.Line);
+				foreach (ConnectionDecl connection in connections)
+					Register(connection.Target, connection.Line);
+			}
+
+			static string EndpointKey(string endpoint)
+			{
+				endpoint = endpoint?.Trim() ?? string.Empty;
+				int dot = endpoint.IndexOf('.');
+				if (dot < 0) return "S:" + Normalize(endpoint);
+
+				string owner = endpoint.Substring(0, dot).Trim();
+				string pin = endpoint.Substring(dot + 1).Trim();
+				return "I:" + Normalize(owner) + ":" + Normalize(pin);
 			}
 
 			void ParseExpressions()
