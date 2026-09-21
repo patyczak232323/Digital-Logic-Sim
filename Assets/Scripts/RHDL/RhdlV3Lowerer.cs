@@ -215,7 +215,7 @@ namespace DLS.RHDL
 
 				ParseStatements();
 				if (string.IsNullOrWhiteSpace(chipName))
-					diagnostics.Add(new RhdlDiagnostic(0, "Missing 'chip NAME {' declaration."));
+					diagnostics.Add(new RhdlDiagnostic(0, "Missing chip declaration. Example: chip Adder:"));
 				if (diagnostics.Count != 0) return;
 
 				ValidateAndResolveNames();
@@ -286,6 +286,10 @@ namespace DLS.RHDL
 						}
 
 						string rest = line.Substring(5).Trim();
+						// RHDL v0.4 accepts the beginner-friendly Python-style header:
+						//   chip Adder:
+						if (rest.EndsWith(":", StringComparison.Ordinal))
+							rest = rest.Substring(0, rest.Length - 1).Trim();
 						int brace = rest.IndexOf('{');
 						if (brace >= 0) rest = rest.Substring(0, brace).Trim();
 
@@ -602,6 +606,24 @@ namespace DLS.RHDL
 				string declaration = line;
 				if (declaration.StartsWith("use ", StringComparison.OrdinalIgnoreCase))
 					declaration = declaration.Substring(4).Trim();
+
+				// Python-like instance form:
+				//   n = NAND(IN_A=A, IN_B=B)
+				// lowers to the existing structural form NAND n(...).
+				int instanceEq = FindAssignmentEquals(declaration);
+				if (instanceEq > 0)
+				{
+					string instanceName = declaration.Substring(0, instanceEq).Trim();
+					string rhs = declaration.Substring(instanceEq + 1).Trim();
+					int rhsOpen = rhs.IndexOf('(');
+					int rhsClose = rhs.LastIndexOf(')');
+					if (ValidIdentifier(instanceName) && rhsOpen > 0 && rhsClose == rhs.Length - 1)
+					{
+						string typeName = rhs.Substring(0, rhsOpen).Trim();
+						if (ValidIdentifier(typeName))
+							declaration = typeName + " " + instanceName + rhs.Substring(rhsOpen);
+					}
+				}
 
 				int open = declaration.IndexOf('(');
 				string head = open >= 0 ? declaration.Substring(0, open).Trim() : declaration;
@@ -1637,19 +1659,40 @@ namespace DLS.RHDL
 				int index = 0;
 				ExprNode ParseTernary()
 				{
-					ExprNode condition = ParseComparison();
-					if (condition == null) return null;
-					if (!Match("?")) return condition;
-					ExprNode whenTrue = ParseTernary();
-					if (whenTrue == null) return null;
-					if (!Match(":"))
+					ExprNode first = ParseComparison();
+					if (first == null) return null;
+
+					// Classic RHDL form: condition ? whenTrue : whenFalse
+					if (Match("?"))
 					{
-						Error("Missing ':' in ternary expression.");
-						return null;
+						ExprNode whenTrue = ParseTernary();
+						if (whenTrue == null) return null;
+						if (!Match(":"))
+						{
+							Error("Missing ':' in ternary expression.");
+							return null;
+						}
+						ExprNode whenFalse = ParseTernary();
+						if (whenFalse == null) return null;
+						return new TernaryExpr { Condition = first, WhenTrue = whenTrue, WhenFalse = whenFalse, Position = first.Position };
 					}
-					ExprNode whenFalse = ParseTernary();
-					if (whenFalse == null) return null;
-					return new TernaryExpr { Condition = condition, WhenTrue = whenTrue, WhenFalse = whenFalse, Position = condition.Position };
+
+					// Python-style mux form: whenTrue if condition else whenFalse
+					if (Match("IF"))
+					{
+						ExprNode condition = ParseComparison();
+						if (condition == null) return null;
+						if (!Match("ELSE"))
+						{
+							Error("Expected 'else' in conditional expression.");
+							return null;
+						}
+						ExprNode whenFalse = ParseTernary();
+						if (whenFalse == null) return null;
+						return new TernaryExpr { Condition = condition, WhenTrue = first, WhenFalse = whenFalse, Position = condition.Position };
+					}
+
+					return first;
 				}
 
 				ExprNode ParseComparison()
@@ -1827,6 +1870,14 @@ namespace DLS.RHDL
 					}
 
 					Token token = tokens[index++];
+					if (token.Text.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+					    token.Text.Equals("high", StringComparison.OrdinalIgnoreCase) ||
+					    token.Text.Equals("on", StringComparison.OrdinalIgnoreCase))
+						return new ConstExpr { Value = 1, WidthHint = 1, Raw = token.Text, Position = token.Position };
+					if (token.Text.Equals("false", StringComparison.OrdinalIgnoreCase) ||
+					    token.Text.Equals("low", StringComparison.OrdinalIgnoreCase) ||
+					    token.Text.Equals("off", StringComparison.OrdinalIgnoreCase))
+						return new ConstExpr { Value = 0, WidthHint = 1, Raw = token.Text, Position = token.Position };
 					if (TryParseIntegerLiteral(token.Text, out ulong value, out int widthHint))
 						return new ConstExpr { Value = value, WidthHint = widthHint, Raw = token.Text, Position = token.Position };
 
@@ -1951,7 +2002,9 @@ namespace DLS.RHDL
 
 		static string CleanLine(string line)
 		{
-			int comment = line.IndexOf("//", StringComparison.Ordinal);
+			int slashComment = line.IndexOf("//", StringComparison.Ordinal);
+			int hashComment = line.IndexOf('#');
+			int comment = slashComment < 0 ? hashComment : hashComment < 0 ? slashComment : Math.Min(slashComment, hashComment);
 			if (comment >= 0) line = line.Substring(0, comment);
 			line = line.Trim();
 			if (line.EndsWith(";")) line = line.Substring(0, line.Length - 1).Trim();
