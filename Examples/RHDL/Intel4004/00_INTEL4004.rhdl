@@ -140,10 +140,10 @@ circuit Intel4004
     signal latch_pending = enter_two or enter_fin
 
     signal reg_sel: 4 = choose(opa == 0x0, r0_q, choose(opa == 0x1, r1_q, choose(opa == 0x2, r2_q, choose(opa == 0x3, r3_q, choose(opa == 0x4, r4_q, choose(opa == 0x5, r5_q, choose(opa == 0x6, r6_q, choose(opa == 0x7, r7_q, choose(opa == 0x8, r8_q, choose(opa == 0x9, r9_q, choose(opa == 0xA, r10_q, choose(opa == 0xB, r11_q, choose(opa == 0xC, r12_q, choose(opa == 0xD, r13_q, choose(opa == 0xE, r14_q, r15_q)))))))))))))))
-    signal pending_reg: 4 = choose(pending_opa == 0x0, r0_q, choose(pending_opa == 0x1, r1_q, choose(pending_opa == 0x2, r2_q, choose(pending_opa == 0x3, r3_q, choose(pending_opa == 0x4, r4_q, choose(pending_opa == 0x5, r5_q, choose(pending_opa == 0x6, r6_q, choose(pending_opa == 0x7, r7_q, choose(pending_opa == 0x8, r8_q, choose(pending_opa == 0x9, r9_q, choose(pending_opa == 0xA, r10_q, choose(pending_opa == 0xB, r11_q, choose(pending_opa == 0xC, r12_q, choose(pending_opa == 0xD, r13_q, choose(pending_opa == 0xE, r14_q, r15_q)))))))))))))))
+    signal pending_reg: 4 = choose(pending_opa_q == 0x0, r0_q, choose(pending_opa_q == 0x1, r1_q, choose(pending_opa_q == 0x2, r2_q, choose(pending_opa_q == 0x3, r3_q, choose(pending_opa_q == 0x4, r4_q, choose(pending_opa_q == 0x5, r5_q, choose(pending_opa_q == 0x6, r6_q, choose(pending_opa_q == 0x7, r7_q, choose(pending_opa_q == 0x8, r8_q, choose(pending_opa_q == 0x9, r9_q, choose(pending_opa_q == 0xA, r10_q, choose(pending_opa_q == 0xB, r11_q, choose(pending_opa_q == 0xC, r12_q, choose(pending_opa_q == 0xD, r13_q, choose(pending_opa_q == 0xE, r14_q, r15_q)))))))))))))))
 
     signal pair_sel: 8 = choose(opa < 0x2, join(r0_q, r1_q), choose(opa < 0x4, join(r2_q, r3_q), choose(opa < 0x6, join(r4_q, r5_q), choose(opa < 0x8, join(r6_q, r7_q), choose(opa < 0xA, join(r8_q, r9_q), choose(opa < 0xC, join(r10_q, r11_q), choose(opa < 0xE, join(r12_q, r13_q), join(r14_q, r15_q))))))))
-    signal pending_pair: 8 = choose(pending_opa < 0x2, join(r0_q, r1_q), choose(pending_opa < 0x4, join(r2_q, r3_q), choose(pending_opa < 0x6, join(r4_q, r5_q), choose(pending_opa < 0x8, join(r6_q, r7_q), choose(pending_opa < 0xA, join(r8_q, r9_q), choose(pending_opa < 0xC, join(r10_q, r11_q), choose(pending_opa < 0xE, join(r12_q, r13_q), join(r14_q, r15_q))))))))
+    signal pending_pair: 8 = choose(pending_opa_q < 0x2, join(r0_q, r1_q), choose(pending_opa_q < 0x4, join(r2_q, r3_q), choose(pending_opa_q < 0x6, join(r4_q, r5_q), choose(pending_opa_q < 0x8, join(r6_q, r7_q), choose(pending_opa_q < 0xA, join(r8_q, r9_q), choose(pending_opa_q < 0xC, join(r10_q, r11_q), choose(pending_opa_q < 0xE, join(r12_q, r13_q), join(r14_q, r15_q))))))))
 
     signal pc_lo_inc: 8 = pc_lo_q + 0x01
     signal pc_lo_wrap = pc_lo_q == 0xFF
@@ -156,8 +156,8 @@ circuit Intel4004
 
     signal jcn_acc_zero = acc_q == 0x0
     signal jcn_test_zero = TEST == 0
-    signal jcn_base = (pending_opa[2] and jcn_acc_zero) or (pending_opa[1] and carry_q) or (pending_opa[0] and jcn_test_zero)
-    signal jcn_take = choose(pending_opa[3], not jcn_base, jcn_base)
+    signal jcn_base = (pending_opa_q[2] and jcn_acc_zero) or (pending_opa_q[1] and carry_q) or (pending_opa_q[0] and jcn_test_zero)
+    signal jcn_take = choose(pending_opa_q[3], not jcn_base, jcn_base)
     signal isz_result: 4 = pending_reg + 0x1
     signal isz_take = isz_result != 0x0
 
@@ -233,92 +233,92 @@ circuit Intel4004
     signal f_daa = ex_f and (opa == 0xB)
     signal f_kbp = ex_f and (opa == 0xC)
     signal f_dcl = ex_f and (opa == 0xD)
-    signal second_jcn = phase1 and (pending_group == 0x1)
-    signal second_fim = phase1 and (pending_group == 0x2)
-    signal second_jun = phase1 and (pending_group == 0x4)
-    signal second_jms = phase1 and (pending_group == 0x5)
-    signal second_isz = phase1 and (pending_group == 0x7)
+    signal second_jcn = phase1 and (pending_group_q == 0x1)
+    signal second_fim = phase1 and (pending_group_q == 0x2)
+    signal second_jun = phase1 and (pending_group_q == 0x4)
+    signal second_jms = phase1 and (pending_group_q == 0x5)
+    signal second_isz = phase1 and (pending_group_q == 0x7)
 
     acc_d = choose(RESET, 0x0, choose(ex_add, add_result, choose(ex_sub, sub_result, choose(ex_ld, reg_sel, choose(ex_xch, reg_sel, choose(ex_bbl, opa, choose(ex_ldm, opa, choose(e_sbm, sbm_result, choose(e_rdm, RAM_DATA_IN, choose(e_rdr, ROM_PORT_IN, choose(e_adm, adm_result, choose(e_rd0 or e_rd1 or e_rd2 or e_rd3, RAM_STATUS_IN, choose(f_clb, 0x0, choose(f_iac, iac_result, choose(f_cma, not acc_q, choose(f_ral, ral_result, choose(f_rar, rar_result, choose(f_tcc, tcc_result, choose(f_dac, dac_result, choose(f_tcs, tcs_result, choose(f_daa, daa_result, choose(f_kbp, kbp_result, acc_q))))))))))))))))))))))
     carry_d = choose(RESET, 0, choose(ex_add, add_carry, choose(ex_sub, sub_carry, choose(e_sbm, sbm_carry, choose(e_adm, adm_carry, choose(f_clb, 0, choose(f_clc, 0, choose(f_iac, iac_carry, choose(f_cmc, not carry_q, choose(f_ral, acc_q[3], choose(f_rar, acc_q[0], choose(f_tcc, 0, choose(f_dac, dac_carry, choose(f_tcs, 0, choose(f_stc, 1, choose(f_daa, daa_carry, carry_q))))))))))))))))
 
-    signal r0_write_pair = (second_fim or phase2) and (pending_opa == 0x0)
-    signal r0_write_inc = (ex_inc and (opa == 0x0)) or (second_isz and (pending_opa == 0x0))
+    signal r0_write_pair = (second_fim or phase2) and (pending_opa_q == 0x0)
+    signal r0_write_inc = (ex_inc and (opa == 0x0)) or (second_isz and (pending_opa_q == 0x0))
     signal r0_write_xch = ex_xch and (opa == 0x0)
     signal r0_inc: 4 = r0_q + 0x1
     r0_d = choose(RESET, 0x0, choose(r0_write_pair, ROM_DATA[7:4], choose(r0_write_inc, r0_inc, choose(r0_write_xch, acc_q, r0_q))))
-    signal r1_write_pair = (second_fim or phase2) and (pending_opa == 0x0)
-    signal r1_write_inc = (ex_inc and (opa == 0x1)) or (second_isz and (pending_opa == 0x1))
+    signal r1_write_pair = (second_fim or phase2) and (pending_opa_q == 0x0)
+    signal r1_write_inc = (ex_inc and (opa == 0x1)) or (second_isz and (pending_opa_q == 0x1))
     signal r1_write_xch = ex_xch and (opa == 0x1)
     signal r1_inc: 4 = r1_q + 0x1
     r1_d = choose(RESET, 0x0, choose(r1_write_pair, ROM_DATA[3:0], choose(r1_write_inc, r1_inc, choose(r1_write_xch, acc_q, r1_q))))
-    signal r2_write_pair = (second_fim or phase2) and (pending_opa == 0x2)
-    signal r2_write_inc = (ex_inc and (opa == 0x2)) or (second_isz and (pending_opa == 0x2))
+    signal r2_write_pair = (second_fim or phase2) and (pending_opa_q == 0x2)
+    signal r2_write_inc = (ex_inc and (opa == 0x2)) or (second_isz and (pending_opa_q == 0x2))
     signal r2_write_xch = ex_xch and (opa == 0x2)
     signal r2_inc: 4 = r2_q + 0x1
     r2_d = choose(RESET, 0x0, choose(r2_write_pair, ROM_DATA[7:4], choose(r2_write_inc, r2_inc, choose(r2_write_xch, acc_q, r2_q))))
-    signal r3_write_pair = (second_fim or phase2) and (pending_opa == 0x2)
-    signal r3_write_inc = (ex_inc and (opa == 0x3)) or (second_isz and (pending_opa == 0x3))
+    signal r3_write_pair = (second_fim or phase2) and (pending_opa_q == 0x2)
+    signal r3_write_inc = (ex_inc and (opa == 0x3)) or (second_isz and (pending_opa_q == 0x3))
     signal r3_write_xch = ex_xch and (opa == 0x3)
     signal r3_inc: 4 = r3_q + 0x1
     r3_d = choose(RESET, 0x0, choose(r3_write_pair, ROM_DATA[3:0], choose(r3_write_inc, r3_inc, choose(r3_write_xch, acc_q, r3_q))))
-    signal r4_write_pair = (second_fim or phase2) and (pending_opa == 0x4)
-    signal r4_write_inc = (ex_inc and (opa == 0x4)) or (second_isz and (pending_opa == 0x4))
+    signal r4_write_pair = (second_fim or phase2) and (pending_opa_q == 0x4)
+    signal r4_write_inc = (ex_inc and (opa == 0x4)) or (second_isz and (pending_opa_q == 0x4))
     signal r4_write_xch = ex_xch and (opa == 0x4)
     signal r4_inc: 4 = r4_q + 0x1
     r4_d = choose(RESET, 0x0, choose(r4_write_pair, ROM_DATA[7:4], choose(r4_write_inc, r4_inc, choose(r4_write_xch, acc_q, r4_q))))
-    signal r5_write_pair = (second_fim or phase2) and (pending_opa == 0x4)
-    signal r5_write_inc = (ex_inc and (opa == 0x5)) or (second_isz and (pending_opa == 0x5))
+    signal r5_write_pair = (second_fim or phase2) and (pending_opa_q == 0x4)
+    signal r5_write_inc = (ex_inc and (opa == 0x5)) or (second_isz and (pending_opa_q == 0x5))
     signal r5_write_xch = ex_xch and (opa == 0x5)
     signal r5_inc: 4 = r5_q + 0x1
     r5_d = choose(RESET, 0x0, choose(r5_write_pair, ROM_DATA[3:0], choose(r5_write_inc, r5_inc, choose(r5_write_xch, acc_q, r5_q))))
-    signal r6_write_pair = (second_fim or phase2) and (pending_opa == 0x6)
-    signal r6_write_inc = (ex_inc and (opa == 0x6)) or (second_isz and (pending_opa == 0x6))
+    signal r6_write_pair = (second_fim or phase2) and (pending_opa_q == 0x6)
+    signal r6_write_inc = (ex_inc and (opa == 0x6)) or (second_isz and (pending_opa_q == 0x6))
     signal r6_write_xch = ex_xch and (opa == 0x6)
     signal r6_inc: 4 = r6_q + 0x1
     r6_d = choose(RESET, 0x0, choose(r6_write_pair, ROM_DATA[7:4], choose(r6_write_inc, r6_inc, choose(r6_write_xch, acc_q, r6_q))))
-    signal r7_write_pair = (second_fim or phase2) and (pending_opa == 0x6)
-    signal r7_write_inc = (ex_inc and (opa == 0x7)) or (second_isz and (pending_opa == 0x7))
+    signal r7_write_pair = (second_fim or phase2) and (pending_opa_q == 0x6)
+    signal r7_write_inc = (ex_inc and (opa == 0x7)) or (second_isz and (pending_opa_q == 0x7))
     signal r7_write_xch = ex_xch and (opa == 0x7)
     signal r7_inc: 4 = r7_q + 0x1
     r7_d = choose(RESET, 0x0, choose(r7_write_pair, ROM_DATA[3:0], choose(r7_write_inc, r7_inc, choose(r7_write_xch, acc_q, r7_q))))
-    signal r8_write_pair = (second_fim or phase2) and (pending_opa == 0x8)
-    signal r8_write_inc = (ex_inc and (opa == 0x8)) or (second_isz and (pending_opa == 0x8))
+    signal r8_write_pair = (second_fim or phase2) and (pending_opa_q == 0x8)
+    signal r8_write_inc = (ex_inc and (opa == 0x8)) or (second_isz and (pending_opa_q == 0x8))
     signal r8_write_xch = ex_xch and (opa == 0x8)
     signal r8_inc: 4 = r8_q + 0x1
     r8_d = choose(RESET, 0x0, choose(r8_write_pair, ROM_DATA[7:4], choose(r8_write_inc, r8_inc, choose(r8_write_xch, acc_q, r8_q))))
-    signal r9_write_pair = (second_fim or phase2) and (pending_opa == 0x8)
-    signal r9_write_inc = (ex_inc and (opa == 0x9)) or (second_isz and (pending_opa == 0x9))
+    signal r9_write_pair = (second_fim or phase2) and (pending_opa_q == 0x8)
+    signal r9_write_inc = (ex_inc and (opa == 0x9)) or (second_isz and (pending_opa_q == 0x9))
     signal r9_write_xch = ex_xch and (opa == 0x9)
     signal r9_inc: 4 = r9_q + 0x1
     r9_d = choose(RESET, 0x0, choose(r9_write_pair, ROM_DATA[3:0], choose(r9_write_inc, r9_inc, choose(r9_write_xch, acc_q, r9_q))))
-    signal r10_write_pair = (second_fim or phase2) and (pending_opa == 0xA)
-    signal r10_write_inc = (ex_inc and (opa == 0xA)) or (second_isz and (pending_opa == 0xA))
+    signal r10_write_pair = (second_fim or phase2) and (pending_opa_q == 0xA)
+    signal r10_write_inc = (ex_inc and (opa == 0xA)) or (second_isz and (pending_opa_q == 0xA))
     signal r10_write_xch = ex_xch and (opa == 0xA)
     signal r10_inc: 4 = r10_q + 0x1
     r10_d = choose(RESET, 0x0, choose(r10_write_pair, ROM_DATA[7:4], choose(r10_write_inc, r10_inc, choose(r10_write_xch, acc_q, r10_q))))
-    signal r11_write_pair = (second_fim or phase2) and (pending_opa == 0xA)
-    signal r11_write_inc = (ex_inc and (opa == 0xB)) or (second_isz and (pending_opa == 0xB))
+    signal r11_write_pair = (second_fim or phase2) and (pending_opa_q == 0xA)
+    signal r11_write_inc = (ex_inc and (opa == 0xB)) or (second_isz and (pending_opa_q == 0xB))
     signal r11_write_xch = ex_xch and (opa == 0xB)
     signal r11_inc: 4 = r11_q + 0x1
     r11_d = choose(RESET, 0x0, choose(r11_write_pair, ROM_DATA[3:0], choose(r11_write_inc, r11_inc, choose(r11_write_xch, acc_q, r11_q))))
-    signal r12_write_pair = (second_fim or phase2) and (pending_opa == 0xC)
-    signal r12_write_inc = (ex_inc and (opa == 0xC)) or (second_isz and (pending_opa == 0xC))
+    signal r12_write_pair = (second_fim or phase2) and (pending_opa_q == 0xC)
+    signal r12_write_inc = (ex_inc and (opa == 0xC)) or (second_isz and (pending_opa_q == 0xC))
     signal r12_write_xch = ex_xch and (opa == 0xC)
     signal r12_inc: 4 = r12_q + 0x1
     r12_d = choose(RESET, 0x0, choose(r12_write_pair, ROM_DATA[7:4], choose(r12_write_inc, r12_inc, choose(r12_write_xch, acc_q, r12_q))))
-    signal r13_write_pair = (second_fim or phase2) and (pending_opa == 0xC)
-    signal r13_write_inc = (ex_inc and (opa == 0xD)) or (second_isz and (pending_opa == 0xD))
+    signal r13_write_pair = (second_fim or phase2) and (pending_opa_q == 0xC)
+    signal r13_write_inc = (ex_inc and (opa == 0xD)) or (second_isz and (pending_opa_q == 0xD))
     signal r13_write_xch = ex_xch and (opa == 0xD)
     signal r13_inc: 4 = r13_q + 0x1
     r13_d = choose(RESET, 0x0, choose(r13_write_pair, ROM_DATA[3:0], choose(r13_write_inc, r13_inc, choose(r13_write_xch, acc_q, r13_q))))
-    signal r14_write_pair = (second_fim or phase2) and (pending_opa == 0xE)
-    signal r14_write_inc = (ex_inc and (opa == 0xE)) or (second_isz and (pending_opa == 0xE))
+    signal r14_write_pair = (second_fim or phase2) and (pending_opa_q == 0xE)
+    signal r14_write_inc = (ex_inc and (opa == 0xE)) or (second_isz and (pending_opa_q == 0xE))
     signal r14_write_xch = ex_xch and (opa == 0xE)
     signal r14_inc: 4 = r14_q + 0x1
     r14_d = choose(RESET, 0x0, choose(r14_write_pair, ROM_DATA[7:4], choose(r14_write_inc, r14_inc, choose(r14_write_xch, acc_q, r14_q))))
-    signal r15_write_pair = (second_fim or phase2) and (pending_opa == 0xE)
-    signal r15_write_inc = (ex_inc and (opa == 0xF)) or (second_isz and (pending_opa == 0xF))
+    signal r15_write_pair = (second_fim or phase2) and (pending_opa_q == 0xE)
+    signal r15_write_inc = (ex_inc and (opa == 0xF)) or (second_isz and (pending_opa_q == 0xF))
     signal r15_write_xch = ex_xch and (opa == 0xF)
     signal r15_inc: 4 = r15_q + 0x1
     r15_d = choose(RESET, 0x0, choose(r15_write_pair, ROM_DATA[3:0], choose(r15_write_inc, r15_inc, choose(r15_write_xch, acc_q, r15_q))))
@@ -342,7 +342,7 @@ circuit Intel4004
     signal pc1_lo_isz: 8 = choose(isz_take, ROM_DATA, pc2_lo)
     signal pc1_hi_isz: 4 = pc1_branch_page
     signal pc1_lo_next: 8 = choose(second_jcn, pc1_lo_jcn, choose(second_jun, ROM_DATA, choose(second_jms, ROM_DATA, choose(second_isz, pc1_lo_isz, pc2_lo))))
-    signal pc1_hi_next: 4 = choose(second_jcn, pc1_hi_jcn, choose(second_jun, pending_opa, choose(second_jms, pending_opa, choose(second_isz, pc1_hi_isz, pc2_hi))))
+    signal pc1_hi_next: 4 = choose(second_jcn, pc1_hi_jcn, choose(second_jun, pending_opa_q, choose(second_jms, pending_opa_q, choose(second_isz, pc1_hi_isz, pc2_hi))))
     pc_lo_d = choose(RESET, 0x00, choose(phase0, pc0_lo_next, choose(phase1, pc1_lo_next, pc_lo_q)))
     pc_hi_d = choose(RESET, 0x0, choose(phase0, pc0_hi_next, choose(phase1, pc1_hi_next, pc_hi_q)))
 
@@ -3010,7 +3010,7 @@ circuit Intel4004
     component phase_b3_sq : NAND(IN_A=phase_b3_s_set_n, IN_B=phase_b3_s_nq, OUT=phase_q3)
     component phase_b3_snq : NAND(IN_A=phase_b3_s_reset_n, IN_B=phase_q3, OUT=phase_b3_s_nq)
 
-    # State: pending_group (4 bits)
+    # State: pending_group_q (4 bits)
     signal pending_group_q0
     signal pending_group_q1
     signal pending_group_q2
@@ -3089,7 +3089,7 @@ circuit Intel4004
     component pending_group_b3_sq : NAND(IN_A=pending_group_b3_s_set_n, IN_B=pending_group_b3_s_nq, OUT=pending_group_q3)
     component pending_group_b3_snq : NAND(IN_A=pending_group_b3_s_reset_n, IN_B=pending_group_q3, OUT=pending_group_b3_s_nq)
 
-    # State: pending_opa (4 bits)
+    # State: pending_opa_q (4 bits)
     signal pending_opa_q0
     signal pending_opa_q1
     signal pending_opa_q2
