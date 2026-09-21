@@ -689,13 +689,13 @@ namespace DLS.Simulation
     input B:8
     output Y
     output equal
-    output low
+    output low_nibble
 
     signal sum
     sum = A + B
     Y = sum
     equal = A == B
-    low = A[3:0]";
+    low_nibble = A[3:0]";
 
 			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
 			Assert(result.Success,
@@ -708,7 +708,7 @@ namespace DLS.Simulation
 			Assert(result.Description.OutputPins[1].Name == "equal" &&
 			       result.Description.OutputPins[1].BitCount == PinBitCount.Bit1,
 				"comparison output should infer to 1 bit");
-			Assert(result.Description.OutputPins[2].Name == "low" &&
+			Assert(result.Description.OutputPins[2].Name == "low_nibble" &&
 			       result.Description.OutputPins[2].BitCount == PinBitCount.Bit4,
 				"slice output should infer to 4 bits");
 
