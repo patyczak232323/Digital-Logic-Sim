@@ -12,7 +12,7 @@
 # The stock ROM is 256x16. CPU4 uses only addresses 0..15 and the low byte
 # (ROM pin OUT A) for its 8-bit instruction. In the ROM editor, enter words
 # such as 0x0013 for "LDI 3".
-circuit CPU4:
+circuit CPU4
     input CLK, RESET
 
     output ACC: 4
@@ -40,7 +40,7 @@ circuit CPU4:
     signal pc_we
 
     pc_d8 = join(0x0, pc_d)
-    component pc_reg = dev.RAM-8(ADDRESS=0x00, DATA=pc_d8, WRITE=pc_we, RESET=RESET, CLOCK=CLK, OUT=pc_raw)
+    component pc_reg : dev.RAM-8(ADDRESS=0x00, DATA=pc_d8, WRITE=pc_we, RESET=RESET, CLOCK=CLK, OUT=pc_raw)
     pc_q = pc_raw[3:0]
 
     signal acc_q: 4
@@ -50,7 +50,7 @@ circuit CPU4:
     signal acc_we
 
     acc_d8 = join(0x0, acc_d)
-    component acc_reg = dev.RAM-8(ADDRESS=0x00, DATA=acc_d8, WRITE=acc_we, RESET=RESET, CLOCK=CLK, OUT=acc_raw)
+    component acc_reg : dev.RAM-8(ADDRESS=0x00, DATA=acc_d8, WRITE=acc_we, RESET=RESET, CLOCK=CLK, OUT=acc_raw)
     acc_q = acc_raw[3:0]
 
     signal out_q: 4
@@ -59,7 +59,7 @@ circuit CPU4:
     signal out_we
 
     out_d8 = join(0x0, acc_q)
-    component out_reg = dev.RAM-8(ADDRESS=0x00, DATA=out_d8, WRITE=out_we, RESET=RESET, CLOCK=CLK, OUT=out_raw)
+    component out_reg : dev.RAM-8(ADDRESS=0x00, DATA=out_d8, WRITE=out_we, RESET=RESET, CLOCK=CLK, OUT=out_raw)
     out_q = out_raw[3:0]
 
     # A one-bit HALT latch implemented with the low bit of another byte cell.
@@ -69,7 +69,7 @@ circuit CPU4:
     signal halted_i
 
     halt_data = 0x01
-    component halt_reg = dev.RAM-8(ADDRESS=0x00, DATA=halt_data, WRITE=halt_we, RESET=RESET, CLOCK=CLK, OUT=halt_raw)
+    component halt_reg : dev.RAM-8(ADDRESS=0x00, DATA=halt_data, WRITE=halt_we, RESET=RESET, CLOCK=CLK, OUT=halt_raw)
     halted_i = halt_raw[0]
 
     # -----------------------------------------------------------------------
@@ -83,7 +83,7 @@ circuit CPU4:
     signal rom_high_unused: 8
 
     rom_addr = join(0x0, pc_q)
-    component program_rom = ROM25616(ADDRESS=rom_addr, OUT_A=instruction, OUT_B=rom_high_unused)
+    component program_rom : ROM25616(ADDRESS=rom_addr, OUT_A=instruction, OUT_B=rom_high_unused)
 
     signal opcode_i: 4
     signal operand_i: 4
@@ -105,7 +105,7 @@ circuit CPU4:
     ram_addr = join(0x0, operand_i)
     ram_in = join(0x0, acc_q)
 
-    component data_ram = dev.RAM-8(ADDRESS=ram_addr, DATA=ram_in, WRITE=ram_write, RESET=RESET, CLOCK=CLK, OUT=ram_raw)
+    component data_ram : dev.RAM-8(ADDRESS=ram_addr, DATA=ram_in, WRITE=ram_write, RESET=RESET, CLOCK=CLK, OUT=ram_raw)
     ram_q = ram_raw[3:0]
 
     # -----------------------------------------------------------------------
@@ -175,7 +175,7 @@ circuit CPU4:
     not_v = not acc_q
     inc_v = acc_q + 0x1
 
-    acc_d = (operand_i if i_ldi else (ram_q if i_lda else (add_v if i_add else (sub_v if i_sub else (and_v if i_and else (or_v if i_or else (xor_v if i_xor else (not_v if i_not else (inc_v if i_inc else acc_q)))))))))
+    acc_d = choose(i_ldi, operand_i, choose(i_lda, ram_q, choose(i_add, add_v, choose(i_sub, sub_v, choose(i_and, and_v, choose(i_or, or_v, choose(i_xor, xor_v, choose(i_not, not_v, choose(i_inc, inc_v, acc_q)))))))))
 
     signal running
     signal acc_instruction
@@ -203,7 +203,7 @@ circuit CPU4:
     pc_inc = pc_q + 0x1
     take_branch = i_jmp or (i_jz and zero) or (i_jnz and not zero)
     branch_target = operand_i
-    pc_d = (branch_target if take_branch else pc_inc)
+    pc_d = choose(take_branch, branch_target, pc_inc)
     pc_we = running and not i_hlt
 
     # -----------------------------------------------------------------------
@@ -220,3 +220,4 @@ circuit CPU4:
     OPCODE = opcode_i
     OPERAND = operand_i
     MEM_DATA = ram_q
+end
