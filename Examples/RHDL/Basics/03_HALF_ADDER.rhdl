@@ -1,8 +1,0 @@
-# Half adder written as readable concurrent equations.
-circuit HalfAdder
-    input A, B
-    output SUM, CARRY
-
-    SUM = A xor B
-    CARRY = A and B
-end

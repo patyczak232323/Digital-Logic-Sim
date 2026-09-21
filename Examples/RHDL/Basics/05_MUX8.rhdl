@@ -1,9 +1,0 @@
-# 8-bit 2:1 multiplexer.
-# SEL=1 selects A, SEL=0 selects B.
-circuit Mux8
-    input A: 8, B: 8
-    input SEL
-    output Y: 8
-
-    Y = choose(SEL, A, B)
-end
