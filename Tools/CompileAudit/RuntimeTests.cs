@@ -283,6 +283,29 @@ namespace DLS.Simulation
 
 			DeterministicSimulator.Reset();
 			Simulator.Reset();
+
+			string doubleDriveSource =
+@"chip DoubleDrive {
+  input A, B
+  output Y = A
+  Y = B
+}";
+			RhdlCompileResult doubleDrive = RhdlCompiler.Compile(doubleDriveSource, library);
+			Assert(!doubleDrive.Success, "RHDL double-drive sample should fail");
+			Assert(doubleDrive.Diagnostics.Any(d => d.Message.Contains("driven more than once") && d.Message.Contains("line 3")),
+				"RHDL double-drive diagnostic should identify the first source line");
+
+			string duplicateConstSource =
+@"chip DuplicateConst {
+  const X = 0
+  const X = 1
+  input A
+  output Y = A
+}";
+			RhdlCompileResult duplicateConst = RhdlCompiler.Compile(duplicateConstSource, library);
+			Assert(!duplicateConst.Success, "duplicate RHDL const should fail");
+			Assert(duplicateConst.Diagnostics.Any(d => d.Message.Contains("declared more than once")),
+				"duplicate RHDL const diagnostic missing");
 		}
 
 		static void TestRhdlV3BusExpressions()
