@@ -19,9 +19,9 @@ namespace DLS.Simulation
 		{
 			Run("RHDL structural HalfAdder compilation", TestRhdlHalfAdderCompilation);
 			Run("RHDL readable logic synthesis", TestRhdlReadableLogicSynthesis);
-			Run("RHDL concise authoring sugar", TestRhdlConciseAuthoringSugar);
-			Run("RHDL v0.5 clear beginner syntax", TestRhdlClearSyntax);
-			Run("RHDL buses, arithmetic, slices and selection", TestRhdlBusExpressions);
+			Run("RHDL concise hardware equations", TestRhdlConciseAuthoringSugar);
+			Run("RHDL v0.6 hardware-language syntax", TestRhdlV06Syntax);
+			Run("RHDL buses, arithmetic, slices and choose", TestRhdlBusExpressions);
 			Run("RHDL implicit width inference", TestRhdlImplicitWidthInference);
 			Run("RHDL block layout and orthogonal routing", TestRhdlBlockLayout);
 			Run("RHDL operators, constants and named ports", TestRhdlOperatorsAndNamedPorts);
@@ -80,16 +80,16 @@ namespace DLS.Simulation
 
 			ChipLibrary library = new(nand);
 			string source =
-@"circuit HalfAdder:
+@"circuit HalfAdder
     input a
     input b
     output sum
     output carry
-    component n1 = NAND
-    component n2 = NAND
-    component n3 = NAND
-    component n4 = NAND
-    component n5 = NAND
+    component n1 : NAND
+    component n2 : NAND
+    component n3 : NAND
+    component n4 : NAND
+    component n5 : NAND
     connect a -> n1.IN_A
     connect b -> n1.IN_B
     connect a -> n2.IN_A
@@ -101,7 +101,8 @@ namespace DLS.Simulation
     connect n4.OUT -> sum
     connect n1.OUT -> n5.IN_A
     connect n1.OUT -> n5.IN_B
-    connect n5.OUT -> carry";
+    connect n5.OUT -> carry
+end";
 
 			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
 			Assert(result.Success, "RHDL compile failed: " + string.Join(" | ", result.Diagnostics.Select(d => d.ToString())));
@@ -162,12 +163,13 @@ namespace DLS.Simulation
 
 			ChipLibrary library = new(nand);
 			string source =
-@"circuit HalfAdderReadable:
+@"circuit HalfAdderReadable
     input a, b
     output sum, carry
 
     sum = a XOR b
-    carry = a AND b";
+    carry = a AND b
+end";
 
 			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
 			Assert(result.Success, "Readable RHDL compile failed: " + string.Join(" | ", result.Diagnostics.Select(d => d.ToString())));
@@ -200,20 +202,22 @@ namespace DLS.Simulation
 			}
 
 			string typoSource =
-@"circuit TypoDemo:
+@"circuit TypoDemo
     input alpha
     output y
-    y = alhpa";
+    y = alhpa
+end";
 			RhdlCompileResult typo = RhdlCompiler.Compile(typoSource, library);
 			Assert(!typo.Success, "RHDL typo sample should fail");
 			Assert(typo.Diagnostics.Any(d => d.Message.Contains("Did you mean 'alpha'?")),
 				"RHDL typo diagnostic did not suggest the nearest signal");
 
 			string chipTypoSource =
-@"circuit ChipTypo:
+@"circuit ChipTypo
     input a, b
     output y
-    component n = NANND(IN_A=a, IN_B=b, OUT=y)";
+    component n : NANND(IN_A=a, IN_B=b, OUT=y)
+end";
 			RhdlCompileResult chipTypo = RhdlCompiler.Compile(chipTypoSource, library);
 			Assert(!chipTypo.Success, "Unknown chip typo sample should fail");
 			Assert(chipTypo.Diagnostics.Any(d => d.Message.Contains("Did you mean 'NAND'?")),
@@ -252,12 +256,13 @@ namespace DLS.Simulation
 
 			ChipLibrary library = new(nand, bus1);
 			string source =
-@"circuit Concise:
+@"circuit Concise
     constant ONE = 1
     input A, B
 
     signal x = A XOR B
-    output Y = x XOR ONE";
+    output Y = x XOR ONE
+end";
 
 			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
 			Assert(result.Success,
@@ -292,21 +297,23 @@ namespace DLS.Simulation
 			Simulator.Reset();
 
 			string doubleDriveSource =
-@"circuit DoubleDrive:
+@"circuit DoubleDrive
     input A, B
     output Y = A
-    Y = B";
+    Y = B
+end";
 			RhdlCompileResult doubleDrive = RhdlCompiler.Compile(doubleDriveSource, library);
 			Assert(!doubleDrive.Success, "RHDL double-drive sample should fail");
 			Assert(doubleDrive.Diagnostics.Any(d => d.Message.Contains("driven more than once") && d.Message.Contains("line 3")),
 				"RHDL double-drive diagnostic should identify the first source line");
 
 			string duplicateConstSource =
-@"circuit DuplicateConst:
+@"circuit DuplicateConst
     constant X = 0
     constant X = 1
     input A
-    output Y = A";
+    output Y = A
+end";
 			RhdlCompileResult duplicateConst = RhdlCompiler.Compile(duplicateConstSource, library);
 			Assert(!duplicateConst.Success, "duplicate RHDL constant should fail");
 			Assert(duplicateConst.Diagnostics.Any(d => d.Message.Contains("declared more than once")),
@@ -314,7 +321,7 @@ namespace DLS.Simulation
 		}
 
 
-		static void TestRhdlClearSyntax()
+		static void TestRhdlV06Syntax()
 		{
 			PinDescription PinNamed(string name, int id) =>
 				new(name, id, new UnityEngine.Vector2(), PinBitCount.Bit1, PinColour.Red, PinValueDisplayMode.Off);
@@ -343,7 +350,7 @@ namespace DLS.Simulation
 
 			ChipLibrary library = new(nand, bus1);
 			string source =
-@"circuit Friendly:
+@"circuit Friendly
     # Inputs are simply named signals.
     input A
     input B
@@ -352,16 +359,17 @@ namespace DLS.Simulation
     signal both = A and B
     signal either = A or B
 
-    output Y = both if select else either
-    output Y_mux = (both if select else either)
-    output enabled = high";
+    output Y = choose(select, both, either)
+    output Y_mux = choose(select, both, either)
+    output enabled = high
+end";
 
 			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
 			Assert(result.Success,
-				"RHDL v0.5 compile failed: " + string.Join(" | ", result.Diagnostics.Select(d => d.ToString())));
-			Assert(result.Description != null, "RHDL v0.5 returned no description");
-			Assert(result.Description.InputPins.Length == 3, "RHDL v0.5 input count mismatch");
-			Assert(result.Description.OutputPins.Length == 3, "RHDL v0.5 output count mismatch");
+				"RHDL v0.6 compile failed: " + string.Join(" | ", result.Diagnostics.Select(d => d.ToString())));
+			Assert(result.Description != null, "RHDL v0.6 returned no description");
+			Assert(result.Description.InputPins.Length == 3, "RHDL v0.6 input count mismatch");
+			Assert(result.Description.OutputPins.Length == 3, "RHDL v0.6 output count mismatch");
 
 			Simulator.Reset();
 			DeterministicSimulator.Reset();
@@ -383,11 +391,11 @@ namespace DLS.Simulation
 
 						uint expectedY = select != 0 ? (a & b) : (a | b);
 						Assert(Bit(root.OutputPins[0].State) == expectedY,
-							$"RHDL v0.5 conditional mismatch for A={a} B={b} select={select}");
+							$"RHDL v0.6 conditional mismatch for A={a} B={b} select={select}");
 						Assert(Bit(root.OutputPins[1].State) == expectedY,
-							$"RHDL v0.5 conditional mismatch #2 for A={a} B={b} select={select}");
+							$"RHDL v0.6 choose mismatch for A={a} B={b} select={select}");
 						Assert(Bit(root.OutputPins[2].State) == 1,
-							"RHDL v0.5 high constant should produce logic high");
+							"RHDL v0.6 high constant should produce logic high");
 					}
 				}
 			}
@@ -396,17 +404,18 @@ namespace DLS.Simulation
 			Simulator.Reset();
 
 			string instanceSource =
-@"circuit FriendlyInstance:
+@"circuit FriendlyInstance
     input A
     input B
     output Y
 
-    component n = NAND(A=A, B=B, OUT=Y)";
+    component n : NAND(A=A, B=B, OUT=Y)
+end";
 
 			RhdlCompileResult instance = RhdlCompiler.Compile(instanceSource, library);
 			Assert(instance.Success,
-				"RHDL v0.5 instance syntax failed: " + string.Join(" | ", instance.Diagnostics.Select(d => d.ToString())));
-			Assert(instance.Description.SubChips.Length == 1, "RHDL v0.5 instance syntax should create one NAND");
+				"RHDL v0.6 instance syntax failed: " + string.Join(" | ", instance.Diagnostics.Select(d => d.ToString())));
+			Assert(instance.Description.SubChips.Length == 1, "RHDL v0.6 instance syntax should create one NAND");
 
 			string oldHeader =
 @"chip OldStyle {
@@ -414,17 +423,18 @@ namespace DLS.Simulation
   output Y = A
 }";
 			RhdlCompileResult oldHeaderResult = RhdlCompiler.Compile(oldHeader, library);
-			Assert(!oldHeaderResult.Success, "Removed 'chip' syntax should fail in RHDL v0.5");
-			Assert(oldHeaderResult.Diagnostics.Any(d => d.Message.Contains("'chip' was removed")),
+			Assert(!oldHeaderResult.Success, "Removed 'chip' syntax should fail in RHDL v0.6");
+			Assert(oldHeaderResult.Diagnostics.Any(d => d.Message.Contains("'chip' is not RHDL v0.6 syntax")),
 				"Removed 'chip' syntax should explain the v0.5 replacement");
 
 			string oldLogic =
-@"circuit OldLogic:
+@"circuit OldLogic
     input A
     input B
-    output Y = A & B";
+    output Y = A & B
+end";
 			RhdlCompileResult oldLogicResult = RhdlCompiler.Compile(oldLogic, library);
-			Assert(!oldLogicResult.Success, "Removed '&' syntax should fail in RHDL v0.5");
+			Assert(!oldLogicResult.Success, "Removed '&' syntax should fail in RHDL v0.6");
 			Assert(oldLogicResult.Diagnostics.Any(d => d.Message.Contains("Use 'and' instead of '&'")),
 				"Removed '&' syntax should point to the readable 'and' operator");
 		}
@@ -497,7 +507,7 @@ namespace DLS.Simulation
 			ChipLibrary library = new(nand, bus8, split8, split4, merge8, merge4);
 
 			string source =
-@"circuit V3Demo:
+@"circuit V3Demo
     constant WIDTH = 8
 
     input A: WIDTH, B: WIDTH
@@ -510,8 +520,9 @@ namespace DLS.Simulation
 
     sum = A + B
     mixed = join(A[7:4], B[3:0])
-    Y = (sum if sel else mixed)
-    equal = A == B";
+    Y = choose(sel, sum, mixed)
+    equal = A == B
+end";
 
 			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
 			Assert(result.Success,
@@ -599,7 +610,7 @@ namespace DLS.Simulation
 
 			ChipLibrary library = new(nand, bus1);
 			string source =
-@"circuit BlockLayout:
+@"circuit BlockLayout
     input A, B, C
     output Y
 
@@ -607,7 +618,8 @@ namespace DLS.Simulation
     signal bc
     ab = A and B
     bc = B xor C
-    Y = ab or bc";
+    Y = ab or bc
+end";
 
 			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
 			Assert(result.Success,
@@ -690,12 +702,13 @@ namespace DLS.Simulation
 			ChipLibrary library = new(nand, bus8, split8, merge8, split4, merge4);
 
 			string minimalSource =
-@"circuit Adder:
+@"circuit Adder
     input A:8
     input B:8
     output Y
 
-    Y = A + B";
+    Y = A + B
+end";
 			RhdlCompileResult minimal = RhdlCompiler.Compile(minimalSource, library);
 			Assert(minimal.Success,
 				"Minimal inferred adder failed: " + string.Join(" | ", minimal.Diagnostics.Select(d => d.ToString())));
@@ -704,7 +717,7 @@ namespace DLS.Simulation
 				"Minimal 'output Y' should infer to 8 bits from A + B");
 
 			string source =
-@"circuit Adder:
+@"circuit Adder
     input A:8
     input B:8
     output Y
@@ -715,7 +728,8 @@ namespace DLS.Simulation
     sum = A + B
     Y = sum
     equal = A == B
-    low_nibble = A[3:0]";
+    low_nibble = A[3:0]
+end";
 
 			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
 			Assert(result.Success,
@@ -799,7 +813,7 @@ namespace DLS.Simulation
 			ChipLibrary library = new(nand, split8, merge8);
 
 			string source =
-@"circuit V3Ops:
+@"circuit V3Ops
     input A: 8, B: 8
     input flag
 
@@ -818,7 +832,8 @@ namespace DLS.Simulation
     ge = A >= B
     literal = 0xA5
 
-    component named = NAND(IN_A=flag, IN_B=flag, OUT=nand_named)";
+    component named : NAND(IN_A=flag, IN_B=flag, OUT=nand_named)
+end";
 
 			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
 			Assert(result.Success,
