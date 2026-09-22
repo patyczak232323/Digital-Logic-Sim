@@ -91,6 +91,14 @@ namespace DLS.Game
 			if (inputSource == null) return;
 			inputSource.PrepareFrame();
 
+			// Main.Update processes world interaction before drawing UI. Pre-mark the
+			// persistent mobile chrome so a first tap on the dock/top bar cannot leak
+			// through and select/place something in the circuit underneath it.
+			if (Input.touchCount > 0 && MobileUI.IsScreenPointOverPersistentChrome(Input.GetTouch(0).position))
+			{
+				InteractionState.MouseIsOverUI = true;
+			}
+
 			// Android Back first closes the custom keyboard, then the current mobile
 			// screen/drawer. Only an unhandled Back is allowed to reach normal shortcuts.
 			if (Input.GetKeyDown(KeyCode.Escape))
@@ -132,6 +140,7 @@ namespace DLS.Game
 			{
 				if (touch.position.x <= edgeStart)
 				{
+					InteractionState.MouseIsOverUI = true;
 					edgeSwipeTracking = true;
 					edgeSwipeFingerId = touch.fingerId;
 					edgeSwipeStart = touch.position;
@@ -143,6 +152,7 @@ namespace DLS.Game
 
 			// A possible edge gesture owns the pointer from its first frame so it
 			// cannot accidentally place/select a component underneath the finger.
+			InteractionState.MouseIsOverUI = true;
 			inputSource.CancelPrimaryPointerThisFrame();
 
 			Vector2 delta = touch.position - edgeSwipeStart;
