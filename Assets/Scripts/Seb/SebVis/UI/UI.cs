@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using Seb.Helpers;
+using Seb.Helpers.InputHandling;
 using Seb.Types;
 using Seb.Vis.Text.Rendering;
 using UnityEngine;
@@ -362,15 +363,19 @@ namespace Seb.Vis.UI
 				Draw.Quad(ss.centre, ss.size, theme.bgCol);
 
 				// Focus input
-				bool mouseInBounds = InputHelper.MouseInBounds_ScreenSpace(ss.centre, ss.size);
+				bool mouseInBounds = PointerInTouchableBounds(ss.centre, ss.size);
 
 				if (InputHelper.IsMouseDownThisFrame(MouseButton.Left))
 				{
 					state.SetFocus(mouseInBounds);
 					state.isMouseDownInBounds = mouseInBounds;
 
-					// Set caret pos based on mouse position
-					if (mouseInBounds) state.SetCursorIndex(CharIndexBeforeMouse(textCentreLeft_ss.x), InputHelper.ShiftIsHeld);
+					// Set caret pos based on pointer position and explicitly open the in-app keyboard.
+					if (mouseInBounds)
+					{
+						state.SetCursorIndex(CharIndexBeforeMouse(textCentreLeft_ss.x), InputHelper.ShiftIsHeld);
+						MobileInputBridge.RequestKeyboard(MobileKeyboardMode.Text);
+					}
 				}
 
 				// Hold-drag left mouse to select
@@ -382,11 +387,13 @@ namespace Seb.Vis.UI
 				if (forceFocus && !state.focused)
 				{
 					state.SetFocus(true);
+					MobileInputBridge.RequestKeyboard(MobileKeyboardMode.Text);
 				}
 
 				// Draw focus outline and update text
 				if (state.focused)
 				{
+					MobileInputBridge.NotifyTextFocus(MobileKeyboardMode.Text);
 					const float outlineWidth = 0.05f;
 					Draw.QuadOutline(ss.centre, ss.size, outlineWidth * scale, theme.focusBorderCol);
 					foreach (char c in InputHelper.InputStringThisFrame)
@@ -742,7 +749,7 @@ namespace Seb.Vis.UI
 
 				// --- Handle interaction ---
 				bool mouseInsideMask = Draw.IsPointInsideActiveMask(InputHelper.MousePos) && !ignoreInputs;
-				bool mouseOver = mouseInsideMask && InputHelper.MouseInBounds_ScreenSpace(ss.centre, ss.size);
+				bool mouseOver = mouseInsideMask && PointerInTouchableBounds(ss.centre, ss.size);
 				bool mouseIsDown = InputHelper.IsMouseHeld(MouseButton.Left);
 
 				if (mouseOver && enabled)
@@ -771,7 +778,12 @@ namespace Seb.Vis.UI
 		public static bool MouseInsideBounds(Bounds2D uiBounds)
 		{
 			(Vector2 centre, Vector2 size) ss = UIToScreenSpace(uiBounds.Centre, uiBounds.Size);
-			return InputHelper.MouseInBounds_ScreenSpace(ss.centre, ss.size);
+			return PointerInTouchableBounds(ss.centre, ss.size);
+		}
+
+		static bool PointerInTouchableBounds(Vector2 centre, Vector2 size)
+		{
+			return InputHelper.MouseInBounds_ScreenSpace(centre, MobileInputBridge.ExpandTouchHitSize(size));
 		}
 
 		// Returns the index of the pressed button (-1 if none)
@@ -859,7 +871,7 @@ namespace Seb.Vis.UI
 
 				// --- Handle interation ---
 				bool mouseInsideMask = Draw.IsPointInsideActiveMask(InputHelper.MousePos);
-				bool mouseOver = mouseInsideMask && InputHelper.MouseInBounds_ScreenSpace(ss.centre, ss.size);
+				bool mouseOver = mouseInsideMask && PointerInTouchableBounds(ss.centre, ss.size);
 				bool mouseIsDown = InputHelper.IsMouseHeld(MouseButton.Left);
 				if (InputHelper.IsMouseDownThisFrame(MouseButton.Left))
 				{
@@ -899,7 +911,7 @@ namespace Seb.Vis.UI
 				bool state = GetOrCreateState(id, checkBoxStates);
 				(Vector2 centre, Vector2 size) ss = UIToScreenSpace(centre, boxSize);
 
-				if (InputHelper.MouseInBounds_ScreenSpace(ss.centre, ss.size))
+				if (PointerInTouchableBounds(ss.centre, ss.size))
 				{
 					if (InputHelper.IsMouseDownThisFrame(MouseButton.Left))
 					{
