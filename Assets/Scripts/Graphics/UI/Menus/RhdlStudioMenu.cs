@@ -31,6 +31,7 @@ namespace DLS.Graphics
 		static int lastBuildSubChipCount;
 		static int lastBuildWireCount;
 		static string requestedSourceChipName;
+		static bool mobileInfoOpen;
 
 		public static void OpenSource(string chipName)
 		{
@@ -61,6 +62,7 @@ namespace DLS.Graphics
 			buildAttempted = false;
 			latestResult = null;
 			CodeEditor.SetDiagnosticLines(Array.Empty<int>());
+			mobileInfoOpen = false;
 		}
 
 		public static void DrawMenu()
@@ -74,6 +76,12 @@ namespace DLS.Graphics
 
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
 			MenuHelper.DrawBackgroundOverlay();
+
+			if (MobileUI.IsActive)
+			{
+				DrawMobileMenu(theme, project);
+				return;
+			}
 
 			Vector2 topLeft = UI.Centre + new Vector2(-WorkspaceWidth / 2f, 26.2f);
 			Bounds2D mainHeader = RewiredUI.DrawSectionHeader(
@@ -159,6 +167,274 @@ namespace DLS.Graphics
 				SaveDraft(project);
 				UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
 			}
+		}
+
+		static void DrawMobileMenu(DrawSettings.UIThemeDLS theme, Project project)
+		{
+			Rect safe = MobileUI.SafeRectUI;
+			const float pad = 0.75f;
+			const float gap = 0.45f;
+			float left = safe.xMin + pad;
+			float width = safe.width - pad * 2f;
+			float top = safe.yMax - pad;
+
+			// Dedicated mobile header. The left side is intentionally reserved for
+			// MobileUI's persistent BACK button, which is drawn above this menu.
+			UI.DrawPanel(new Vector2(left, top), new Vector2(width, 5.2f), RewiredUI.SurfaceRaised, Anchor.TopLeft);
+			Bounds2D header = UI.PrevBounds;
+			UI.DrawLine(header.BottomLeft, header.BottomRight, 0.07f, RewiredUI.Accent);
+			UI.DrawText(
+				"RHDL STUDIO",
+				theme.FontBold,
+				theme.FontSizeRegular * 0.98f,
+				header.CentreLeft + Vector2.right * 12.8f,
+				Anchor.TextCentreLeft,
+				Color.white);
+
+			string sourceInfo = $"LN {CodeEditor.CaretLine}  COL {CodeEditor.CaretColumn}  /  {CodeEditor.LineCount} LINES";
+			if (CodeEditor.IsDirty) sourceInfo += "  /  MODIFIED";
+			UI.DrawText(
+				sourceInfo,
+				theme.FontRegular,
+				theme.FontSizeRegular * 0.62f,
+				header.CentreRight + Vector2.left * 0.9f,
+				Anchor.TextCentreRight,
+				RewiredUI.SecondaryText);
+
+			float actionTop = header.Bottom - gap;
+			float actionH = 4.7f;
+			float actionGap = 0.42f;
+			float actionW = (width - actionGap * 3f) / 4f;
+			string[] labels = { "SAVE", "BUILD", "BUILD + OPEN", mobileInfoOpen ? "EDITOR" : "INFO" };
+			for (int i = 0; i < labels.Length; i++)
+			{
+				ButtonTheme bt = i == 3 && mobileInfoOpen
+					? theme.ChipLibraryCollectionToggleOn
+					: i == 1 || i == 2
+						? theme.MainMenuButtonTheme
+						: theme.MenuButtonTheme;
+
+				if (!UI.Button(
+					labels[i],
+					bt,
+					new Vector2(left + i * (actionW + actionGap), actionTop),
+					new Vector2(actionW, actionH),
+					true,
+					false,
+					false,
+					Anchor.TopLeft,
+					true,
+					0.35f))
+				{
+					continue;
+				}
+
+				switch (i)
+				{
+					case 0:
+						SaveDraft(project);
+						statusText = "Draft saved.";
+						break;
+					case 1:
+						Build(project, false);
+						break;
+					case 2:
+						Build(project, true);
+						break;
+					case 3:
+						mobileInfoOpen = !mobileInfoOpen;
+						if (mobileInfoOpen) MobileInputBridge.DismissKeyboard();
+						break;
+				}
+			}
+
+			Vector2 statusTopLeft = new(left, actionTop - actionH - gap);
+			RewiredUI.DrawCard(statusTopLeft, new Vector2(width, 3.15f), true);
+			Bounds2D statusCard = UI.PrevBounds;
+			Color statusCol = !buildAttempted
+				? RewiredUI.SecondaryText
+				: statusSuccess
+					? new Color(0.62f, 0.9f, 0.68f)
+					: new Color(1f, 0.48f, 0.48f);
+			string statusLabel = !buildAttempted ? "READY" : statusSuccess ? "BUILD OK" : "BUILD ERROR";
+			UI.DrawText(
+				statusLabel,
+				theme.FontBold,
+				theme.FontSizeRegular * 0.66f,
+				statusCard.CentreLeft + Vector2.right * 0.75f,
+				Anchor.TextCentreLeft,
+				statusCol);
+			UI.DrawText(
+				MobileStatusText(statusText),
+				theme.FontRegular,
+				theme.FontSizeRegular * 0.58f,
+				statusCard.CentreRight + Vector2.left * 0.75f,
+				Anchor.TextCentreRight,
+				statusCol);
+
+			float contentTop = statusCard.Bottom - gap;
+			float contentBottom = safe.yMin + pad;
+			if (MobileInputBridge.KeyboardVisible)
+			{
+				float pixelsPerUi = Screen.width / UI.Width;
+				contentBottom = Mathf.Max(
+					contentBottom,
+					MobileInputBridge.KeyboardScreenRect.yMax / pixelsPerUi + 0.6f);
+			}
+
+			float contentHeight = Mathf.Max(5.5f, contentTop - contentBottom);
+			Vector2 contentTopLeft = new(left, contentTop);
+
+			if (mobileInfoOpen)
+			{
+				DrawMobileInfo(theme, project, contentTopLeft, new Vector2(width, contentHeight));
+			}
+			else
+			{
+				RewiredUI.DrawCard(contentTopLeft, new Vector2(width, contentHeight));
+				Bounds2D editorCard = UI.PrevBounds;
+				Vector2 scrollTopLeft = editorCard.TopLeft + new Vector2(0.45f, -0.45f);
+				Vector2 scrollSize = new(editorCard.Width - 0.9f, editorCard.Height - 0.9f);
+
+				InputFieldTheme editorTheme = theme.ChipNameInputField;
+				editorTheme.font = theme.FontRegular;
+				editorTheme.fontSize = theme.FontSizeRegular * 0.66f;
+				editorTheme.bgCol = Color.clear;
+				editorTheme.focusBorderCol = RewiredUI.Accent;
+
+				RhdlEditorCommand editorCommand = CodeEditor.Draw(
+					scrollTopLeft,
+					scrollSize,
+					theme.ScrollTheme,
+					editorTheme);
+
+				if ((editorCommand & RhdlEditorCommand.Save) != 0)
+				{
+					SaveDraft(project);
+					statusText = "Draft saved.";
+				}
+				if ((editorCommand & RhdlEditorCommand.Build) != 0) Build(project, false);
+				if ((editorCommand & RhdlEditorCommand.BuildAndOpen) != 0) Build(project, true);
+			}
+
+			if (KeyboardShortcuts.CancelShortcutTriggered)
+			{
+				SaveDraft(project);
+				UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
+			}
+		}
+
+		static void DrawMobileInfo(
+			DrawSettings.UIThemeDLS theme,
+			Project project,
+			Vector2 topLeft,
+			Vector2 size)
+		{
+			RewiredUI.DrawCard(topLeft, size, true);
+			Bounds2D card = UI.PrevBounds;
+			float x = card.Left + 0.8f;
+			float y = card.Top - 1.0f;
+			float innerW = card.Width - 1.6f;
+
+			UI.DrawText(
+				"COMPILER / QUICK REFERENCE",
+				theme.FontBold,
+				theme.FontSizeRegular * 0.78f,
+				new Vector2(x, y),
+				Anchor.TextCentreLeft,
+				Color.white);
+			y -= 2.1f;
+
+			string buildInfo;
+			if (statusSuccess && latestResult?.Description != null)
+			{
+				buildInfo =
+					$"{latestResult.Description.Name}  /  {lastBuildSubChipCount} components  /  {lastBuildWireCount} connections";
+			}
+			else
+			{
+				buildInfo = MobileStatusText(statusText, 120);
+			}
+
+			UI.DrawText(
+				buildInfo,
+				theme.FontRegular,
+				theme.FontSizeRegular * 0.60f,
+				new Vector2(x, y),
+				Anchor.TextCentreLeft,
+				statusSuccess ? new Color(0.62f, 0.9f, 0.68f) : RewiredUI.SecondaryText);
+			y -= 2.4f;
+
+			string help =
+				"circuit Adder\n" +
+				"    input A: 8\n" +
+				"    input B: 8\n" +
+				"    output Y = A + B\n\n" +
+				"signal sum = A + B    constant WIDTH = 8\n" +
+				"and / or / xor / not    high / low\n" +
+				"choose(sel, A, B)    join(A[7:4], B[3:0])\n" +
+				"component n : NAND(A=A, B=B, OUT=Y)\n" +
+				"connect SOURCE -> TARGET    # comment\n\n" +
+				"TAB indent    UNDO/REDO on keyboard    BUILD above";
+			UI.DrawText(
+				help,
+				theme.FontRegular,
+				theme.FontSizeRegular * 0.56f,
+				new Vector2(x, y),
+				Anchor.TopLeft,
+				RewiredUI.SecondaryText);
+
+			float buttonH = 4.7f;
+			float buttonGap = 0.45f;
+			float buttonW = (innerW - buttonGap) / 2f;
+			Vector2 buttons = new(card.Left + 0.8f, card.Bottom + 0.8f + buttonH);
+			if (UI.Button(
+				"NEW CIRCUIT",
+				theme.MenuButtonTheme,
+				buttons,
+				new Vector2(buttonW, buttonH),
+				true,
+				false,
+				false,
+				Anchor.BottomLeft))
+			{
+				SetEditorSource(StarterTemplate);
+				CodeEditor.MarkDirty();
+				CodeEditor.SetDiagnosticLines(Array.Empty<int>());
+				latestResult = null;
+				buildAttempted = false;
+				statusSuccess = false;
+				statusText = "New circuit template loaded.";
+				mobileInfoOpen = false;
+			}
+			if (UI.Button(
+				"LOAD EXAMPLE",
+				theme.MainMenuButtonTheme,
+				buttons + Vector2.right * (buttonW + buttonGap),
+				new Vector2(buttonW, buttonH),
+				true,
+				false,
+				false,
+				Anchor.BottomLeft))
+			{
+				SetEditorSource(DefaultExample);
+				CodeEditor.MarkDirty();
+				CodeEditor.SetDiagnosticLines(Array.Empty<int>());
+				latestResult = null;
+				buildAttempted = false;
+				statusSuccess = false;
+				statusText = "Example loaded. Press BUILD + OPEN.";
+				mobileInfoOpen = false;
+			}
+		}
+
+		static string MobileStatusText(string text, int max = 86)
+		{
+			if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+			string singleLine = text.Replace('\n', ' ').Replace('\r', ' ').Trim();
+			while (singleLine.Contains("  ")) singleLine = singleLine.Replace("  ", " ");
+			if (singleLine.Length <= max) return singleLine;
+			return singleLine.Substring(0, Mathf.Max(0, max - 3)) + "...";
 		}
 
 		static void DrawRightPanel(DrawSettings.UIThemeDLS theme, Vector2 topLeft, Project project)
