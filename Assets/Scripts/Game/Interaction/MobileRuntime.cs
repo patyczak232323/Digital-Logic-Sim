@@ -308,7 +308,7 @@ namespace DLS.Game
 
 	public sealed class MobileInputSource : IInputSource
 	{
-		readonly UnityInputSource hardware = new();
+		readonly IInputSource hardware = new UnityInputSource();
 		readonly Dictionary<KeyCode, int> virtualDownFrame = new();
 		int virtualCtrlFrame = -1;
 		int virtualShiftFrame = -1;
