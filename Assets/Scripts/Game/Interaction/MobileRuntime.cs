@@ -392,7 +392,7 @@ namespace DLS.Game
 					new[] { "!", "@", "#", "$", "%", "^", "&", "*", "/", "\\", "<", ">" }, gap, 0f, false);
 				y += rowH + gap;
 				DrawTextRow(new Rect(rect.x + margin, y, rect.width - margin * 2f, rowH),
-					new[] { "(", ")", "[", "]", "{", "}", ":", ";", "=", "'", "\\"", "?" }, gap, 0f, false);
+					new[] { "(", ")", "[", "]", "{", "}", ":", ";", "=", "'", "\"", "?" }, gap, 0f, false);
 				y += rowH + gap;
 			}
 			else
