@@ -77,6 +77,14 @@ namespace DLS.Game
 		{
 			if (inputSource == null) return;
 			inputSource.PrepareFrame();
+
+			// Android Back first dismisses our own keyboard instead of escaping the app/menu.
+			if (MobileInputBridge.KeyboardVisible && Input.GetKeyDown(KeyCode.Escape))
+			{
+				MobileInputBridge.DismissKeyboard();
+				inputSource.SuppressEscapeThisFrame();
+			}
+
 			UpdateLongPress();
 			UpdateTwoFingerGesture();
 		}
@@ -321,6 +329,7 @@ namespace DLS.Game
 		string virtualText = string.Empty;
 		int cancelPrimaryFrame = -1;
 		int rightClickFrame = -1;
+		int suppressEscapeFrame = -1;
 		Vector2 rightClickPosition;
 		Vector2 lastPointerPosition;
 
@@ -368,6 +377,11 @@ namespace DLS.Game
 			}
 		}
 
+		public void SuppressEscapeThisFrame()
+		{
+			suppressEscapeFrame = Time.frameCount;
+		}
+
 		public void CancelPrimaryPointerThisFrame()
 		{
 			cancelPrimaryFrame = Time.frameCount;
@@ -408,7 +422,8 @@ namespace DLS.Game
 
 		public bool IsKeyDownThisFrame(KeyCode key)
 		{
-			return hardware.IsKeyDownThisFrame(key) ||
+			bool hardwareDown = !(key == KeyCode.Escape && suppressEscapeFrame == Time.frameCount) && hardware.IsKeyDownThisFrame(key);
+			return hardwareDown ||
 				(virtualDownFrame.TryGetValue(key, out int frame) && frame == Time.frameCount);
 		}
 
