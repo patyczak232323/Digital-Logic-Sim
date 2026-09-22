@@ -5,6 +5,7 @@ using DLS.Game;
 using DLS.SaveSystem;
 using DLS.Simulation;
 using Seb.Helpers;
+using Seb.Helpers.InputHandling;
 using Seb.Types;
 using Seb.Vis;
 using Seb.Vis.UI;
@@ -135,19 +136,22 @@ namespace DLS.Graphics
 		static void DrawProjectElement(Vector2 topLeft, float width, int index, bool isLayoutOnly)
 		{
 			const float height = 5.4f;
+			Bounds2D entryBounds = Bounds2D.CreateFromTopLeftAndSize(topLeft, new Vector2(width, height));
+			if (isLayoutOnly)
+			{
+				UI.OverridePreviousBounds(entryBounds);
+				return;
+			}
+
 			ProjectDescription project = projects[index];
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
-
 			bool pressed = UI.Button(project.ProjectName.ToUpperInvariant(), theme.ProjectSelectionButton, topLeft, new Vector2(width, height), true, false, false, Anchor.TopLeft, true, 1f);
 			Bounds2D bounds = UI.PrevBounds;
 
-			if (!isLayoutOnly)
-			{
-				UI.DrawText("OPEN", theme.FontBold, theme.FontSizeRegular * 0.66f, bounds.CentreRight + Vector2.left * 1f, Anchor.TextCentreRight, RewiredUI.SecondaryText);
-				UI.OverridePreviousBounds(bounds);
-			}
+			UI.DrawText("OPEN", theme.FontBold, theme.FontSizeRegular * 0.66f, bounds.CentreRight + Vector2.left * 1f, Anchor.TextCentreRight, RewiredUI.SecondaryText);
+			UI.OverridePreviousBounds(bounds);
 
-			if (pressed && !isLayoutOnly)
+			if (pressed)
 			{
 				TryOpenProject(project.ProjectName);
 			}
