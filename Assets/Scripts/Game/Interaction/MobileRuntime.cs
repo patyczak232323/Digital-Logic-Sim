@@ -32,16 +32,6 @@ namespace DLS.Game
 		Vector2 longPressStartPos;
 		float longPressStartTime;
 
-		bool shift;
-		bool symbols;
-
-		GUIStyle keyboardPanelStyle;
-		GUIStyle keyboardKeyStyle;
-		GUIStyle keyboardActionStyle;
-		GUIStyle keyboardAccentStyle;
-		GUIStyle keyboardLabelStyle;
-		Texture2D keyboardAccentLine;
-
 		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterAssembliesLoaded)]
 		static void Bootstrap()
 		{
@@ -82,6 +72,26 @@ namespace DLS.Game
 		public static void ScheduleVirtualKey(KeyCode key)
 		{
 			instance?.inputSource?.ScheduleKey(key);
+		}
+
+		public static void ScheduleVirtualText(string text)
+		{
+			instance?.inputSource?.ScheduleText(text);
+		}
+
+		public static void ScheduleVirtualShortcut(KeyCode key)
+		{
+			instance?.inputSource?.ScheduleShortcut(key);
+		}
+
+		/// <summary>
+		/// World/menu input is suppressed while the pointer is over the keyboard.
+		/// UIDrawer calls this only after the underlying mobile screen has already
+		/// processed input, so the keyboard itself can receive the same touch.
+		/// </summary>
+		public static void RestorePrimaryPointerForKeyboardUI()
+		{
+			instance?.inputSource?.RestorePrimaryPointerThisFrame();
 		}
 
 		void OnDestroy()
@@ -354,297 +364,6 @@ namespace DLS.Game
 			return new Rect(safe.xMin, safe.yMin, safe.width, keyboardHeight);
 		}
 
-		void OnGUI()
-		{
-			if (!MobileInputBridge.KeyboardVisible || inputSource == null) return;
-
-			Rect screenRect = CalculateKeyboardScreenRect();
-			MobileInputBridge.SetKeyboardScreenRect(screenRect);
-			bool code = MobileInputBridge.RequestedMode == MobileKeyboardMode.Code;
-
-			// Keep the custom keyboard above all other legacy IMGUI surfaces.
-			int oldDepth = GUI.depth;
-			GUI.depth = -10000;
-			Rect guiRect = new(screenRect.x, Screen.height - screenRect.yMax, screenRect.width, screenRect.height);
-			DrawKeyboard(guiRect, code);
-			GUI.depth = oldDepth;
-		}
-
-		void DrawKeyboard(Rect rect, bool code)
-		{
-			EnsureKeyboardStyles();
-
-			float margin = Mathf.Clamp(rect.width * 0.008f, 7f, 13f);
-			float gap = Mathf.Clamp(rect.width * 0.0042f, 4f, 8f);
-			int keyRows = code ? 5 : 4;
-			float toolbarH = Mathf.Clamp(rect.height * 0.115f, 34f, 54f);
-			float rowH = (rect.height - margin * 2f - toolbarH - gap * keyRows) / keyRows;
-
-			int keyFont = Mathf.Clamp(Mathf.RoundToInt(rowH * 0.31f), 15, 29);
-			int actionFont = Mathf.Clamp(Mathf.RoundToInt(Mathf.Min(rowH, toolbarH) * 0.25f), 11, 21);
-			keyboardKeyStyle.fontSize = keyFont;
-			keyboardAccentStyle.fontSize = actionFont;
-			keyboardActionStyle.fontSize = actionFont;
-			keyboardLabelStyle.fontSize = Mathf.Clamp(Mathf.RoundToInt(toolbarH * 0.28f), 11, 18);
-
-			GUI.Box(rect, GUIContent.none, keyboardPanelStyle);
-			GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, Mathf.Max(2f, rect.height * 0.006f)), keyboardAccentLine);
-
-			float y = rect.y + margin;
-			DrawToolbar(new Rect(rect.x + margin, y, rect.width - margin * 2f, toolbarH), code, gap);
-			y += toolbarH + gap;
-
-			if (code)
-			{
-				DrawTextRow(
-					new Rect(rect.x + margin, y, rect.width - margin * 2f, rowH),
-					new[] { "{", "}", "(", ")", "[", "]", ":", "=", ",", ".", "#", "_" },
-					gap,
-					0f,
-					true);
-				y += rowH + gap;
-			}
-
-			if (symbols)
-			{
-				DrawTextRow(new Rect(rect.x + margin, y, rect.width - margin * 2f, rowH),
-					new[] { "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "+" }, gap, 0f, false);
-				y += rowH + gap;
-				DrawTextRow(new Rect(rect.x + margin, y, rect.width - margin * 2f, rowH),
-					new[] { "!", "@", "#", "$", "%", "^", "&", "*", "/", "\\", "<", ">" }, gap, 0f, false);
-				y += rowH + gap;
-				DrawTextRow(new Rect(rect.x + margin, y, rect.width - margin * 2f, rowH),
-					new[] { "(", ")", "[", "]", "{", "}", ":", ";", "=", "'", "\"", "?" }, gap, 0f, false);
-				y += rowH + gap;
-			}
-			else
-			{
-				DrawTextRow(new Rect(rect.x + margin, y, rect.width - margin * 2f, rowH),
-					new[] { "q", "w", "e", "r", "t", "y", "u", "i", "o", "p" }, gap, 0f, false);
-				y += rowH + gap;
-				DrawTextRow(new Rect(rect.x + margin, y, rect.width - margin * 2f, rowH),
-					new[] { "a", "s", "d", "f", "g", "h", "j", "k", "l" }, gap, rect.width * 0.035f, false);
-				y += rowH + gap;
-				DrawTextRow(new Rect(rect.x + margin, y, rect.width - margin * 2f, rowH),
-					new[] { "z", "x", "c", "v", "b", "n", "m", "-", "_" }, gap, rect.width * 0.065f, false);
-				y += rowH + gap;
-			}
-
-			DrawBottomRow(new Rect(rect.x + margin, y, rect.width - margin * 2f, rowH), gap, code);
-		}
-
-		void DrawToolbar(Rect row, bool code, float gap)
-		{
-			float titleW = Mathf.Clamp(row.width * 0.15f, 96f, 165f);
-			GUI.Label(new Rect(row.x, row.y, titleW, row.height), code ? "RHDL INPUT" : "TEXT INPUT", keyboardLabelStyle);
-
-			string[] labels = code
-				? new[] { "ESC", "\u2190", "\u2192", "TAB", "UNDO", "REDO", "PASTE", "DONE" }
-				: new[] { "\u2190", "\u2192", "ALL", "COPY", "PASTE", "DONE" };
-			string[] actions = code
-				? new[] { "ESC", "LEFT", "RIGHT", "TAB", "UNDO", "REDO", "PASTE", "HIDE" }
-				: new[] { "LEFT", "RIGHT", "ALL", "COPY", "PASTE", "HIDE" };
-
-			float x = row.x + titleW + gap;
-			float available = row.xMax - x;
-			float keyW = (available - gap * (labels.Length - 1)) / labels.Length;
-			for (int i = 0; i < labels.Length; i++)
-			{
-				Rect keyRect = new(x + i * (keyW + gap), row.y, keyW, row.height);
-				bool repeat = actions[i] is "LEFT" or "RIGHT";
-				GUIStyle style = actions[i] == "HIDE" ? keyboardAccentStyle : keyboardActionStyle;
-				bool pressed = repeat
-					? GUI.RepeatButton(keyRect, labels[i], style)
-					: GUI.Button(keyRect, labels[i], style);
-				if (pressed) RunKeyboardAction(actions[i]);
-			}
-		}
-
-		void DrawTextRow(Rect row, string[] keys, float gap, float sideInset, bool accessoryRow)
-		{
-			Rect usable = new(row.x + sideInset, row.y, row.width - sideInset * 2f, row.height);
-			float keyW = (usable.width - gap * (keys.Length - 1)) / keys.Length;
-			GUIStyle style = accessoryRow ? keyboardActionStyle : keyboardKeyStyle;
-
-			for (int i = 0; i < keys.Length; i++)
-			{
-				Rect keyRect = new(usable.x + i * (keyW + gap), usable.y, keyW, usable.height);
-				bool letter = keys[i].Length == 1 && char.IsLetter(keys[i][0]);
-				string label = letter
-					? (shift ? keys[i].ToUpperInvariant() : keys[i].ToLowerInvariant())
-					: keys[i];
-				string text = label;
-
-				if (!GUI.Button(keyRect, label, style)) continue;
-				inputSource.ScheduleText(text);
-				if (shift) shift = false;
-			}
-		}
-
-		void DrawBottomRow(Rect row, float gap, bool code)
-		{
-			float shiftW = row.width * 0.115f;
-			float modeW = row.width * 0.105f;
-			float enterW = row.width * 0.115f;
-			float backW = row.width * 0.13f;
-			float spaceW = row.width - shiftW - modeW - enterW - backW - gap * 4f;
-
-			Rect shiftRect = new(row.x, row.y, shiftW, row.height);
-			Rect modeRect = new(shiftRect.xMax + gap, row.y, modeW, row.height);
-			Rect spaceRect = new(modeRect.xMax + gap, row.y, spaceW, row.height);
-			Rect enterRect = new(spaceRect.xMax + gap, row.y, enterW, row.height);
-			Rect backRect = new(enterRect.xMax + gap, row.y, backW, row.height);
-
-			if (GUI.Button(shiftRect, "SHIFT", shift ? keyboardAccentStyle : keyboardActionStyle)) shift = !shift;
-			if (GUI.Button(modeRect, symbols ? "ABC" : "123", symbols ? keyboardAccentStyle : keyboardActionStyle)) symbols = !symbols;
-			if (GUI.Button(spaceRect, "SPACE", keyboardKeyStyle)) inputSource.ScheduleText(" ");
-			if (GUI.Button(enterRect, code ? "ENTER" : "DONE", keyboardAccentStyle))
-			{
-				if (code) inputSource.ScheduleKey(KeyCode.Return);
-				else MobileInputBridge.DismissKeyboard();
-			}
-			if (GUI.RepeatButton(backRect, "DEL", keyboardActionStyle)) inputSource.ScheduleKey(KeyCode.Backspace);
-		}
-
-		void RunKeyboardAction(string action)
-		{
-			switch (action)
-			{
-				case "ESC": inputSource.ScheduleKey(KeyCode.Escape); break;
-				case "LEFT": inputSource.ScheduleKey(KeyCode.LeftArrow); break;
-				case "RIGHT": inputSource.ScheduleKey(KeyCode.RightArrow); break;
-				case "TAB": inputSource.ScheduleKey(KeyCode.Tab); break;
-				case "UNDO": inputSource.ScheduleShortcut(KeyCode.Z); break;
-				case "REDO": inputSource.ScheduleShortcut(KeyCode.Y); break;
-				case "ALL": inputSource.ScheduleShortcut(KeyCode.A); break;
-				case "COPY": inputSource.ScheduleShortcut(KeyCode.C); break;
-				case "PASTE": inputSource.ScheduleShortcut(KeyCode.V); break;
-				case "HIDE": MobileInputBridge.DismissKeyboard(); break;
-			}
-		}
-
-		void EnsureKeyboardStyles()
-		{
-			if (keyboardKeyStyle != null) return;
-
-			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
-			Color accent = RewiredUI.Accent;
-			Color panelCol = theme.MenuPanelCol;
-			Color keyCol = theme.MainMenuButtonTheme.buttonCols.normal;
-			Color keyPressedCol = theme.MainMenuButtonTheme.buttonCols.pressed;
-			Color actionCol = theme.MenuPopupButtonTheme.buttonCols.normal;
-			Color actionPressedCol = theme.MenuPopupButtonTheme.buttonCols.pressed;
-			Color borderCol = new(0.235f, 0.24f, 0.27f, 1f);
-
-			Texture2D panel = CreateSolidTexture(panelCol);
-			Texture2D key = CreateTechKeyTexture(keyCol, borderCol, false, accent);
-			Texture2D keyPressed = CreateTechKeyTexture(keyPressedCol, accent, false, accent);
-			Texture2D action = CreateTechKeyTexture(actionCol, borderCol, false, accent);
-			Texture2D actionPressed = CreateTechKeyTexture(actionPressedCol, accent, false, accent);
-			Texture2D accentKey = CreateTechKeyTexture(accent, accent, false, accent);
-			keyboardAccentLine = CreateSolidTexture(accent);
-
-			keyboardPanelStyle = new GUIStyle(GUI.skin.box);
-			keyboardPanelStyle.normal.background = panel;
-			keyboardPanelStyle.border = new RectOffset(0, 0, 0, 0);
-
-			keyboardKeyStyle = MakeKeyboardStyle(key, keyPressed, theme.MainMenuButtonTheme.textCols.normal, false);
-			keyboardActionStyle = MakeKeyboardStyle(action, actionPressed, RewiredUI.SecondaryText, true);
-			keyboardAccentStyle = MakeKeyboardStyle(accentKey, keyPressed, Color.white, true);
-
-			keyboardLabelStyle = new GUIStyle(GUI.skin.label)
-			{
-				alignment = TextAnchor.MiddleLeft,
-				fontStyle = FontStyle.Bold,
-				clipping = TextClipping.Clip,
-				padding = new RectOffset(8, 4, 0, 0)
-			};
-			keyboardLabelStyle.normal.textColor = RewiredUI.SecondaryText;
-		}
-
-		static GUIStyle MakeKeyboardStyle(Texture2D normal, Texture2D pressed, Color text, bool bold)
-		{
-			GUIStyle style = new(GUI.skin.button)
-			{
-				alignment = TextAnchor.MiddleCenter,
-				fontStyle = bold ? FontStyle.Bold : FontStyle.Normal,
-				border = new RectOffset(6, 6, 6, 6),
-				padding = new RectOffset(4, 4, 2, 2),
-				margin = new RectOffset(0, 0, 0, 0),
-				clipping = TextClipping.Clip
-			};
-			style.normal.background = normal;
-			style.hover.background = normal;
-			style.focused.background = normal;
-			style.active.background = pressed;
-			style.normal.textColor = text;
-			style.hover.textColor = Color.white;
-			style.focused.textColor = text;
-			style.active.textColor = Color.white;
-			return style;
-		}
-
-		static Texture2D CreateSolidTexture(Color colour)
-		{
-			Texture2D texture = new(1, 1, TextureFormat.RGBA32, false)
-			{
-				wrapMode = TextureWrapMode.Clamp,
-				filterMode = FilterMode.Bilinear,
-				hideFlags = HideFlags.HideAndDontSave
-			};
-			texture.SetPixel(0, 0, colour);
-			texture.Apply(false, true);
-			return texture;
-		}
-
-		static Texture2D CreateTechKeyTexture(Color fill, Color border, bool accentTop, Color accent)
-		{
-			const int size = 32;
-			const float radius = 1.6f;
-			const float borderWidth = 0.75f;
-			float half = size * 0.5f;
-			Color[] pixels = new Color[size * size];
-
-			for (int y = 0; y < size; y++)
-			{
-				for (int x = 0; x < size; x++)
-				{
-					float px = x + 0.5f - half;
-					float py = y + 0.5f - half;
-					float outer = RoundedRectDistance(px, py, half, radius);
-					float inner = RoundedRectDistance(px, py, half - borderWidth, Mathf.Max(0.5f, radius - borderWidth));
-					float outerAlpha = Mathf.Clamp01(0.5f - outer);
-					float innerAlpha = Mathf.Clamp01(0.5f - inner);
-					float borderT = Mathf.Clamp01(outerAlpha - innerAlpha);
-					Color pixel = Color.Lerp(fill, border, borderT);
-					pixel.a *= outerAlpha;
-
-					if (accentTop && y >= size - 3 && outerAlpha > 0.5f)
-						pixel = Color.Lerp(pixel, accent, 0.9f);
-
-					pixels[y * size + x] = pixel;
-				}
-			}
-
-			Texture2D texture = new(size, size, TextureFormat.RGBA32, false)
-			{
-				wrapMode = TextureWrapMode.Clamp,
-				filterMode = FilterMode.Bilinear,
-				hideFlags = HideFlags.HideAndDontSave
-			};
-			texture.SetPixels(pixels);
-			texture.Apply(false, true);
-			return texture;
-		}
-
-		static float RoundedRectDistance(float x, float y, float half, float radius)
-		{
-			float qx = Mathf.Abs(x) - (half - radius);
-			float qy = Mathf.Abs(y) - (half - radius);
-			float ox = Mathf.Max(qx, 0f);
-			float oy = Mathf.Max(qy, 0f);
-			return Mathf.Sqrt(ox * ox + oy * oy) + Mathf.Min(Mathf.Max(qx, qy), 0f) - radius;
-		}
 
 	}
 
@@ -714,6 +433,11 @@ namespace DLS.Game
 		public void CancelPrimaryPointerThisFrame()
 		{
 			cancelPrimaryFrame = Time.frameCount;
+		}
+
+		public void RestorePrimaryPointerThisFrame()
+		{
+			if (cancelPrimaryFrame == Time.frameCount) cancelPrimaryFrame = -1;
 		}
 
 		public void TriggerRightClickThisFrame(Vector2 position)
