@@ -22,7 +22,7 @@ namespace Seb.Helpers.InputHandling
 		public static bool RuntimeEnabled { get; private set; }
 		public static MobileKeyboardMode RequestedMode => requestedMode;
 		public static bool KeyboardVisible => RuntimeEnabled && !dismissed && Time.frameCount - lastFocusedFrame <= 1;
-		public static float TouchHitScale => RuntimeEnabled ? 1.35f : 1f;
+		public static float TouchHitScale => RuntimeEnabled ? 1.55f : 1f;
 
 		public static void EnableRuntime(bool enabled)
 		{
