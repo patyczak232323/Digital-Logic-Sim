@@ -53,6 +53,7 @@ namespace DLS.Graphics
 		static bool isScrolling;
 		static string chipToOpenName;
 		static bool wasOpenedThisFrame;
+		static bool mobileShowCollections = true;
 
 		static readonly Color deleteColWarningHigh = new(0.95f, 0.35f, 0.35f);
 		static readonly Color deleteColWarningMedium = new(1f, 0.75f, 0.2f);
@@ -66,6 +67,12 @@ namespace DLS.Graphics
 
 		public static void DrawMenu()
 		{
+			if (MobileUI.IsActive)
+			{
+				DrawMobileMenu();
+				return;
+			}
+
 			MenuHelper.DrawBackgroundOverlay();
 			Vector2 panelEdgePadding = new(3.25f, 2.6f);
 
@@ -104,6 +111,79 @@ namespace DLS.Graphics
 
 			wasOpenedThisFrame = false;
 		}
+
+
+		static void DrawMobileMenu()
+		{
+			MenuHelper.DrawBackgroundOverlay();
+			Rect safe = MobileUI.SafeRectUI;
+			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
+
+			const float outerPad = 1.1f;
+			const float gap = 1.0f;
+			const float tabHeight = 4.7f;
+			float contentTop = safe.yMax - 7.1f;
+			float contentBottom = safe.yMin + 1.0f;
+			float contentHeight = Mathf.Max(12f, contentTop - contentBottom);
+			float usableWidth = safe.width - outerPad * 2f - gap;
+			float leftWidth = usableWidth * 0.58f;
+			float rightWidth = usableWidth - leftWidth;
+
+			Vector2 leftTop = new(safe.xMin + outerPad, contentTop);
+			Vector2 rightTop = new(leftTop.x + leftWidth + gap, contentTop);
+
+			UI.DrawText("CHIP LIBRARY", theme.FontBold, theme.FontSizeRegular * 1.05f,
+				new Vector2(safe.xMin + 13.2f, safe.yMax - 3.0f), Anchor.TextCentreLeft, Color.white);
+
+			bool popupHasFocus = creatingNewCollection || renamingCollection ||
+			                     isConfirmingChipDeletion || isConfirmingCollectionDeletion;
+
+			using (UI.BeginDisabledScope(popupHasFocus))
+			{
+				float tabGap = 0.4f;
+				float tabWidth = (leftWidth - tabGap) / 2f;
+				ButtonTheme starredTheme = !mobileShowCollections ? theme.ChipLibraryCollectionToggleOn : theme.MenuButtonTheme;
+				ButtonTheme collectionsTheme = mobileShowCollections ? theme.ChipLibraryCollectionToggleOn : theme.MenuButtonTheme;
+
+				if (UI.Button("STARRED", starredTheme, leftTop, new Vector2(tabWidth, tabHeight),
+					true, false, false, Anchor.TopLeft))
+				{
+					mobileShowCollections = false;
+					selectedCollectionIndex = -1;
+					selectedChipInCollectionIndex = -1;
+				}
+
+				if (UI.Button("COLLECTIONS", collectionsTheme,
+					leftTop + Vector2.right * (tabWidth + tabGap), new Vector2(tabWidth, tabHeight),
+					true, false, false, Anchor.TopLeft))
+				{
+					mobileShowCollections = true;
+					selectedStarredItemIndex = -1;
+					if (selectedCollectionIndex < 0 && collections.Count > 0) selectedCollectionIndex = 0;
+				}
+
+				Vector2 listTop = leftTop + Vector2.down * (tabHeight + 0.55f);
+				Vector2 listSize = new(leftWidth, Mathf.Max(8f, contentHeight - tabHeight - 0.55f));
+
+				isScrolling = UI.GetScrollbarState(ID_CollectionsScrollbar).isDragging ||
+				              UI.GetScrollbarState(ID_StarredScrollbar).isDragging;
+
+				if (mobileShowCollections) DrawCollectionsPanel(listTop, listSize);
+				else DrawStarredPanel(listTop, listSize);
+
+				DrawSelectedItemPanel(rightTop, new Vector2(rightWidth, contentHeight));
+			}
+
+			if (KeyboardShortcuts.CancelShortcutTriggered ||
+			    (KeyboardShortcuts.LibraryShortcutTriggered && !wasOpenedThisFrame))
+			{
+				if (popupHasFocus) ResetPopupState();
+				else ExitLibrary();
+			}
+
+			wasOpenedThisFrame = false;
+		}
+
 
 		static void ResetPopupState()
 		{
@@ -621,6 +701,7 @@ namespace DLS.Graphics
 			selectedStarredItemIndex = -1;
 			selectedCollectionIndex = 0;
 			selectedChipInCollectionIndex = -1;
+			mobileShowCollections = true;
 			ResetPopupState();
 		}
 
