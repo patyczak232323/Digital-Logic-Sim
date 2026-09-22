@@ -54,6 +54,11 @@ namespace DLS.Game
 			Input.multiTouchEnabled = true;
 			Input.simulateMouseWithTouches = true;
 			TouchScreenKeyboard.hideInput = true;
+			Screen.autorotateToPortrait = false;
+			Screen.autorotateToPortraitUpsideDown = false;
+			Screen.autorotateToLandscapeLeft = true;
+			Screen.autorotateToLandscapeRight = true;
+			Screen.orientation = ScreenOrientation.AutoRotation;
 			Screen.fullScreen = true;
 			Screen.sleepTimeout = SleepTimeout.NeverSleep;
 			Application.targetFrameRate = 60;
