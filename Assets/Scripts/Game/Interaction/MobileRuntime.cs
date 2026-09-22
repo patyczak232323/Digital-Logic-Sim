@@ -72,6 +72,11 @@ namespace DLS.Game
 			MobileUI.ApplyRuntimePreferences();
 		}
 
+		public static void ScheduleVirtualKey(KeyCode key)
+		{
+			instance?.inputSource?.ScheduleKey(key);
+		}
+
 		void OnDestroy()
 		{
 			if (instance != this) return;
@@ -103,7 +108,7 @@ namespace DLS.Game
 
 			UpdateEdgeSwipe();
 			UpdateSingleFingerPan();
-			if (!MobileUI.PanMode) UpdateLongPress();
+			if (!MobileUI.PanMode && !edgeSwipeTracking) UpdateLongPress();
 			else CancelLongPress();
 			UpdateTwoFingerGesture();
 		}
@@ -135,6 +140,10 @@ namespace DLS.Game
 			}
 
 			if (!edgeSwipeTracking || touch.fingerId != edgeSwipeFingerId) return;
+
+			// A possible edge gesture owns the pointer from its first frame so it
+			// cannot accidentally place/select a component underneath the finger.
+			inputSource.CancelPrimaryPointerThisFrame();
 
 			Vector2 delta = touch.position - edgeSwipeStart;
 			float requiredDistance = Mathf.Max(80f, Screen.width * 0.12f);
