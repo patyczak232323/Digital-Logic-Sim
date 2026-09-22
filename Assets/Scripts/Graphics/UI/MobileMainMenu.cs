@@ -470,7 +470,7 @@ namespace DLS.Graphics
 			{
 				string suggestion = SelectedProjectName + " COPY";
 				if (suggestion.Length > MainMenu.MaxProjectNameLength)
-					suggestion = suggestion[..MainMenu.MaxProjectNameLength];
+					suggestion = suggestion.Substring(0, MainMenu.MaxProjectNameLength);
 				field.SetText(suggestion);
 			}
 
