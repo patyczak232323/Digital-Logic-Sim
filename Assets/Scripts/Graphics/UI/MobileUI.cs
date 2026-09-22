@@ -304,8 +304,8 @@ namespace DLS.Graphics
 			Vector2 pos = new(safe.xMin + 0.6f, safe.yMax - 0.6f);
 			if (UI.Button("BACK", theme.MainMenuButtonTheme, pos, new Vector2(11.5f, 4.8f), true, false, false, Anchor.TopLeft))
 			{
-				UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
 				MobileInputBridge.DismissKeyboard();
+				MobileRuntime.ScheduleVirtualKey(KeyCode.Escape);
 			}
 		}
 
@@ -362,12 +362,11 @@ namespace DLS.Graphics
 				return true;
 			}
 
+			// Specialized menus already define their own Escape/cancel semantics.
+			// Returning false lets Android Back flow through the existing shortcut path,
+			// preserving save/discard/rollback behavior instead of force-closing state.
 			if (UIDrawer.ActiveMenu != UIDrawer.MenuType.None)
-			{
-				UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
-				MobileInputBridge.DismissKeyboard();
-				return true;
-			}
+				return false;
 
 			Project project = Project.ActiveProject;
 			if (project != null && project.chipViewStack.Count > 1)
