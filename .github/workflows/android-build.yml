@@ -9,7 +9,7 @@ on:
       - ".github/workflows/android-build.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: android-smoke-${{ github.ref }}
@@ -93,3 +93,27 @@ jobs:
           path: DLSRewired-Android-arm64.apk
           if-no-files-found: error
           retention-days: 7
+
+      - name: Publish unofficial Android prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          TAG="android-unofficial"
+          TITLE="Rewired Android — Unofficial"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" DLSRewired-Android-arm64.apk --clobber
+            gh release edit "$TAG" \
+              --title "$TITLE" \
+              --prerelease \
+              --notes "Unofficial Android ARM64 build of Rewired. Development/smoke build; Android support is experimental."
+          else
+            gh release create "$TAG" DLSRewired-Android-arm64.apk \
+              --target "$GITHUB_SHA" \
+              --title "$TITLE" \
+              --prerelease \
+              --notes "Unofficial Android ARM64 build of Rewired. Development/smoke build; Android support is experimental."
+          fi
