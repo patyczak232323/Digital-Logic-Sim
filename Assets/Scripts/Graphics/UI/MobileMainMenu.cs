@@ -58,7 +58,7 @@ namespace DLS.Graphics
 				case ScreenKind.Projects: DrawProjects(safe); break;
 				case ScreenKind.ProjectName: DrawProjectName(safe); break;
 				case ScreenKind.DeleteProject: DrawDeleteProject(safe); break;
-				case ScreenKind.Settings: DrawSettings(safe); break;
+				case ScreenKind.Settings: DrawMobileSettings(safe); break;
 				case ScreenKind.About: DrawAbout(safe); break;
 			}
 		}
@@ -376,7 +376,7 @@ namespace DLS.Graphics
 			return !SaveUtils.NameContainsForbiddenChar(text);
 		}
 
-		static void DrawSettings(Rect safe)
+		static void DrawMobileSettings(Rect safe)
 		{
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
 			float width = Mathf.Min(64f, safe.width - 4f);
