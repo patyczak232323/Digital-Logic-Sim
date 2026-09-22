@@ -1,0 +1,43 @@
+name: Publish existing Android unofficial build
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/publish-android-unofficial.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download existing Android artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api             -H "Accept: application/vnd.github+json"             "/repos/${GITHUB_REPOSITORY}/actions/artifacts/10668845917/zip"             > android-artifact.zip
+          unzip -o android-artifact.zip
+          test -f DLSRewired-Android-arm64.apk
+          ls -lh DLSRewired-Android-arm64.apk
+
+      - name: Publish unofficial Android prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="android-unofficial"
+          TITLE="Rewired Android — Unofficial"
+          NOTES="Unofficial Android ARM64 build of Rewired. Experimental development/smoke build; Android support is not part of the stable v0.3.0 release."
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" DLSRewired-Android-arm64.apk               --repo "$GITHUB_REPOSITORY"               --clobber
+            gh release edit "$TAG"               --repo "$GITHUB_REPOSITORY"               --title "$TITLE"               --prerelease               --notes "$NOTES"
+          else
+            gh release create "$TAG" DLSRewired-Android-arm64.apk               --repo "$GITHUB_REPOSITORY"               --target "22dd5863cd2d32c074e45b06dfe30422d1287c00"               --title "$TITLE"               --prerelease               --notes "$NOTES"
+          fi
