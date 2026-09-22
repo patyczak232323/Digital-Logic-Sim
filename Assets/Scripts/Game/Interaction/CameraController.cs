@@ -177,6 +177,33 @@ namespace DLS.Game
 			UpdateCameraState();
 		}
 
+		/// <summary>
+		/// Native touch navigation for mobile builds. The previous/current centres are
+		/// screen-space pinch centres; distance ratio controls zoom. Keeping the old
+		/// centre's world position under the new centre makes pan + pinch feel like one gesture.
+		/// </summary>
+		public static void ApplyMobilePanZoom(Vector2 previousCentre, Vector2 currentCentre, float previousDistance, float currentDistance)
+		{
+			if (camera == null || activeView == null || (!CanMove && !CanZoom)) return;
+			if (previousDistance <= 0.001f || currentDistance <= 0.001f) return;
+
+			Vector2 worldAnchorBefore = camera.ScreenToWorldPoint(previousCentre);
+
+			if (CanZoom)
+			{
+				float targetZoom = activeView.OrthoSize * (previousDistance / currentDistance);
+				SetZoom(targetZoom);
+			}
+
+			if (CanMove)
+			{
+				Vector2 worldAnchorAfter = camera.ScreenToWorldPoint(currentCentre);
+				MovePosition(worldAnchorBefore - worldAnchorAfter);
+			}
+
+			ContextMenu.CloseContextMenu();
+		}
+
 		static void UpdateCameraState()
 		{
 			Vector2 pos2D = activeView.Pos;
