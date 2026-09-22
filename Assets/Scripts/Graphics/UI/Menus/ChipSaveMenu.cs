@@ -60,6 +60,12 @@ namespace DLS.Graphics
 
 		public static void DrawMenu()
 		{
+			if (MobileUI.IsActive)
+			{
+				DrawMobileMenu();
+				return;
+			}
+
 			MenuHelper.DrawBackgroundOverlay();
 
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
@@ -121,6 +127,103 @@ namespace DLS.Graphics
 				}
 			}
 		}
+
+
+		static void DrawMobileMenu()
+		{
+			MenuHelper.DrawBackgroundOverlay();
+			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
+			Rect safe = MobileUI.SafeRectUI;
+			float pad = 1.2f;
+			float width = safe.width - pad * 2f;
+			Vector2 topLeft = new(safe.xMin + pad, safe.yMax - 7.2f);
+
+			UI.DrawText("SAVE CHIP", theme.FontBold, theme.FontSizeRegular * 1.1f,
+				topLeft + new Vector2(12.5f, -1f), Anchor.TextCentreLeft, Color.white);
+
+			topLeft.y -= 3.2f;
+			InputFieldTheme inputTheme = theme.ChipNameInputField;
+			InputFieldState inputFieldState = UI.InputField(
+				ID_ChipNameField,
+				inputTheme,
+				topLeft,
+				new Vector2(width, 6.3f),
+				"CHIP NAME",
+				Anchor.TopLeft,
+				1.2f,
+				chipNameValidator,
+				true);
+
+			string newName = inputFieldState.text;
+			bool renaming = Project.ActiveProject.ChipHasBeenSavedBefore &&
+			                !string.Equals(newName, Project.ActiveProject.ViewedChip.LastSavedDescription.Name, StringComparison.Ordinal);
+			bool canSave = IsValidSaveName(newName);
+
+			topLeft = UI.PrevBounds.BottomLeft + Vector2.down * 1.0f;
+			float gap = 0.55f;
+			float buttonHeight = 5.5f;
+			float half = (width - gap) / 2f;
+
+			if (UI.Button("CUSTOMIZE", theme.MenuButtonTheme, topLeft, new Vector2(half, buttonHeight),
+				true, false, false, Anchor.TopLeft))
+			{
+				OpenCustomizationMenu();
+				return;
+			}
+
+			string primaryLabel = renaming ? "RENAME" : "SAVE";
+			if (UI.Button(primaryLabel, theme.MainMenuButtonTheme,
+				topLeft + Vector2.right * (half + gap), new Vector2(half, buttonHeight),
+				canSave, false, false, Anchor.TopLeft))
+			{
+				Save(renaming ? Project.SaveMode.Rename : Project.SaveMode.Normal);
+				return;
+			}
+
+			topLeft.y -= buttonHeight + gap;
+			if (renaming)
+			{
+				if (UI.Button("SAVE AS NEW CHIP", theme.MenuButtonTheme, topLeft, new Vector2(width, buttonHeight),
+					canSave, false, false, Anchor.TopLeft))
+				{
+					Save(Project.SaveMode.SaveAs);
+					return;
+				}
+				topLeft.y -= buttonHeight + gap;
+			}
+
+			string hint = Project.ActiveProject.ChipHasBeenSavedBefore
+				? "Change the name to rename or save a copy."
+				: "Choose a name, optionally customize the chip, then save.";
+			UI.DrawText(hint, theme.FontRegular, theme.FontSizeRegular * 0.76f,
+				topLeft + new Vector2(0.2f, -1.1f), Anchor.TextCentreLeft, RewiredUI.SecondaryText);
+
+			if (KeyboardShortcuts.CancelShortcutTriggered)
+			{
+				Cancel();
+				return;
+			}
+
+			if (!renaming && canSave && KeyboardShortcuts.ConfirmShortcutTriggered)
+			{
+				Save(Project.SaveMode.Normal);
+				return;
+			}
+
+			UpdateCustomizationName(newName);
+		}
+
+		static void UpdateCustomizationName(string newName)
+		{
+			if (ActiveCustomizeChip == null || ActiveCustomizeDescription.Name == newName) return;
+			ActiveCustomizeDescription.Name = newName;
+			Vector2 minChipSize = SubChipInstance.CalculateMinChipSize(
+				ActiveCustomizeDescription.InputPins,
+				ActiveCustomizeDescription.OutputPins,
+				newName);
+			ActiveCustomizeDescription.Size = minChipSize + sizeBeyondNameMinimum;
+		}
+
 
 		// Create a subchip instance based on the current dev chip (we need a subchip instance to be able to draw a preview of the chip in the customization menu)
 		// The description on this subchip holds potential customizations, such as name changes, resizing, colour etc.
