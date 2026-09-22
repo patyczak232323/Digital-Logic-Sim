@@ -349,7 +349,7 @@ namespace DLS.Game
 		{
 			Rect safe = Screen.safeArea;
 			bool code = MobileInputBridge.RequestedMode == MobileKeyboardMode.Code;
-			float keyboardHeight = Mathf.Clamp(safe.height * (code ? 0.50f : 0.44f), 260f, 580f);
+			float keyboardHeight = Mathf.Clamp(safe.height * (code ? 0.47f : 0.41f), 240f, 540f);
 			keyboardHeight = Mathf.Min(keyboardHeight, safe.height);
 			return new Rect(safe.xMin, safe.yMin, safe.width, keyboardHeight);
 		}
@@ -375,24 +375,24 @@ namespace DLS.Game
 			EnsureKeyboardStyles();
 
 			float margin = Mathf.Clamp(rect.width * 0.008f, 7f, 13f);
-			float gap = Mathf.Clamp(rect.width * 0.0045f, 4f, 9f);
-			int rows = code ? 6 : 5;
-			float rowH = (rect.height - margin * 2f - gap * (rows - 1)) / rows;
+			float gap = Mathf.Clamp(rect.width * 0.0042f, 4f, 8f);
+			int keyRows = code ? 5 : 4;
+			float toolbarH = Mathf.Clamp(rect.height * 0.115f, 34f, 54f);
+			float rowH = (rect.height - margin * 2f - toolbarH - gap * keyRows) / keyRows;
 
 			int keyFont = Mathf.Clamp(Mathf.RoundToInt(rowH * 0.31f), 15, 29);
-			int actionFont = Mathf.Clamp(Mathf.RoundToInt(rowH * 0.22f), 11, 21);
+			int actionFont = Mathf.Clamp(Mathf.RoundToInt(Mathf.Min(rowH, toolbarH) * 0.25f), 11, 21);
 			keyboardKeyStyle.fontSize = keyFont;
-			keyboardAccentStyle.fontSize = keyFont;
+			keyboardAccentStyle.fontSize = actionFont;
 			keyboardActionStyle.fontSize = actionFont;
-			keyboardLabelStyle.fontSize = Mathf.Clamp(Mathf.RoundToInt(rowH * 0.24f), 11, 20);
+			keyboardLabelStyle.fontSize = Mathf.Clamp(Mathf.RoundToInt(toolbarH * 0.28f), 11, 18);
 
 			GUI.Box(rect, GUIContent.none, keyboardPanelStyle);
 			GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, Mathf.Max(2f, rect.height * 0.006f)), keyboardAccentLine);
 
 			float y = rect.y + margin;
-			Rect innerRow = new(rect.x + margin, y, rect.width - margin * 2f, rowH);
-			DrawToolbar(innerRow, code, gap);
-			y += rowH + gap;
+			DrawToolbar(new Rect(rect.x + margin, y, rect.width - margin * 2f, toolbarH), code, gap);
+			y += toolbarH + gap;
 
 			if (code)
 			{
@@ -435,14 +435,14 @@ namespace DLS.Game
 
 		void DrawToolbar(Rect row, bool code, float gap)
 		{
-			float titleW = Mathf.Clamp(row.width * 0.16f, 100f, 172f);
-			GUI.Label(new Rect(row.x, row.y, titleW, row.height), code ? "REWIRED / RHDL" : "REWIRED / TEXT", keyboardLabelStyle);
+			float titleW = Mathf.Clamp(row.width * 0.15f, 96f, 165f);
+			GUI.Label(new Rect(row.x, row.y, titleW, row.height), code ? "REWIRED  /  RHDL" : "REWIRED  /  TEXT", keyboardLabelStyle);
 
 			string[] labels = code
-				? new[] { "LEFT", "RIGHT", "TAB", "UNDO", "REDO", "PASTE", "DONE" }
-				: new[] { "LEFT", "RIGHT", "ALL", "COPY", "PASTE", "DONE" };
+				? new[] { "ESC", "\u2190", "\u2192", "TAB", "UNDO", "REDO", "PASTE", "DONE" }
+				: new[] { "\u2190", "\u2192", "ALL", "COPY", "PASTE", "DONE" };
 			string[] actions = code
-				? new[] { "LEFT", "RIGHT", "TAB", "UNDO", "REDO", "PASTE", "HIDE" }
+				? new[] { "ESC", "LEFT", "RIGHT", "TAB", "UNDO", "REDO", "PASTE", "HIDE" }
 				: new[] { "LEFT", "RIGHT", "ALL", "COPY", "PASTE", "HIDE" };
 
 			float x = row.x + titleW + gap;
@@ -468,12 +468,12 @@ namespace DLS.Game
 			for (int i = 0; i < keys.Length; i++)
 			{
 				Rect keyRect = new(usable.x + i * (keyW + gap), usable.y, keyW, usable.height);
-				string label = shift && keys[i].Length == 1 && char.IsLetter(keys[i][0])
-					? keys[i].ToUpperInvariant()
-					: keys[i];
+				bool letter = keys[i].Length == 1 && char.IsLetter(keys[i][0]);
+				string label = letter ? keys[i].ToUpperInvariant() : keys[i];
+				string text = shift && letter ? keys[i].ToUpperInvariant() : keys[i];
 
 				if (!GUI.Button(keyRect, label, style)) continue;
-				inputSource.ScheduleText(label);
+				inputSource.ScheduleText(text);
 				if (shift) shift = false;
 			}
 		}
@@ -495,7 +495,7 @@ namespace DLS.Game
 			if (GUI.Button(shiftRect, "SHIFT", shift ? keyboardAccentStyle : keyboardActionStyle)) shift = !shift;
 			if (GUI.Button(modeRect, symbols ? "ABC" : "123", symbols ? keyboardAccentStyle : keyboardActionStyle)) symbols = !symbols;
 			if (GUI.Button(spaceRect, "SPACE", keyboardKeyStyle)) inputSource.ScheduleText(" ");
-			if (GUI.Button(enterRect, "ENTER", keyboardActionStyle)) inputSource.ScheduleKey(KeyCode.Return);
+			if (GUI.Button(enterRect, "ENTER", keyboardAccentStyle)) inputSource.ScheduleKey(KeyCode.Return);
 			if (GUI.RepeatButton(backRect, "DEL", keyboardActionStyle)) inputSource.ScheduleKey(KeyCode.Backspace);
 		}
 
@@ -503,6 +503,7 @@ namespace DLS.Game
 		{
 			switch (action)
 			{
+				case "ESC": inputSource.ScheduleKey(KeyCode.Escape); break;
 				case "LEFT": inputSource.ScheduleKey(KeyCode.LeftArrow); break;
 				case "RIGHT": inputSource.ScheduleKey(KeyCode.RightArrow); break;
 				case "TAB": inputSource.ScheduleKey(KeyCode.Tab); break;
@@ -520,27 +521,28 @@ namespace DLS.Game
 			if (keyboardKeyStyle != null) return;
 
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
-			Color panelCol = theme.MenuPanelCol;
-			Color keyCol = theme.MainMenuButtonTheme.buttonCols.normal;
-			Color keyPressedCol = theme.MainMenuButtonTheme.buttonCols.pressed;
-			Color actionCol = theme.MenuPopupButtonTheme.buttonCols.normal;
-			Color accentCol = theme.MainMenuButtonTheme.buttonCols.hover;
-			Color borderCol = new(0.23f, 0.24f, 0.27f, 1f);
+			Color accent = RewiredUI.Accent;
+			Color panelCol = Color.Lerp(theme.MenuPanelCol, Color.black, 0.08f);
+			Color keyCol = Color.Lerp(theme.MainMenuButtonTheme.buttonCols.normal, RewiredUI.SurfaceRaised, 0.35f);
+			Color actionCol = Color.Lerp(theme.MenuPopupButtonTheme.buttonCols.normal, Color.black, 0.08f);
+			Color borderCol = new(0.28f, 0.29f, 0.33f, 1f);
+			Color pressedCol = Color.Lerp(keyCol, accent, 0.24f);
+			Color accentKeyCol = Color.Lerp(actionCol, accent, 0.28f);
 
 			Texture2D panel = CreateSolidTexture(panelCol);
-			Texture2D key = CreateRoundedTexture(keyCol, borderCol);
-			Texture2D keyPressed = CreateRoundedTexture(keyPressedCol, accentCol);
-			Texture2D action = CreateRoundedTexture(actionCol, borderCol);
-			Texture2D accent = CreateRoundedTexture(accentCol, accentCol);
-			keyboardAccentLine = CreateSolidTexture(accentCol);
+			Texture2D key = CreateTechKeyTexture(keyCol, borderCol, false, accent);
+			Texture2D keyPressed = CreateTechKeyTexture(pressedCol, Color.Lerp(borderCol, accent, 0.72f), true, accent);
+			Texture2D action = CreateTechKeyTexture(actionCol, borderCol, false, accent);
+			Texture2D accentKey = CreateTechKeyTexture(accentKeyCol, accent, true, accent);
+			keyboardAccentLine = CreateSolidTexture(accent);
 
 			keyboardPanelStyle = new GUIStyle(GUI.skin.box);
 			keyboardPanelStyle.normal.background = panel;
 			keyboardPanelStyle.border = new RectOffset(0, 0, 0, 0);
 
 			keyboardKeyStyle = MakeKeyboardStyle(key, keyPressed, theme.MainMenuButtonTheme.textCols.normal, false);
-			keyboardActionStyle = MakeKeyboardStyle(action, keyPressed, theme.MenuPopupButtonTheme.textCols.normal, true);
-			keyboardAccentStyle = MakeKeyboardStyle(accent, keyPressed, Color.white, true);
+			keyboardActionStyle = MakeKeyboardStyle(action, keyPressed, RewiredUI.SecondaryText, true);
+			keyboardAccentStyle = MakeKeyboardStyle(accentKey, keyPressed, Color.white, true);
 
 			keyboardLabelStyle = new GUIStyle(GUI.skin.label)
 			{
@@ -549,7 +551,7 @@ namespace DLS.Game
 				clipping = TextClipping.Clip,
 				padding = new RectOffset(8, 4, 0, 0)
 			};
-			keyboardLabelStyle.normal.textColor = RewiredUI.SecondaryText;
+			keyboardLabelStyle.normal.textColor = accent;
 		}
 
 		static GUIStyle MakeKeyboardStyle(Texture2D normal, Texture2D pressed, Color text, bool bold)
@@ -558,7 +560,7 @@ namespace DLS.Game
 			{
 				alignment = TextAnchor.MiddleCenter,
 				fontStyle = bold ? FontStyle.Bold : FontStyle.Normal,
-				border = new RectOffset(9, 9, 9, 9),
+				border = new RectOffset(6, 6, 6, 6),
 				padding = new RectOffset(4, 4, 2, 2),
 				margin = new RectOffset(0, 0, 0, 0),
 				clipping = TextClipping.Clip
@@ -587,10 +589,10 @@ namespace DLS.Game
 			return texture;
 		}
 
-		static Texture2D CreateRoundedTexture(Color fill, Color border)
+		static Texture2D CreateTechKeyTexture(Color fill, Color border, bool accentTop, Color accent)
 		{
 			const int size = 32;
-			const float radius = 5.5f;
+			const float radius = 2.8f;
 			const float borderWidth = 1.25f;
 			float half = size * 0.5f;
 			Color[] pixels = new Color[size * size];
@@ -601,15 +603,17 @@ namespace DLS.Game
 				{
 					float px = x + 0.5f - half;
 					float py = y + 0.5f - half;
-					float qx = Mathf.Abs(px) - (half - radius);
-					float qy = Mathf.Abs(py) - (half - radius);
-					float ox = Mathf.Max(qx, 0f);
-					float oy = Mathf.Max(qy, 0f);
-					float distance = Mathf.Sqrt(ox * ox + oy * oy) + Mathf.Min(Mathf.Max(qx, qy), 0f) - radius;
-					float alpha = Mathf.Clamp01(0.5f - distance);
-					float borderT = Mathf.Clamp01((distance + borderWidth + 0.5f) / borderWidth);
+					float outer = RoundedRectDistance(px, py, half, radius);
+					float inner = RoundedRectDistance(px, py, half - borderWidth, Mathf.Max(0.5f, radius - borderWidth));
+					float outerAlpha = Mathf.Clamp01(0.5f - outer);
+					float innerAlpha = Mathf.Clamp01(0.5f - inner);
+					float borderT = Mathf.Clamp01(outerAlpha - innerAlpha);
 					Color pixel = Color.Lerp(fill, border, borderT);
-					pixel.a *= alpha;
+					pixel.a *= outerAlpha;
+
+					if (accentTop && y >= size - 3 && outerAlpha > 0.5f)
+						pixel = Color.Lerp(pixel, accent, 0.9f);
+
 					pixels[y * size + x] = pixel;
 				}
 			}
@@ -623,6 +627,15 @@ namespace DLS.Game
 			texture.SetPixels(pixels);
 			texture.Apply(false, true);
 			return texture;
+		}
+
+		static float RoundedRectDistance(float x, float y, float half, float radius)
+		{
+			float qx = Mathf.Abs(x) - (half - radius);
+			float qy = Mathf.Abs(y) - (half - radius);
+			float ox = Mathf.Max(qx, 0f);
+			float oy = Mathf.Max(qy, 0f);
+			return Mathf.Sqrt(ox * ox + oy * oy) + Mathf.Min(Mathf.Max(qx, qy), 0f) - radius;
 		}
 
 	}
