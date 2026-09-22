@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Seb.Helpers;
+using Seb.Helpers.InputHandling;
 using Seb.Types;
 using Seb.Vis;
 using Seb.Vis.UI;
@@ -143,6 +144,7 @@ namespace DLS.Graphics
 			int localColumn = Mathf.Clamp(column - 1, 0, lines[lineIndex].Length);
 			SetCaret(lineStarts[lineIndex] + localColumn, false);
 			focused = true;
+			MobileInputBridge.RequestKeyboard(MobileKeyboardMode.Code);
 			UI.GetScrollbarState(scrollID).scrollY = Mathf.Max(0, (lineIndex - 2) * RowHeight);
 		}
 
@@ -172,6 +174,7 @@ namespace DLS.Graphics
 
 			if (InputHelper.IsMouseUpThisFrame(MouseButton.Left)) mouseSelecting = false;
 
+			if (focused) MobileInputBridge.NotifyTextFocus(MobileKeyboardMode.Code);
 			HandleKeyboard();
 			return commands;
 		}
@@ -368,6 +371,7 @@ namespace DLS.Graphics
 			{
 				focused = true;
 				mouseSelecting = true;
+				MobileInputBridge.RequestKeyboard(MobileKeyboardMode.Code);
 
 				float mouseX = UI.ScreenToUISpace(InputHelper.MousePos).x;
 				if (mouseX < textX)
