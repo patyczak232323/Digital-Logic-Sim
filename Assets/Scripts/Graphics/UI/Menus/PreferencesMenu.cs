@@ -78,6 +78,12 @@ namespace DLS.Graphics
 
 		public static void DrawMenu(Project project)
 		{
+			if (MobileUI.IsActive)
+			{
+				DrawMobileMenu(project);
+				return;
+			}
+
 			//HandleKeyboardShortcuts();
 
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
@@ -180,6 +186,158 @@ namespace DLS.Graphics
 			}
 
 		}
+
+
+		static void DrawMobileMenu(Project project)
+		{
+			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
+			MenuHelper.DrawBackgroundOverlay();
+			UpdateSimSpeedString(project);
+
+			Rect safe = MobileUI.SafeRectUI;
+			const float outerPad = 1.2f;
+			const float gap = 1.2f;
+			float top = safe.yMax - 7.1f;
+			float bottom = safe.yMin + 1.0f;
+			float usableWidth = safe.width - outerPad * 2f;
+			float colWidth = (usableWidth - gap) / 2f;
+			float fieldWidth = colWidth * 0.43f;
+			Vector2 mobileEntrySize = new(colWidth, 4.3f);
+			Color labelCol = Color.white;
+
+			Vector2 left = new(safe.xMin + outerPad, top);
+			Vector2 right = new(left.x + colWidth + gap, top);
+
+			UI.DrawText("PREFERENCES", theme.FontBold, theme.FontSizeRegular * 1.05f,
+				new Vector2(safe.xMin + 13.2f, safe.yMax - 3.0f), Anchor.TextCentreLeft, Color.white);
+
+			DrawMobileHeader("DISPLAY & EDITING", ref left, colWidth);
+
+			int mainPinNamesMode = DrawMobileWheel("I/O pin names", PinDisplayOptions, ID_MainPinNames, ref left);
+			int chipPinNamesMode = DrawMobileWheel("Chip pin names", PinDisplayOptions, ID_ChipPinNames, ref left);
+			int gridDisplayMode = DrawMobileWheel("Grid", GridDisplayOptions, ID_GridDisplay, ref left);
+			int snappingMode = DrawMobileWheel("Snap to grid", SnappingOptions, ID_Snapping, ref left);
+			int straightWireMode = DrawMobileWheel("Straight wires", StraightWireOptions, ID_StraightWires, ref left);
+
+			DrawMobileHeader("SIMULATION", ref right, colWidth);
+
+			bool pauseSim = MenuHelper.LabeledOptionsWheel(
+				"Simulation",
+				labelCol,
+				right,
+				mobileEntrySize,
+				ID_SimStatus,
+				SimulationStatusOptions,
+				fieldWidth,
+				true) == 1;
+			Step(ref right);
+
+			InputFieldState clockSpeed = MenuHelper.LabeledInputField(
+				"Steps / clock",
+				labelCol,
+				right,
+				mobileEntrySize,
+				ID_ClockSpeedInput,
+				integerInputValidator,
+				fieldWidth,
+				true);
+			Step(ref right);
+
+			InputFieldState targetSpeed = MenuHelper.LabeledInputField(
+				"Target steps / s",
+				labelCol,
+				right,
+				mobileEntrySize,
+				ID_SimFrequencyField,
+				integerInputValidator,
+				fieldWidth,
+				true);
+			Step(ref right);
+
+			Vector2 currentRight = MenuHelper.DrawLabelSectionOfLabelInputPair(
+				right,
+				mobileEntrySize,
+				"Current steps / s",
+				labelCol * 0.75f,
+				true);
+			UI.DrawPanel(currentRight, new Vector2(fieldWidth, mobileEntrySize.y), new Color(0.18f, 0.18f, 0.18f), Anchor.CentreRight);
+			UI.DrawText(
+				currentSimSpeedString,
+				theme.FontBold,
+				theme.FontSizeRegular,
+				currentRight + new Vector2(1f - fieldWidth, 0),
+				Anchor.TextCentreLeft,
+				currentSimSpeedStringColour);
+			Step(ref right);
+
+			float buttonGap = 0.5f;
+			float buttonWidth = (colWidth - buttonGap) / 2f;
+			bool cancel = UI.Button(
+				"CANCEL",
+				theme.MenuPopupButtonTheme,
+				right,
+				new Vector2(buttonWidth, 5.2f),
+				true,
+				false,
+				false,
+				Anchor.TopLeft);
+			bool apply = UI.Button(
+				"APPLY",
+				theme.MainMenuButtonTheme,
+				right + Vector2.right * (buttonWidth + buttonGap),
+				new Vector2(buttonWidth, 5.2f),
+				true,
+				false,
+				false,
+				Anchor.TopLeft);
+
+			int.TryParse(clockSpeed.text, out int stepsPerClock);
+			stepsPerClock = Mathf.Max(1, stepsPerClock);
+			int.TryParse(targetSpeed.text, out int targetTicks);
+			targetTicks = Mathf.Max(1, targetTicks);
+
+			if (project.targetTicksPerSecond != targetTicks || project.simPaused != pauseSim)
+				lastSimTickRateSetTime = Time.time;
+
+			project.description.Prefs_MainPinNamesDisplayMode = mainPinNamesMode;
+			project.description.Prefs_ChipPinNamesDisplayMode = chipPinNamesMode;
+			project.description.Prefs_GridDisplayMode = gridDisplayMode;
+			project.description.Prefs_Snapping = snappingMode;
+			project.description.Prefs_StraightWires = straightWireMode;
+			project.description.Prefs_SimTargetStepsPerSecond = targetTicks;
+			project.description.Prefs_SimStepsPerClockTick = stepsPerClock;
+			project.description.Prefs_SimPaused = pauseSim;
+
+			if (cancel || KeyboardShortcuts.CancelShortcutTriggered)
+			{
+				project.description = originalProjectDesc;
+				UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
+			}
+			else if (apply || KeyboardShortcuts.ConfirmShortcutTriggered)
+			{
+				project.UpdateAndSaveProjectDescription(project.description);
+				UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
+			}
+
+			void DrawMobileHeader(string text, ref Vector2 pos, float width)
+			{
+				Bounds2D header = RewiredUI.DrawSectionHeader(text, pos, width);
+				pos = header.BottomLeft + Vector2.down * 0.55f;
+			}
+
+			int DrawMobileWheel(string label, string[] options, UIHandle id, ref Vector2 pos)
+			{
+				int value = MenuHelper.LabeledOptionsWheel(label, labelCol, pos, mobileEntrySize, id, options, fieldWidth, true);
+				Step(ref pos);
+				return value;
+			}
+
+			void Step(ref Vector2 pos)
+			{
+				pos.y -= mobileEntrySize.y + 0.55f;
+			}
+		}
+
 
 		public static void OnMenuOpened()
 		{
