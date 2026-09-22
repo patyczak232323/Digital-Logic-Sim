@@ -67,7 +67,7 @@ namespace DLS.Game
 			MobileInputBridge.EnableRuntime(true);
 
 			Input.multiTouchEnabled = true;
-			Input.simulateMouseWithTouches = true;
+			Input.simulateMouseWithTouches = false;
 			TouchScreenKeyboard.hideInput = true;
 			Screen.autorotateToPortrait = false;
 			Screen.autorotateToPortraitUpsideDown = false;
@@ -349,7 +349,7 @@ namespace DLS.Game
 		{
 			Rect safe = Screen.safeArea;
 			bool code = MobileInputBridge.RequestedMode == MobileKeyboardMode.Code;
-			float keyboardHeight = Mathf.Clamp(safe.height * (code ? 0.47f : 0.41f), 240f, 540f);
+			float keyboardHeight = Mathf.Clamp(safe.height * (code ? 0.43f : 0.36f), 220f, 500f);
 			keyboardHeight = Mathf.Min(keyboardHeight, safe.height);
 			return new Rect(safe.xMin, safe.yMin, safe.width, keyboardHeight);
 		}
@@ -436,7 +436,7 @@ namespace DLS.Game
 		void DrawToolbar(Rect row, bool code, float gap)
 		{
 			float titleW = Mathf.Clamp(row.width * 0.15f, 96f, 165f);
-			GUI.Label(new Rect(row.x, row.y, titleW, row.height), code ? "REWIRED  /  RHDL" : "REWIRED  /  TEXT", keyboardLabelStyle);
+			GUI.Label(new Rect(row.x, row.y, titleW, row.height), code ? "RHDL INPUT" : "TEXT INPUT", keyboardLabelStyle);
 
 			string[] labels = code
 				? new[] { "ESC", "\u2190", "\u2192", "TAB", "UNDO", "REDO", "PASTE", "DONE" }
@@ -452,9 +452,10 @@ namespace DLS.Game
 			{
 				Rect keyRect = new(x + i * (keyW + gap), row.y, keyW, row.height);
 				bool repeat = actions[i] is "LEFT" or "RIGHT";
+				GUIStyle style = actions[i] == "HIDE" ? keyboardAccentStyle : keyboardActionStyle;
 				bool pressed = repeat
-					? GUI.RepeatButton(keyRect, labels[i], keyboardActionStyle)
-					: GUI.Button(keyRect, labels[i], keyboardActionStyle);
+					? GUI.RepeatButton(keyRect, labels[i], style)
+					: GUI.Button(keyRect, labels[i], style);
 				if (pressed) RunKeyboardAction(actions[i]);
 			}
 		}
@@ -469,8 +470,10 @@ namespace DLS.Game
 			{
 				Rect keyRect = new(usable.x + i * (keyW + gap), usable.y, keyW, usable.height);
 				bool letter = keys[i].Length == 1 && char.IsLetter(keys[i][0]);
-				string label = letter ? keys[i].ToUpperInvariant() : keys[i];
-				string text = shift && letter ? keys[i].ToUpperInvariant() : keys[i];
+				string label = letter
+					? (shift ? keys[i].ToUpperInvariant() : keys[i].ToLowerInvariant())
+					: keys[i];
+				string text = label;
 
 				if (!GUI.Button(keyRect, label, style)) continue;
 				inputSource.ScheduleText(text);
@@ -526,18 +529,19 @@ namespace DLS.Game
 
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
 			Color accent = RewiredUI.Accent;
-			Color panelCol = Color.Lerp(theme.MenuPanelCol, Color.black, 0.08f);
-			Color keyCol = Color.Lerp(theme.MainMenuButtonTheme.buttonCols.normal, RewiredUI.SurfaceRaised, 0.35f);
-			Color actionCol = Color.Lerp(theme.MenuPopupButtonTheme.buttonCols.normal, Color.black, 0.08f);
-			Color borderCol = new(0.28f, 0.29f, 0.33f, 1f);
-			Color pressedCol = Color.Lerp(keyCol, accent, 0.24f);
-			Color accentKeyCol = Color.Lerp(actionCol, accent, 0.28f);
+			Color panelCol = theme.MenuPanelCol;
+			Color keyCol = theme.MainMenuButtonTheme.buttonCols.normal;
+			Color keyPressedCol = theme.MainMenuButtonTheme.buttonCols.pressed;
+			Color actionCol = theme.MenuPopupButtonTheme.buttonCols.normal;
+			Color actionPressedCol = theme.MenuPopupButtonTheme.buttonCols.pressed;
+			Color borderCol = new(0.235f, 0.24f, 0.27f, 1f);
 
 			Texture2D panel = CreateSolidTexture(panelCol);
 			Texture2D key = CreateTechKeyTexture(keyCol, borderCol, false, accent);
-			Texture2D keyPressed = CreateTechKeyTexture(pressedCol, Color.Lerp(borderCol, accent, 0.72f), true, accent);
+			Texture2D keyPressed = CreateTechKeyTexture(keyPressedCol, accent, false, accent);
 			Texture2D action = CreateTechKeyTexture(actionCol, borderCol, false, accent);
-			Texture2D accentKey = CreateTechKeyTexture(accentKeyCol, accent, true, accent);
+			Texture2D actionPressed = CreateTechKeyTexture(actionPressedCol, accent, false, accent);
+			Texture2D accentKey = CreateTechKeyTexture(accent, accent, false, accent);
 			keyboardAccentLine = CreateSolidTexture(accent);
 
 			keyboardPanelStyle = new GUIStyle(GUI.skin.box);
@@ -545,7 +549,7 @@ namespace DLS.Game
 			keyboardPanelStyle.border = new RectOffset(0, 0, 0, 0);
 
 			keyboardKeyStyle = MakeKeyboardStyle(key, keyPressed, theme.MainMenuButtonTheme.textCols.normal, false);
-			keyboardActionStyle = MakeKeyboardStyle(action, keyPressed, RewiredUI.SecondaryText, true);
+			keyboardActionStyle = MakeKeyboardStyle(action, actionPressed, RewiredUI.SecondaryText, true);
 			keyboardAccentStyle = MakeKeyboardStyle(accentKey, keyPressed, Color.white, true);
 
 			keyboardLabelStyle = new GUIStyle(GUI.skin.label)
@@ -555,7 +559,7 @@ namespace DLS.Game
 				clipping = TextClipping.Clip,
 				padding = new RectOffset(8, 4, 0, 0)
 			};
-			keyboardLabelStyle.normal.textColor = accent;
+			keyboardLabelStyle.normal.textColor = RewiredUI.SecondaryText;
 		}
 
 		static GUIStyle MakeKeyboardStyle(Texture2D normal, Texture2D pressed, Color text, bool bold)
@@ -596,8 +600,8 @@ namespace DLS.Game
 		static Texture2D CreateTechKeyTexture(Color fill, Color border, bool accentTop, Color accent)
 		{
 			const int size = 32;
-			const float radius = 2.8f;
-			const float borderWidth = 1.25f;
+			const float radius = 1.6f;
+			const float borderWidth = 0.75f;
 			float half = size * 0.5f;
 			Color[] pixels = new Color[size * size];
 
