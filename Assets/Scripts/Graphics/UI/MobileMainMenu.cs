@@ -260,8 +260,10 @@ namespace DLS.Graphics
 		{
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
 			float width = Mathf.Min(62f, safe.width - 4f);
-			Vector2 centre = new(safe.center.x, safe.center.y + 2f);
-			Vector2 topLeft = new(centre.x - width / 2f, centre.y + 7f);
+			Rect visible = MobileUI.KeyboardAwareSafeRectUI;
+			float centreY = MobileInputBridge.KeyboardVisible ? visible.center.y + 0.5f : safe.center.y + 2f;
+			float formTop = Mathf.Min(safe.yMax - 7.1f, centreY + 7f);
+			Vector2 topLeft = new(safe.center.x - width / 2f, formTop);
 
 			string title = projectNameMode switch
 			{

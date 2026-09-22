@@ -159,44 +159,64 @@ namespace DLS.Graphics
 			                !string.Equals(newName, Project.ActiveProject.ViewedChip.LastSavedDescription.Name, StringComparison.Ordinal);
 			bool canSave = IsValidSaveName(newName);
 
-			topLeft = UI.PrevBounds.BottomLeft + Vector2.down * 1.0f;
-			float gap = 0.55f;
-			float buttonHeight = 5.5f;
-			float half = (width - gap) / 2f;
+			topLeft = UI.PrevBounds.BottomLeft + Vector2.down * 0.8f;
+			float gap = 0.5f;
+			float buttonHeight = MobileInputBridge.KeyboardVisible ? 4.8f : 5.5f;
 
-			if (UI.Button("CUSTOMIZE", theme.MenuButtonTheme, topLeft, new Vector2(half, buttonHeight),
-				true, false, false, Anchor.TopLeft))
-			{
-				OpenCustomizationMenu();
-				return;
-			}
-
-			string primaryLabel = renaming ? "RENAME" : "SAVE";
-			if (UI.Button(primaryLabel, theme.MainMenuButtonTheme,
-				topLeft + Vector2.right * (half + gap), new Vector2(half, buttonHeight),
-				canSave, false, false, Anchor.TopLeft))
-			{
-				Save(renaming ? Project.SaveMode.Rename : Project.SaveMode.Normal);
-				return;
-			}
-
-			topLeft.y -= buttonHeight + gap;
 			if (renaming)
 			{
-				if (UI.Button("SAVE AS NEW CHIP", theme.MenuButtonTheme, topLeft, new Vector2(width, buttonHeight),
+				float third = (width - gap * 2f) / 3f;
+				if (UI.Button("CUSTOMIZE", theme.MenuButtonTheme, topLeft, new Vector2(third, buttonHeight),
+					true, false, false, Anchor.TopLeft))
+				{
+					OpenCustomizationMenu();
+					return;
+				}
+
+				if (UI.Button("RENAME", theme.MainMenuButtonTheme,
+					topLeft + Vector2.right * (third + gap), new Vector2(third, buttonHeight),
+					canSave, false, false, Anchor.TopLeft))
+				{
+					Save(Project.SaveMode.Rename);
+					return;
+				}
+
+				if (UI.Button("SAVE AS", theme.MenuButtonTheme,
+					topLeft + Vector2.right * ((third + gap) * 2f), new Vector2(third, buttonHeight),
 					canSave, false, false, Anchor.TopLeft))
 				{
 					Save(Project.SaveMode.SaveAs);
 					return;
 				}
-				topLeft.y -= buttonHeight + gap;
+			}
+			else
+			{
+				float half = (width - gap) / 2f;
+				if (UI.Button("CUSTOMIZE", theme.MenuButtonTheme, topLeft, new Vector2(half, buttonHeight),
+					true, false, false, Anchor.TopLeft))
+				{
+					OpenCustomizationMenu();
+					return;
+				}
+
+				if (UI.Button("SAVE", theme.MainMenuButtonTheme,
+					topLeft + Vector2.right * (half + gap), new Vector2(half, buttonHeight),
+					canSave, false, false, Anchor.TopLeft))
+				{
+					Save(Project.SaveMode.Normal);
+					return;
+				}
 			}
 
-			string hint = Project.ActiveProject.ChipHasBeenSavedBefore
-				? "Change the name to rename or save a copy."
-				: "Choose a name, optionally customize the chip, then save.";
-			UI.DrawText(hint, theme.FontRegular, theme.FontSizeRegular * 0.76f,
-				topLeft + new Vector2(0.2f, -1.1f), Anchor.TextCentreLeft, RewiredUI.SecondaryText);
+			topLeft.y -= buttonHeight + gap;
+			if (!MobileInputBridge.KeyboardVisible)
+			{
+				string hint = Project.ActiveProject.ChipHasBeenSavedBefore
+					? "Change the name to rename or save a copy."
+					: "Choose a name, optionally customize the chip, then save.";
+				UI.DrawText(hint, theme.FontRegular, theme.FontSizeRegular * 0.76f,
+					topLeft + new Vector2(0.2f, -1.1f), Anchor.TextCentreLeft, RewiredUI.SecondaryText);
+			}
 
 			if (KeyboardShortcuts.CancelShortcutTriggered)
 			{

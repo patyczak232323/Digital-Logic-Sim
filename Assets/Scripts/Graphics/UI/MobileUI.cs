@@ -42,6 +42,25 @@ namespace DLS.Graphics
 			}
 		}
 
+		public static Rect KeyboardAwareSafeRectUI
+		{
+			get
+			{
+				Rect safe = SafeRectUI;
+				if (!MobileInputBridge.KeyboardVisible ||
+				    MobileInputBridge.KeyboardScreenRect.height <= 0 ||
+				    Screen.width <= 0)
+				{
+					return safe;
+				}
+
+				float s = UI.Width / Screen.width;
+				float keyboardTop = MobileInputBridge.KeyboardScreenRect.yMax * s;
+				float visibleBottom = Mathf.Clamp(keyboardTop + 0.6f, safe.yMin, safe.yMax);
+				return Rect.MinMaxRect(safe.xMin, visibleBottom, safe.xMax, safe.yMax);
+			}
+		}
+
 		public static void ApplyRuntimePreferences()
 		{
 			panMode = PanByDefault;

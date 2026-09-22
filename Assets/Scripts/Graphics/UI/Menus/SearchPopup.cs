@@ -94,7 +94,7 @@ namespace DLS.Graphics
 		{
 			MenuHelper.DrawBackgroundOverlay();
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
-			Rect safe = MobileUI.SafeRectUI;
+			Rect safe = MobileUI.KeyboardAwareSafeRectUI;
 
 			float pad = 1.2f;
 			float top = safe.yMax - 6.8f;
@@ -111,7 +111,7 @@ namespace DLS.Graphics
 
 			topLeft = UI.PrevBounds.BottomLeft + Vector2.down * 0.8f;
 			float bottom = safe.yMin + 1.0f;
-			float listHeight = Mathf.Max(8f, topLeft.y - bottom);
+			float listHeight = Mathf.Max(1f, topLeft.y - bottom);
 			ScrollBarState scrollState = UI.DrawScrollView(
 				ID_Scrollbar,
 				topLeft,
