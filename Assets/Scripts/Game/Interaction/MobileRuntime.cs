@@ -18,6 +18,14 @@ namespace DLS.Game
 		Vector2 previousGestureCentre;
 		float previousGestureDistance;
 
+		bool singleFingerPanActive;
+		int singleFingerPanId = -1;
+		Vector2 previousSinglePanPosition;
+
+		bool edgeSwipeTracking;
+		int edgeSwipeFingerId = -1;
+		Vector2 edgeSwipeStart;
+
 		bool longPressTracking;
 		bool longPressTriggered;
 		int longPressFingerId = -1;
@@ -61,7 +69,7 @@ namespace DLS.Game
 			Screen.orientation = ScreenOrientation.AutoRotation;
 			Screen.fullScreen = true;
 			Screen.sleepTimeout = SleepTimeout.NeverSleep;
-			Application.targetFrameRate = 60;
+			MobileUI.ApplyRuntimePreferences();
 		}
 
 		void OnDestroy()
@@ -78,15 +86,125 @@ namespace DLS.Game
 			if (inputSource == null) return;
 			inputSource.PrepareFrame();
 
-			// Android Back first dismisses our own keyboard instead of escaping the app/menu.
-			if (MobileInputBridge.KeyboardVisible && Input.GetKeyDown(KeyCode.Escape))
+			// Android Back first closes the custom keyboard, then the current mobile
+			// screen/drawer. Only an unhandled Back is allowed to reach normal shortcuts.
+			if (Input.GetKeyDown(KeyCode.Escape))
 			{
-				MobileInputBridge.DismissKeyboard();
-				inputSource.SuppressEscapeThisFrame();
+				if (MobileInputBridge.KeyboardVisible)
+				{
+					MobileInputBridge.DismissKeyboard();
+					inputSource.SuppressEscapeThisFrame();
+				}
+				else if (MobileUI.HandleBackButton())
+				{
+					inputSource.SuppressEscapeThisFrame();
+				}
 			}
 
-			UpdateLongPress();
+			UpdateEdgeSwipe();
+			UpdateSingleFingerPan();
+			if (!MobileUI.PanMode) UpdateLongPress();
+			else CancelLongPress();
 			UpdateTwoFingerGesture();
+		}
+
+
+		void UpdateEdgeSwipe()
+		{
+			if (UIDrawer.ActiveMenu != UIDrawer.MenuType.None ||
+			    MobileInputBridge.KeyboardVisible ||
+			    Input.touchCount != 1)
+			{
+				CancelEdgeSwipe();
+				return;
+			}
+
+			Touch touch = Input.GetTouch(0);
+			float edgeWidth = Mathf.Max(24f, Screen.width * 0.035f);
+			float edgeStart = Screen.safeArea.xMin + edgeWidth;
+
+			if (touch.phase == TouchPhase.Began)
+			{
+				if (touch.position.x <= edgeStart)
+				{
+					edgeSwipeTracking = true;
+					edgeSwipeFingerId = touch.fingerId;
+					edgeSwipeStart = touch.position;
+				}
+				return;
+			}
+
+			if (!edgeSwipeTracking || touch.fingerId != edgeSwipeFingerId) return;
+
+			Vector2 delta = touch.position - edgeSwipeStart;
+			float requiredDistance = Mathf.Max(80f, Screen.width * 0.12f);
+			if (delta.x >= requiredDistance && Mathf.Abs(delta.x) > Mathf.Abs(delta.y) * 1.25f)
+			{
+				inputSource.CancelPrimaryPointerThisFrame();
+				MobileUI.OpenDrawer();
+				CancelEdgeSwipe();
+				return;
+			}
+
+			if (touch.phase is TouchPhase.Ended or TouchPhase.Canceled)
+				CancelEdgeSwipe();
+		}
+
+		void CancelEdgeSwipe()
+		{
+			edgeSwipeTracking = false;
+			edgeSwipeFingerId = -1;
+		}
+
+		void UpdateSingleFingerPan()
+		{
+			if (!MobileUI.PanMode ||
+			    UIDrawer.ActiveMenu != UIDrawer.MenuType.None ||
+			    Input.touchCount != 1)
+			{
+				CancelSingleFingerPan();
+				return;
+			}
+
+			Touch touch = Input.GetTouch(0);
+			if (MobileInputBridge.IsPointOverKeyboard(touch.position) || InteractionState.MouseIsOverUI)
+			{
+				CancelSingleFingerPan();
+				return;
+			}
+
+			// In PAN mode a one-finger gesture must never leak through as an editor click.
+			inputSource.CancelPrimaryPointerThisFrame();
+
+			if (touch.phase == TouchPhase.Began)
+			{
+				singleFingerPanActive = true;
+				singleFingerPanId = touch.fingerId;
+				previousSinglePanPosition = touch.position;
+				return;
+			}
+
+			if (!singleFingerPanActive || touch.fingerId != singleFingerPanId) return;
+
+			if (touch.phase == TouchPhase.Moved)
+			{
+				CameraController.ApplyMobilePanZoom(
+					previousSinglePanPosition,
+					touch.position,
+					100f,
+					100f);
+				previousSinglePanPosition = touch.position;
+			}
+			else if (touch.phase is TouchPhase.Ended or TouchPhase.Canceled)
+			{
+				CancelSingleFingerPan();
+			}
+		}
+
+		void CancelSingleFingerPan()
+		{
+			singleFingerPanActive = false;
+			singleFingerPanId = -1;
 		}
 
 		void UpdateTwoFingerGesture()
@@ -97,6 +215,7 @@ namespace DLS.Game
 				return;
 			}
 
+			CancelSingleFingerPan();
 			Touch a = Input.GetTouch(0);
 			Touch b = Input.GetTouch(1);
 			if (MobileInputBridge.IsPointOverKeyboard(a.position) || MobileInputBridge.IsPointOverKeyboard(b.position))
