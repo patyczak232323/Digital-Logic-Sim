@@ -97,18 +97,19 @@ namespace DLS.Game
 		{
 			if (inputSource == null) return;
 			inputSource.PrepareFrame();
+			RefreshKeyboardScreenRect();
 
 			// Main.Update processes world interaction before drawing UI. Pre-mark the
 			// persistent mobile chrome so a first tap on the dock/top bar cannot leak
 			// through and select/place something in the circuit underneath it.
-			if (Input.touchCount > 0)
+			for (int i = 0; i < Input.touchCount; i++)
 			{
-				Vector2 touchPosition = Input.GetTouch(0).position;
-				if (MobileUI.IsScreenPointOverPersistentChrome(touchPosition) || MobileInputBridge.IsPointOverKeyboard(touchPosition))
+				Vector2 touchPosition = Input.GetTouch(i).position;
+				bool overKeyboard = MobileInputBridge.IsPointOverKeyboard(touchPosition);
+				if (MobileUI.IsScreenPointOverPersistentChrome(touchPosition) || overKeyboard)
 				{
 					InteractionState.MouseIsOverUI = true;
-					if (MobileInputBridge.IsPointOverKeyboard(touchPosition))
-						inputSource.CancelPrimaryPointerThisFrame();
+					if (overKeyboard) inputSource.CancelPrimaryPointerThisFrame();
 				}
 			}
 
@@ -333,19 +334,40 @@ namespace DLS.Game
 			longPressFingerId = -1;
 		}
 
+		void RefreshKeyboardScreenRect()
+		{
+			if (!MobileInputBridge.KeyboardVisible)
+			{
+				MobileInputBridge.SetKeyboardScreenRect(default);
+				return;
+			}
+
+			MobileInputBridge.SetKeyboardScreenRect(CalculateKeyboardScreenRect());
+		}
+
+		Rect CalculateKeyboardScreenRect()
+		{
+			Rect safe = Screen.safeArea;
+			bool code = MobileInputBridge.RequestedMode == MobileKeyboardMode.Code;
+			float keyboardHeight = Mathf.Clamp(safe.height * (code ? 0.50f : 0.44f), 260f, 580f);
+			keyboardHeight = Mathf.Min(keyboardHeight, safe.height);
+			return new Rect(safe.xMin, safe.yMin, safe.width, keyboardHeight);
+		}
+
 		void OnGUI()
 		{
 			if (!MobileInputBridge.KeyboardVisible || inputSource == null) return;
 
-			Rect safe = Screen.safeArea;
-			bool code = MobileInputBridge.RequestedMode == MobileKeyboardMode.Code;
-			float keyboardHeight = Mathf.Clamp(safe.height * (code ? 0.50f : 0.44f), 260f, 580f);
-			Rect screenRect = new(safe.xMin, safe.yMin, safe.width, keyboardHeight);
+			Rect screenRect = CalculateKeyboardScreenRect();
 			MobileInputBridge.SetKeyboardScreenRect(screenRect);
+			bool code = MobileInputBridge.RequestedMode == MobileKeyboardMode.Code;
 
-			// OnGUI uses a top-left origin; touch/screen coordinates use a bottom-left origin.
+			// Keep the custom keyboard above all other legacy IMGUI surfaces.
+			int oldDepth = GUI.depth;
+			GUI.depth = -10000;
 			Rect guiRect = new(screenRect.x, Screen.height - screenRect.yMax, screenRect.width, screenRect.height);
 			DrawKeyboard(guiRect, code);
+			GUI.depth = oldDepth;
 		}
 
 		void DrawKeyboard(Rect rect, bool code)
@@ -357,8 +379,8 @@ namespace DLS.Game
 			int rows = code ? 6 : 5;
 			float rowH = (rect.height - margin * 2f - gap * (rows - 1)) / rows;
 
-			int keyFont = Mathf.Clamp(Mathf.RoundToInt(rowH * 0.34f), 15, 31);
-			int actionFont = Mathf.Clamp(Mathf.RoundToInt(rowH * 0.27f), 12, 24);
+			int keyFont = Mathf.Clamp(Mathf.RoundToInt(rowH * 0.31f), 15, 29);
+			int actionFont = Mathf.Clamp(Mathf.RoundToInt(rowH * 0.22f), 11, 21);
 			keyboardKeyStyle.fontSize = keyFont;
 			keyboardAccentStyle.fontSize = keyFont;
 			keyboardActionStyle.fontSize = actionFont;
@@ -413,12 +435,12 @@ namespace DLS.Game
 
 		void DrawToolbar(Rect row, bool code, float gap)
 		{
-			float titleW = Mathf.Clamp(row.width * 0.12f, 72f, 132f);
-			GUI.Label(new Rect(row.x, row.y, titleW, row.height), code ? "RHDL" : "TEXT", keyboardLabelStyle);
+			float titleW = Mathf.Clamp(row.width * 0.16f, 100f, 172f);
+			GUI.Label(new Rect(row.x, row.y, titleW, row.height), code ? "REWIRED / RHDL" : "REWIRED / TEXT", keyboardLabelStyle);
 
 			string[] labels = code
-				? new[] { "\u2190", "\u2192", "TAB", "UNDO", "REDO", "PASTE", "\u00D7" }
-				: new[] { "\u2190", "\u2192", "ALL", "COPY", "PASTE", "\u00D7" };
+				? new[] { "LEFT", "RIGHT", "TAB", "UNDO", "REDO", "PASTE", "DONE" }
+				: new[] { "LEFT", "RIGHT", "ALL", "COPY", "PASTE", "DONE" };
 			string[] actions = code
 				? new[] { "LEFT", "RIGHT", "TAB", "UNDO", "REDO", "PASTE", "HIDE" }
 				: new[] { "LEFT", "RIGHT", "ALL", "COPY", "PASTE", "HIDE" };
@@ -470,11 +492,11 @@ namespace DLS.Game
 			Rect enterRect = new(spaceRect.xMax + gap, row.y, enterW, row.height);
 			Rect backRect = new(enterRect.xMax + gap, row.y, backW, row.height);
 
-			if (GUI.Button(shiftRect, "\u21E7", shift ? keyboardAccentStyle : keyboardActionStyle)) shift = !shift;
+			if (GUI.Button(shiftRect, "SHIFT", shift ? keyboardAccentStyle : keyboardActionStyle)) shift = !shift;
 			if (GUI.Button(modeRect, symbols ? "ABC" : "123", symbols ? keyboardAccentStyle : keyboardActionStyle)) symbols = !symbols;
-			if (GUI.Button(spaceRect, string.Empty, keyboardKeyStyle)) inputSource.ScheduleText(" ");
-			if (GUI.Button(enterRect, "\u21B5", keyboardActionStyle)) inputSource.ScheduleKey(KeyCode.Return);
-			if (GUI.RepeatButton(backRect, "\u232B", keyboardActionStyle)) inputSource.ScheduleKey(KeyCode.Backspace);
+			if (GUI.Button(spaceRect, "SPACE", keyboardKeyStyle)) inputSource.ScheduleText(" ");
+			if (GUI.Button(enterRect, "ENTER", keyboardActionStyle)) inputSource.ScheduleKey(KeyCode.Return);
+			if (GUI.RepeatButton(backRect, "DEL", keyboardActionStyle)) inputSource.ScheduleKey(KeyCode.Backspace);
 		}
 
 		void RunKeyboardAction(string action)
@@ -497,20 +519,28 @@ namespace DLS.Game
 		{
 			if (keyboardKeyStyle != null) return;
 
-			Texture2D panel = CreateSolidTexture(new Color(0.045f, 0.055f, 0.075f, 0.985f));
-			Texture2D key = CreateRoundedTexture(new Color(0.14f, 0.17f, 0.22f, 1f));
-			Texture2D keyPressed = CreateRoundedTexture(new Color(0.22f, 0.27f, 0.34f, 1f));
-			Texture2D action = CreateRoundedTexture(new Color(0.095f, 0.115f, 0.15f, 1f));
-			Texture2D accent = CreateRoundedTexture(RewiredUI.Accent);
-			keyboardAccentLine = CreateSolidTexture(RewiredUI.Accent);
+			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
+			Color panelCol = theme.MenuPanelCol;
+			Color keyCol = theme.MainMenuButtonTheme.buttonCols.normal;
+			Color keyPressedCol = theme.MainMenuButtonTheme.buttonCols.pressed;
+			Color actionCol = theme.MenuPopupButtonTheme.buttonCols.normal;
+			Color accentCol = theme.MainMenuButtonTheme.buttonCols.hover;
+			Color borderCol = new(0.23f, 0.24f, 0.27f, 1f);
+
+			Texture2D panel = CreateSolidTexture(panelCol);
+			Texture2D key = CreateRoundedTexture(keyCol, borderCol);
+			Texture2D keyPressed = CreateRoundedTexture(keyPressedCol, accentCol);
+			Texture2D action = CreateRoundedTexture(actionCol, borderCol);
+			Texture2D accent = CreateRoundedTexture(accentCol, accentCol);
+			keyboardAccentLine = CreateSolidTexture(accentCol);
 
 			keyboardPanelStyle = new GUIStyle(GUI.skin.box);
 			keyboardPanelStyle.normal.background = panel;
 			keyboardPanelStyle.border = new RectOffset(0, 0, 0, 0);
 
-			keyboardKeyStyle = MakeKeyboardStyle(key, keyPressed, Color.white);
-			keyboardActionStyle = MakeKeyboardStyle(action, keyPressed, new Color(0.84f, 0.88f, 0.94f, 1f));
-			keyboardAccentStyle = MakeKeyboardStyle(accent, keyPressed, Color.white);
+			keyboardKeyStyle = MakeKeyboardStyle(key, keyPressed, theme.MainMenuButtonTheme.textCols.normal, false);
+			keyboardActionStyle = MakeKeyboardStyle(action, keyPressed, theme.MenuPopupButtonTheme.textCols.normal, true);
+			keyboardAccentStyle = MakeKeyboardStyle(accent, keyPressed, Color.white, true);
 
 			keyboardLabelStyle = new GUIStyle(GUI.skin.label)
 			{
@@ -519,25 +549,26 @@ namespace DLS.Game
 				clipping = TextClipping.Clip,
 				padding = new RectOffset(8, 4, 0, 0)
 			};
-			keyboardLabelStyle.normal.textColor = new Color(0.55f, 0.62f, 0.72f, 1f);
+			keyboardLabelStyle.normal.textColor = RewiredUI.SecondaryText;
 		}
 
-		static GUIStyle MakeKeyboardStyle(Texture2D normal, Texture2D pressed, Color text)
+		static GUIStyle MakeKeyboardStyle(Texture2D normal, Texture2D pressed, Color text, bool bold)
 		{
 			GUIStyle style = new(GUI.skin.button)
 			{
 				alignment = TextAnchor.MiddleCenter,
-				fontStyle = FontStyle.Normal,
-				border = new RectOffset(10, 10, 10, 10),
+				fontStyle = bold ? FontStyle.Bold : FontStyle.Normal,
+				border = new RectOffset(9, 9, 9, 9),
 				padding = new RectOffset(4, 4, 2, 2),
-				margin = new RectOffset(0, 0, 0, 0)
+				margin = new RectOffset(0, 0, 0, 0),
+				clipping = TextClipping.Clip
 			};
 			style.normal.background = normal;
 			style.hover.background = normal;
 			style.focused.background = normal;
 			style.active.background = pressed;
 			style.normal.textColor = text;
-			style.hover.textColor = text;
+			style.hover.textColor = Color.white;
 			style.focused.textColor = text;
 			style.active.textColor = Color.white;
 			return style;
@@ -556,10 +587,11 @@ namespace DLS.Game
 			return texture;
 		}
 
-		static Texture2D CreateRoundedTexture(Color colour)
+		static Texture2D CreateRoundedTexture(Color fill, Color border)
 		{
 			const int size = 32;
-			const float radius = 7f;
+			const float radius = 5.5f;
+			const float borderWidth = 1.25f;
 			float half = size * 0.5f;
 			Color[] pixels = new Color[size * size];
 
@@ -575,7 +607,8 @@ namespace DLS.Game
 					float oy = Mathf.Max(qy, 0f);
 					float distance = Mathf.Sqrt(ox * ox + oy * oy) + Mathf.Min(Mathf.Max(qx, qy), 0f) - radius;
 					float alpha = Mathf.Clamp01(0.5f - distance);
-					Color pixel = colour;
+					float borderT = Mathf.Clamp01((distance + borderWidth + 0.5f) / borderWidth);
+					Color pixel = Color.Lerp(fill, border, borderT);
 					pixel.a *= alpha;
 					pixels[y * size + x] = pixel;
 				}
@@ -621,12 +654,12 @@ namespace DLS.Game
 		public bool AnyKeyOrMouseDownThisFrame =>
 			IsMouseDownThisFrame(MouseButton.Left) ||
 			IsMouseDownThisFrame(MouseButton.Right) ||
-			hardware.AnyKeyOrMouseDownThisFrame ||
+			(Input.touchCount == 0 && hardware.AnyKeyOrMouseDownThisFrame) ||
 			HasVirtualKeyDownThisFrame();
 
 		public bool AnyKeyOrMouseHeldThisFrame =>
 			IsMouseHeld(MouseButton.Left) ||
-			hardware.AnyKeyOrMouseHeldThisFrame ||
+			(Input.touchCount == 0 && hardware.AnyKeyOrMouseHeldThisFrame) ||
 			virtualCtrlFrame == Time.frameCount ||
 			virtualShiftFrame == Time.frameCount ||
 			HasVirtualKeyDownThisFrame();

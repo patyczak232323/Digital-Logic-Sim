@@ -55,6 +55,7 @@ namespace Seb.Helpers.InputHandling
 		public static void DismissKeyboard()
 		{
 			dismissed = true;
+			keyboardScreenRect = default;
 		}
 
 		public static Vector2 ExpandTouchHitSize(Vector2 screenSpaceSize)
