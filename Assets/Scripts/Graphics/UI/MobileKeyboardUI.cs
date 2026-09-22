@@ -163,7 +163,7 @@ namespace DLS.Graphics
 					true,
 					false,
 					false,
-					Anchor.TopLeft))
+					Anchor.TopLeft, expandTouchTarget: false))
 				{
 					RunAction(actions[i]);
 				}
@@ -198,7 +198,7 @@ namespace DLS.Graphics
 					true,
 					false,
 					false,
-					Anchor.TopLeft))
+					Anchor.TopLeft, expandTouchTarget: false))
 				{
 					continue;
 				}
@@ -224,21 +224,21 @@ namespace DLS.Graphics
 
 			float x = topLeft.x;
 			ButtonTheme shiftTheme = shift ? theme.ChipLibraryCollectionToggleOn : theme.MenuPopupButtonTheme;
-			if (UI.Button("SHIFT", shiftTheme, new Vector2(x, topLeft.y), new Vector2(shiftW, height), true, false, false, Anchor.TopLeft))
+			if (UI.Button("SHIFT", shiftTheme, new Vector2(x, topLeft.y), new Vector2(shiftW, height), true, false, false, Anchor.TopLeft, expandTouchTarget: false))
 				shift = !shift;
 			x += shiftW + gap;
 
 			ButtonTheme modeTheme = symbols ? theme.ChipLibraryCollectionToggleOn : theme.MenuPopupButtonTheme;
-			if (UI.Button(symbols ? "ABC" : "123", modeTheme, new Vector2(x, topLeft.y), new Vector2(modeW, height), true, false, false, Anchor.TopLeft))
+			if (UI.Button(symbols ? "ABC" : "123", modeTheme, new Vector2(x, topLeft.y), new Vector2(modeW, height), true, false, false, Anchor.TopLeft, expandTouchTarget: false))
 				symbols = !symbols;
 			x += modeW + gap;
 
-			if (UI.Button("SPACE", theme.MainMenuButtonTheme, new Vector2(x, topLeft.y), new Vector2(spaceW, height), true, false, false, Anchor.TopLeft))
+			if (UI.Button("SPACE", theme.MainMenuButtonTheme, new Vector2(x, topLeft.y), new Vector2(spaceW, height), true, false, false, Anchor.TopLeft, expandTouchTarget: false))
 				MobileRuntime.ScheduleVirtualText(" ");
 			x += spaceW + gap;
 
 			if (UI.Button(code ? "ENTER" : "DONE", theme.ChipLibraryCollectionToggleOn,
-				new Vector2(x, topLeft.y), new Vector2(enterW, height), true, false, false, Anchor.TopLeft))
+				new Vector2(x, topLeft.y), new Vector2(enterW, height), true, false, false, Anchor.TopLeft, expandTouchTarget: false))
 			{
 				if (code) MobileRuntime.ScheduleVirtualKey(KeyCode.Return);
 				else MobileInputBridge.DismissKeyboard();
@@ -246,7 +246,7 @@ namespace DLS.Graphics
 			x += enterW + gap;
 
 			if (UI.Button("DEL", theme.MenuPopupButtonTheme,
-				new Vector2(x, topLeft.y), new Vector2(delW, height), true, false, false, Anchor.TopLeft))
+				new Vector2(x, topLeft.y), new Vector2(delW, height), true, false, false, Anchor.TopLeft, expandTouchTarget: false))
 			{
 				MobileRuntime.ScheduleVirtualKey(KeyCode.Backspace);
 			}

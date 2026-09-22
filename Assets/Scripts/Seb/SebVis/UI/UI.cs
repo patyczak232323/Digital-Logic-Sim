@@ -723,7 +723,7 @@ namespace Seb.Vis.UI
 
 		public static bool Button(string text, ButtonTheme theme, Vector2 pos, Vector2 size, bool enabled = true, bool fitToText = true, Anchor anchor = Anchor.Centre) => Button(text, theme, pos, size, enabled, fitToText, fitToText, anchor);
 
-		public static bool Button(string text, ButtonTheme theme, Vector2 pos, Vector2 size, bool enabled, bool fitTextX, bool fitTextY, Anchor anchor = Anchor.Centre, bool leftAlignText = false, float textOffsetX = 0, bool ignoreInputs = false)
+		public static bool Button(string text, ButtonTheme theme, Vector2 pos, Vector2 size, bool enabled, bool fitTextX, bool fitTextY, Anchor anchor = Anchor.Centre, bool leftAlignText = false, float textOffsetX = 0, bool ignoreInputs = false, bool expandTouchTarget = true)
 		{
 			enabled &= !forceInteractionDisabled;
 
@@ -749,7 +749,7 @@ namespace Seb.Vis.UI
 
 				// --- Handle interaction ---
 				bool mouseInsideMask = Draw.IsPointInsideActiveMask(InputHelper.MousePos) && !ignoreInputs;
-				bool mouseOver = mouseInsideMask && PointerInTouchableBounds(ss.centre, ss.size);
+				bool mouseOver = mouseInsideMask && PointerInTouchableBounds(ss.centre, ss.size, expandTouchTarget);
 				bool mouseIsDown = InputHelper.IsMouseHeld(MouseButton.Left);
 
 				if (mouseOver && enabled)
@@ -781,9 +781,10 @@ namespace Seb.Vis.UI
 			return PointerInTouchableBounds(ss.centre, ss.size);
 		}
 
-		static bool PointerInTouchableBounds(Vector2 centre, Vector2 size)
+		static bool PointerInTouchableBounds(Vector2 centre, Vector2 size, bool expandTouchTarget = true)
 		{
-			return InputHelper.MouseInBounds_ScreenSpace(centre, MobileInputBridge.ExpandTouchHitSize(size));
+			Vector2 hitSize = expandTouchTarget ? MobileInputBridge.ExpandTouchHitSize(size) : size;
+			return InputHelper.MouseInBounds_ScreenSpace(centre, hitSize);
 		}
 
 		// Returns the index of the pressed button (-1 if none)
