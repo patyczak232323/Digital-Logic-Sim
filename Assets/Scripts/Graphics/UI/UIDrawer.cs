@@ -33,15 +33,25 @@ namespace DLS.Graphics
 		{
 			NotifyIfActiveMenuChanged();
 
-			using (UI.CreateFixedAspectUIScope(drawLetterbox: true))
+			if (MobileUI.IsActive)
 			{
-				if (ActiveMenu is MenuType.MainMenu)
+				using (UI.CreateUIScope())
 				{
-					DrawAppMenus();
+					MobileUI.Draw();
 				}
-				else
+			}
+			else
+			{
+				using (UI.CreateFixedAspectUIScope(drawLetterbox: true))
 				{
-					DrawProjectMenus(Project.ActiveProject);
+					if (ActiveMenu is MenuType.MainMenu)
+					{
+						DrawAppMenus();
+					}
+					else
+					{
+						DrawProjectMenus(Project.ActiveProject);
+					}
 				}
 			}
 
@@ -98,7 +108,11 @@ namespace DLS.Graphics
 				else if (ActiveMenu == MenuType.Preferences) PreferencesMenu.OnMenuOpened();
 				else if (ActiveMenu == MenuType.SimulationDiagnostics) SimulationDiagnosticsMenu.OnMenuOpened();
 				else if (ActiveMenu == MenuType.RhdlStudio) RhdlStudioMenu.OnMenuOpened();
-				else if (ActiveMenu == MenuType.MainMenu) MainMenu.OnMenuOpened();
+				else if (ActiveMenu == MenuType.MainMenu)
+				{
+					MainMenu.OnMenuOpened();
+					if (MobileUI.IsActive) MobileUI.OnMainMenuOpened();
+				}
 				else if (ActiveMenu == MenuType.RebindKeyChip) RebindKeyChipMenu.OnMenuOpened();
 				else if (ActiveMenu == MenuType.RomEdit) RomEditMenu.OnMenuOpened();
 				else if (ActiveMenu == MenuType.Search) SearchPopup.OnMenuOpened();
@@ -135,6 +149,7 @@ namespace DLS.Graphics
 			RomEditMenu.Reset();
 			ChipLibraryMenu.Reset();
 			SearchPopup.Reset();
+			MobileUI.Reset();
 		}
 	}
 }
