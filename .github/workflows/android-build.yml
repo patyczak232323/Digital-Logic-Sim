@@ -6,6 +6,9 @@ on:
     branches:
       - main
     paths:
+      - "Assets/**"
+      - "Packages/**"
+      - "ProjectSettings/**"
       - ".github/workflows/android-build.yml"
 
 permissions:
