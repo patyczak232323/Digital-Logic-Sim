@@ -21,6 +21,7 @@ namespace DLS.Graphics
 		static string[] allChipNames;
 		static string[] filteredChipNames;
 		static readonly UI.ScrollViewDrawElementFunc drawChipSearchEntry = DrawChipSearchEntry;
+		static readonly UI.ScrollViewDrawElementFunc drawChipSearchEntryMobile = DrawChipSearchEntryMobile;
 		static int menuOpenedFrame;
 		static bool isDraggingScrollbar;
 
@@ -28,6 +29,12 @@ namespace DLS.Graphics
 
 		public static void DrawMenu()
 		{
+			if (MobileUI.IsActive)
+			{
+				DrawMobileMenu();
+				return;
+			}
+
 			MenuHelper.DrawBackgroundOverlay();
 			Draw.ID panelID = UI.ReservePanel();
 
@@ -77,6 +84,113 @@ namespace DLS.Graphics
 				}
 			}
 			else if (KeyboardShortcuts.CancelShortcutTriggered || (KeyboardShortcuts.SearchShortcutTriggered && Time.frameCount > menuOpenedFrame))
+			{
+				UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
+			}
+		}
+
+
+		static void DrawMobileMenu()
+		{
+			MenuHelper.DrawBackgroundOverlay();
+			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
+			Rect safe = MobileUI.SafeRectUI;
+
+			float pad = 1.2f;
+			float top = safe.yMax - 6.8f;
+			float width = safe.width - pad * 2f;
+			Vector2 topLeft = new(safe.xMin + pad, top);
+
+			UI.DrawText("ADD CHIP", theme.FontBold, theme.FontSizeRegular * 1.05f,
+				topLeft + new Vector2(12.5f, -1.2f), Anchor.TextCentreLeft, Color.white);
+
+			topLeft.y -= 3.1f;
+			InputFieldTheme inputTheme = theme.ChipNameInputField;
+			UI.InputField(ID_SearchInput, inputTheme, topLeft, new Vector2(width, 5.6f),
+				"SEARCH CHIPS", Anchor.TopLeft, 1.2f, searchStringValidator, true);
+
+			topLeft = UI.PrevBounds.BottomLeft + Vector2.down * 0.8f;
+			float bottom = safe.yMin + 1.0f;
+			float listHeight = Mathf.Max(8f, topLeft.y - bottom);
+			ScrollBarState scrollState = UI.DrawScrollView(
+				ID_Scrollbar,
+				topLeft,
+				new Vector2(width, listHeight),
+				0.5f,
+				Anchor.TopLeft,
+				theme.ScrollTheme,
+				drawChipSearchEntryMobile,
+				filteredChipNames.Length);
+			isDraggingScrollbar = scrollState.isDragging;
+
+			HandleMobileShortcuts();
+		}
+
+		static void DrawChipSearchEntryMobile(Vector2 topLeft, float width, int index, bool isLayoutPass)
+		{
+			const float rowHeight = 5.6f;
+			Bounds2D entryBounds = Bounds2D.CreateFromTopLeftAndSize(topLeft, new Vector2(width, rowHeight));
+			if (isLayoutPass)
+			{
+				UI.OverridePreviousBounds(entryBounds);
+				return;
+			}
+
+			string chipName = filteredChipNames[index];
+			Project project = Project.ActiveProject;
+			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
+
+			const float gap = 0.35f;
+			float nameWidth = width * 0.46f;
+			float actionWidth = (width - nameWidth - gap * 3f) / 3f;
+
+			UI.Button(chipName, theme.ChipLibraryChipToggleOn, topLeft,
+				new Vector2(nameWidth, rowHeight), true, false, false, Anchor.TopLeft, true, 0.8f, true);
+
+			bool canPlace = project.ViewedChip.CanAddSubchip(chipName);
+			bool canOpen = !project.chipLibrary.IsBuiltinChip(chipName);
+			bool starred = project.description.IsStarred(chipName, false);
+			float x = topLeft.x + nameWidth + gap;
+
+			if (UI.Button("USE", theme.MainMenuButtonTheme, new Vector2(x, topLeft.y), new Vector2(actionWidth, rowHeight),
+				canPlace, false, false, Anchor.TopLeft))
+			{
+				UseChip(chipName);
+				return;
+			}
+			x += actionWidth + gap;
+
+			if (UI.Button("OPEN", theme.MenuButtonTheme, new Vector2(x, topLeft.y), new Vector2(actionWidth, rowHeight),
+				canOpen, false, false, Anchor.TopLeft))
+			{
+				OpenChip(chipName);
+				return;
+			}
+			x += actionWidth + gap;
+
+			if (UI.Button(starred ? "UNSTAR" : "STAR", theme.MenuButtonTheme, new Vector2(x, topLeft.y), new Vector2(actionWidth, rowHeight),
+				true, false, false, Anchor.TopLeft))
+			{
+				project.SetStarred(chipName, !starred, false);
+			}
+
+			UI.OverridePreviousBounds(entryBounds);
+		}
+
+		static void HandleMobileShortcuts()
+		{
+			if (KeyboardShortcuts.ConfirmShortcutTriggered)
+			{
+				foreach (string chipName in filteredChipNames)
+				{
+					if (Project.ActiveProject.ViewedChip.CanAddSubchip(chipName))
+					{
+						UseChip(chipName);
+						return;
+					}
+				}
+			}
+			else if (KeyboardShortcuts.CancelShortcutTriggered)
 			{
 				UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
 			}
