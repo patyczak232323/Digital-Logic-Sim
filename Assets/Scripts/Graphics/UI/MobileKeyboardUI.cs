@@ -1,6 +1,7 @@
 using DLS.Game;
 using Seb.Helpers.InputHandling;
 using Seb.Types;
+using Seb.Vis;
 using Seb.Vis.UI;
 using UnityEngine;
 

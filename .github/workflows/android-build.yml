@@ -82,7 +82,9 @@ jobs:
         if: steps.android_build_primary.outcome == 'failure'
         shell: bash
         run: |
-          rm -rf Library/Bee Library/BuildCache build
+          # unity-builder runs Unity in Docker as root, so transient build files
+          # can be root-owned on the host runner.
+          sudo rm -rf Library/Bee Library/BuildCache build
           mkdir -p build
 
       - name: Retry Android APK build once
