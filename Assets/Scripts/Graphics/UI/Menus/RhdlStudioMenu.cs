@@ -287,7 +287,7 @@ namespace DLS.Graphics
 
 			if (mobileInfoOpen)
 			{
-				DrawMobileInfo(theme, project, contentTopLeft, new Vector2(width, contentHeight));
+				DrawMobileInfo(theme, contentTopLeft, new Vector2(width, contentHeight));
 			}
 			else
 			{
@@ -326,7 +326,6 @@ namespace DLS.Graphics
 
 		static void DrawMobileInfo(
 			DrawSettings.UIThemeDLS theme,
-			Project project,
 			Vector2 topLeft,
 			Vector2 size)
 		{
@@ -387,7 +386,7 @@ namespace DLS.Graphics
 			float buttonH = 4.7f;
 			float buttonGap = 0.45f;
 			float buttonW = (innerW - buttonGap) / 2f;
-			Vector2 buttons = new(card.Left + 0.8f, card.Bottom + 0.8f + buttonH);
+			Vector2 buttons = new(card.Left + 0.8f, card.Bottom + 0.8f);
 			if (UI.Button(
 				"NEW CIRCUIT",
 				theme.MenuButtonTheme,
