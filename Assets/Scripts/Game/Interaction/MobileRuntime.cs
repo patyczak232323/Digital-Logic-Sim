@@ -430,7 +430,7 @@ namespace DLS.Game
 				y += rowH + gap;
 			}
 
-			DrawBottomRow(new Rect(rect.x + margin, y, rect.width - margin * 2f, rowH), gap);
+			DrawBottomRow(new Rect(rect.x + margin, y, rect.width - margin * 2f, rowH), gap, code);
 		}
 
 		void DrawToolbar(Rect row, bool code, float gap)
@@ -478,7 +478,7 @@ namespace DLS.Game
 			}
 		}
 
-		void DrawBottomRow(Rect row, float gap)
+		void DrawBottomRow(Rect row, float gap, bool code)
 		{
 			float shiftW = row.width * 0.115f;
 			float modeW = row.width * 0.105f;
@@ -495,7 +495,11 @@ namespace DLS.Game
 			if (GUI.Button(shiftRect, "SHIFT", shift ? keyboardAccentStyle : keyboardActionStyle)) shift = !shift;
 			if (GUI.Button(modeRect, symbols ? "ABC" : "123", symbols ? keyboardAccentStyle : keyboardActionStyle)) symbols = !symbols;
 			if (GUI.Button(spaceRect, "SPACE", keyboardKeyStyle)) inputSource.ScheduleText(" ");
-			if (GUI.Button(enterRect, "ENTER", keyboardAccentStyle)) inputSource.ScheduleKey(KeyCode.Return);
+			if (GUI.Button(enterRect, code ? "ENTER" : "DONE", keyboardAccentStyle))
+			{
+				if (code) inputSource.ScheduleKey(KeyCode.Return);
+				else MobileInputBridge.DismissKeyboard();
+			}
 			if (GUI.RepeatButton(backRect, "DEL", keyboardActionStyle)) inputSource.ScheduleKey(KeyCode.Backspace);
 		}
 
