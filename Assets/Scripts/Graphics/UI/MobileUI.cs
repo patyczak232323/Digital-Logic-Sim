@@ -53,6 +53,19 @@ namespace DLS.Graphics
 			panMode = enabled;
 		}
 
+		public static bool IsScreenPointOverPersistentChrome(Vector2 screenPosition)
+		{
+			if (!IsActive) return false;
+			if (UIDrawer.ActiveMenu == UIDrawer.MenuType.BottomBarMenuPopup) return true;
+			if (UIDrawer.ActiveMenu != UIDrawer.MenuType.None) return false;
+
+			Rect safe = Screen.safeArea;
+			float pixelsPerUIUnit = Screen.width / UI.Width;
+			float topBottom = safe.yMax - TopBarHeight * pixelsPerUIUnit;
+			float dockTop = safe.yMin + DockHeight * pixelsPerUIUnit;
+			return screenPosition.y >= topBottom || screenPosition.y <= dockTop;
+		}
+
 		public static void SetPanDefault(bool enabled)
 		{
 			PlayerPrefs.SetInt(PrefPanDefault, enabled ? 1 : 0);
