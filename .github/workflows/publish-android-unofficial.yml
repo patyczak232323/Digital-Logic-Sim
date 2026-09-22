@@ -35,9 +35,10 @@ jobs:
           TITLE="Rewired Android — Unofficial"
           NOTES="Unofficial Android ARM64 build of Rewired. Experimental development/smoke build; Android support is not part of the stable v0.3.0 release."
 
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" DLSRewired-Android-arm64.apk               --repo "$GITHUB_REPOSITORY"               --clobber
-            gh release edit "$TAG"               --repo "$GITHUB_REPOSITORY"               --title "$TITLE"               --prerelease               --notes "$NOTES"
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG"               --repo "$GITHUB_REPOSITORY"               --title "$TITLE"               --prerelease               --notes "$NOTES"
           else
-            gh release create "$TAG" DLSRewired-Android-arm64.apk               --repo "$GITHUB_REPOSITORY"               --target "22dd5863cd2d32c074e45b06dfe30422d1287c00"               --title "$TITLE"               --prerelease               --notes "$NOTES"
+            gh release edit "$TAG"               --repo "$GITHUB_REPOSITORY"               --title "$TITLE"               --prerelease               --notes "$NOTES"
           fi
+
+          gh release upload "$TAG" DLSRewired-Android-arm64.apk             --repo "$GITHUB_REPOSITORY"             --clobber
