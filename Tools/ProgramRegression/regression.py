@@ -134,6 +134,7 @@ def test_csharp_integration_guards() -> None:
     save_paths = source("Assets/Scripts/SaveSystem/SavePaths.cs")
     chip_library = source("Assets/Scripts/Game/Project/ChipLibrary.cs")
     global_chips = source("Assets/Scripts/SaveSystem/GlobalChipManager.cs")
+    rhdl_compiler = source("Assets/Scripts/RHDL/RhdlCompiler.cs")
 
     assert 'string temporaryPath = path + ".tmp";' in saver
     assert 'string backupPath = path + ".bak";' in saver
@@ -174,6 +175,9 @@ def test_csharp_integration_guards() -> None:
     assert "PropagateGlobalRename" in global_chips
     assert "TrySaveFromDescription" in project
     assert '"ALL PROJECTS"' in chip_menu
+    assert "float y = totalHeight * 0.5f - i * 1.5f;" in rhdl_compiler
+    assert "result[i] = new PinDescription(" in rhdl_compiler
+    assert "DesiredY" not in rhdl_compiler
     assert not (ROOT / "Assets/Scripts/Game/Project/SimulationFacade.cs").exists()
     assert not (ROOT / "Assets/Scripts/Graphics/UI/Menus/SimulationFacade.cs").exists()
 

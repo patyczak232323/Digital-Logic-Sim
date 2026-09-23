@@ -345,8 +345,8 @@ namespace DLS.RHDL
 			if (diagnostics.Count != 0) return new RhdlCompileResult(null, diagnostics);
 
 			AutoLayout(instances, connections);
-			PinDescription[] inputPins = CreateRootPins(ports.Where(p => p.IsInput).ToList(), instances, connections, left: true);
-			PinDescription[] outputPins = CreateRootPins(ports.Where(p => !p.IsInput).ToList(), instances, connections, left: false);
+			PinDescription[] inputPins = CreateRootPins(ports.Where(p => p.IsInput).ToList(), instances, left: true);
+			PinDescription[] outputPins = CreateRootPins(ports.Where(p => !p.IsInput).ToList(), instances, left: false);
 
 			SubChipDescription[] subChips = instances.Select(instance =>
 				new SubChipDescription(
@@ -1182,7 +1182,6 @@ namespace DLS.RHDL
 		static PinDescription[] CreateRootPins(
 			List<PortDecl> ports,
 			List<InstanceDecl> instances,
-			List<ConnectionDecl> connections,
 			bool left)
 		{
 			if (ports.Count == 0) return Array.Empty<PinDescription>();
@@ -1192,43 +1191,13 @@ namespace DLS.RHDL
 			float x = left ? minX - 4f : maxX + 4f;
 			float totalHeight = (ports.Count - 1) * 1.5f;
 			PinDescription[] result = new PinDescription[ports.Count];
-			Dictionary<int, InstanceDecl> instanceById = instances.ToDictionary(i => i.ID);
 
-			// Keep the public pin array order stable, but choose each pin's visual slot
-			// from the Y position of the circuitry it actually connects to. This removes
-			// a large amount of edge-crossing without changing the generated interface.
-			List<(int Index, float DesiredY)> placement = new();
 			for (int i = 0; i < ports.Count; i++)
 			{
 				PortDecl port = ports[i];
-				List<float> connectedY = new();
+				float y = totalHeight * 0.5f - i * 1.5f;
 
-				foreach (ConnectionDecl connection in connections)
-				{
-					PinAddress rootAddress = left ? connection.Source.Address : connection.Target.Address;
-					if (rootAddress.PinOwnerID != port.OwnerID) continue;
-
-					PinAddress otherAddress = left ? connection.Target.Address : connection.Source.Address;
-					if (TryGetInstanceEndpointPosition(otherAddress, instanceById, out Vector2 otherPosition))
-						connectedY.Add(otherPosition.y);
-				}
-
-				float fallbackY = totalHeight * 0.5f - i * 1.5f;
-				float desiredY = connectedY.Count > 0 ? connectedY.Average() : fallbackY;
-				placement.Add((i, desiredY));
-			}
-
-			(int Index, float DesiredY)[] ordered = placement
-				.OrderByDescending(p => p.DesiredY)
-				.ThenBy(p => p.Index)
-				.ToArray();
-
-			for (int slot = 0; slot < ordered.Length; slot++)
-			{
-				int index = ordered[slot].Index;
-				PortDecl port = ports[index];
-				float y = totalHeight * 0.5f - slot * 1.5f;
-				result[index] = new PinDescription(
+				result[i] = new PinDescription(
 					port.Name,
 					port.OwnerID,
 					Snap(new Vector2(x, y)),
