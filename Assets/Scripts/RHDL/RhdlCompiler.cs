@@ -61,6 +61,7 @@ namespace DLS.RHDL
 			public int ID;
 			public ChipDescription Description;
 			public int Level;
+			public int LayoutGroup;
 			public Vector2 Position;
 		}
 
@@ -344,7 +345,7 @@ namespace DLS.RHDL
 			ValidateDrivenTargets(connections, diagnostics);
 			if (diagnostics.Count != 0) return new RhdlCompileResult(null, diagnostics);
 
-			AutoLayout(instances, connections);
+			AutoLayout(instances, connections, ports);
 			PinDescription[] inputPins = CreateRootPins(ports.Where(p => p.IsInput).ToList(), instances, left: true);
 			PinDescription[] outputPins = CreateRootPins(ports.Where(p => !p.IsInput).ToList(), instances, left: false);
 
@@ -839,24 +840,23 @@ namespace DLS.RHDL
 			}
 		}
 
-		static void AutoLayout(List<InstanceDecl> instances, List<ConnectionDecl> connections)
+		static void AutoLayout(
+			List<InstanceDecl> instances,
+			List<ConnectionDecl> connections,
+			List<PortDecl> ports)
 		{
 			if (instances.Count == 0) return;
 
-			// BLOCK layout:
-			//   1. determine a left-to-right dependency level,
-			//   2. keep related component classes together,
-			//   3. use neighbour barycentres to reduce wire crossings,
-			//   4. space rows/columns using the real chip dimensions.
+			// The layout follows the conventions normally used on a hand-drawn
+			// schematic: signal flow is left-to-right, gates belonging to one
+			// output cone form a horizontal band, and feedback stays in one block.
 			Dictionary<string, InstanceDecl> byName =
 				instances.ToDictionary(i => Normalize(i.Name), StringComparer.OrdinalIgnoreCase);
-
+			Dictionary<int, InstanceDecl> byId = instances.ToDictionary(i => i.ID);
 			Dictionary<InstanceDecl, List<InstanceDecl>> outgoing =
 				instances.ToDictionary(i => i, _ => new List<InstanceDecl>());
 			Dictionary<InstanceDecl, List<InstanceDecl>> incoming =
 				instances.ToDictionary(i => i, _ => new List<InstanceDecl>());
-			Dictionary<InstanceDecl, int> indegree =
-				instances.ToDictionary(i => i, _ => 0);
 
 			foreach (ConnectionDecl connection in connections)
 			{
@@ -865,62 +865,171 @@ namespace DLS.RHDL
 					continue;
 
 				if (!byName.TryGetValue(Normalize(connection.SourceInstance), out InstanceDecl source) ||
-				    !byName.TryGetValue(Normalize(connection.TargetInstance), out InstanceDecl target))
+				    !byName.TryGetValue(Normalize(connection.TargetInstance), out InstanceDecl target) ||
+				    source == target || outgoing[source].Contains(target))
 					continue;
 
-				if (source == target || outgoing[source].Contains(target)) continue;
 				outgoing[source].Add(target);
 				incoming[target].Add(source);
-				indegree[target]++;
 			}
 
-			foreach (InstanceDecl instance in instances) instance.Level = 0;
+			// Collapse feedback loops before assigning columns. A latch or another
+			// stateful loop is therefore treated as one intentional functional block
+			// instead of making every member look like an unrelated level-zero gate.
+			List<List<InstanceDecl>> components = FindStrongComponents(instances, outgoing);
+			Dictionary<InstanceDecl, int> componentOf = new();
+			for (int component = 0; component < components.Count; component++)
+				foreach (InstanceDecl instance in components[component])
+					componentOf[instance] = component;
 
-			Queue<InstanceDecl> queue = new(
-				instances
-					.Where(i => indegree[i] == 0)
-					.OrderBy(LayoutClass)
-					.ThenBy(i => i.Line)
-					.ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase));
-
-			HashSet<InstanceDecl> visited = new();
-			while (queue.Count > 0)
+			Dictionary<int, HashSet<int>> componentOutgoing = new();
+			Dictionary<int, int> componentIndegree = new();
+			Dictionary<int, int> componentLevel = new();
+			for (int component = 0; component < components.Count; component++)
 			{
-				InstanceDecl current = queue.Dequeue();
-				visited.Add(current);
+				componentOutgoing[component] = new HashSet<int>();
+				componentIndegree[component] = 0;
+				componentLevel[component] = 0;
+			}
 
-				foreach (InstanceDecl next in outgoing[current])
+			foreach (InstanceDecl source in instances)
+			{
+				int sourceComponent = componentOf[source];
+				foreach (InstanceDecl target in outgoing[source])
 				{
-					next.Level = Math.Max(next.Level, current.Level + 1);
-					indegree[next]--;
-					if (indegree[next] == 0) queue.Enqueue(next);
+					int targetComponent = componentOf[target];
+					if (sourceComponent == targetComponent ||
+					    !componentOutgoing[sourceComponent].Add(targetComponent))
+						continue;
+					componentIndegree[targetComponent]++;
 				}
 			}
 
-			// Feedback/stateful SCCs are legal. Put unresolved members close to
-			// their connected forward graph rather than collapsing everything on
-			// the exact same point.
-			foreach (InstanceDecl instance in instances.Where(i => !visited.Contains(i)))
+			List<int> ready = componentIndegree
+				.Where(pair => pair.Value == 0)
+				.Select(pair => pair.Key)
+				.ToList();
+			while (ready.Count > 0)
 			{
-				int neighbourLevel = 0;
-				foreach (InstanceDecl parent in incoming[instance])
-					neighbourLevel = Math.Max(neighbourLevel, parent.Level + 1);
-				instance.Level = neighbourLevel;
+				ready.Sort(CompareComponents);
+				int current = ready[0];
+				ready.RemoveAt(0);
+				foreach (int next in componentOutgoing[current])
+				{
+					componentLevel[next] = Math.Max(componentLevel[next], componentLevel[current] + 1);
+					componentIndegree[next]--;
+					if (componentIndegree[next] == 0) ready.Add(next);
+				}
 			}
+
+			foreach (InstanceDecl instance in instances)
+				instance.Level = componentLevel[componentOf[instance]];
+
+			int CompareComponents(int a, int b)
+			{
+				InstanceDecl firstA = components[a]
+					.OrderBy(i => i.Line)
+					.ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+					.First();
+				InstanceDecl firstB = components[b]
+					.OrderBy(i => i.Line)
+					.ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+					.First();
+				int line = firstA.Line.CompareTo(firstB.Line);
+				return line != 0
+					? line
+					: StringComparer.OrdinalIgnoreCase.Compare(firstA.Name, firstB.Name);
+			}
+
+			// Work backwards from declared outputs. Gates contributing to the same
+			// output keep the same band even when other gate types are mixed in.
+			Dictionary<int, int> outputOrder = new();
+			int outputCount = 0;
+			foreach (PortDecl port in ports.Where(p => !p.IsInput))
+				outputOrder[port.OwnerID] = outputCount++;
+
+			Dictionary<InstanceDecl, int> group =
+				instances.ToDictionary(i => i, _ => int.MaxValue);
+			Queue<InstanceDecl> groupQueue = new();
+			foreach (ConnectionDecl connection in connections)
+			{
+				if (!outputOrder.TryGetValue(connection.Target.Address.PinOwnerID, out int output) ||
+				    !byId.TryGetValue(connection.Source.Address.PinOwnerID, out InstanceDecl source) ||
+				    output >= group[source])
+					continue;
+				group[source] = output;
+				groupQueue.Enqueue(source);
+			}
+
+			while (groupQueue.Count > 0)
+			{
+				InstanceDecl current = groupQueue.Dequeue();
+				foreach (InstanceDecl parent in incoming[current])
+				{
+					if (group[current] >= group[parent]) continue;
+					group[parent] = group[current];
+					groupQueue.Enqueue(parent);
+				}
+			}
+
+			int nextFallbackGroup = outputCount;
+			foreach (InstanceDecl instance in instances
+				.OrderBy(i => i.Line)
+				.ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase))
+			{
+				if (group[instance] != int.MaxValue) continue;
+
+				int fallbackGroup = nextFallbackGroup++;
+				Queue<InstanceDecl> weakQueue = new();
+				weakQueue.Enqueue(instance);
+				group[instance] = fallbackGroup;
+				while (weakQueue.Count > 0)
+				{
+					InstanceDecl current = weakQueue.Dequeue();
+					foreach (InstanceDecl neighbour in incoming[current].Concat(outgoing[current]))
+					{
+						if (group[neighbour] != int.MaxValue) continue;
+						group[neighbour] = fallbackGroup;
+						weakQueue.Enqueue(neighbour);
+					}
+				}
+			}
+			foreach (InstanceDecl instance in instances) instance.LayoutGroup = group[instance];
 
 			int maxLevel = instances.Max(i => i.Level);
 			Dictionary<InstanceDecl, float> order =
 				instances.ToDictionary(i => i, i => (float)i.Line);
 
-			// A few Sugiyama-style barycentre sweeps are enough for generated
-			// schematics and are much cheaper than a general graph-layout solver.
-			for (int pass = 0; pass < 4; pass++)
+			// Input/output declaration order acts only as a gentle ordering hint.
+			// It never reorders the root-pin arrays, so saved pin IDs stay stable.
+			Dictionary<int, float> portOrder = new();
+			int portIndex = 0;
+			foreach (PortDecl port in ports.Where(p => p.IsInput)) portOrder[port.OwnerID] = portIndex++;
+			portIndex = 0;
+			foreach (PortDecl port in ports.Where(p => !p.IsInput)) portOrder[port.OwnerID] = portIndex++;
+			Dictionary<InstanceDecl, List<float>> rootHints =
+				instances.ToDictionary(i => i, _ => new List<float>());
+			foreach (ConnectionDecl connection in connections)
+			{
+				if (portOrder.TryGetValue(connection.Source.Address.PinOwnerID, out float sourceHint) &&
+				    byId.TryGetValue(connection.Target.Address.PinOwnerID, out InstanceDecl target))
+					rootHints[target].Add(sourceHint);
+				if (portOrder.TryGetValue(connection.Target.Address.PinOwnerID, out float targetHint) &&
+				    byId.TryGetValue(connection.Source.Address.PinOwnerID, out InstanceDecl source))
+					rootHints[source].Add(targetHint);
+			}
+			foreach (InstanceDecl instance in instances)
+				if (rootHints[instance].Count > 0)
+					order[instance] = rootHints[instance].Average();
+
+			// Repeated forward/backward barycentre passes reduce crossings while the
+			// functional group remains the primary, human-readable ordering rule.
+			for (int pass = 0; pass < 8; pass++)
 			{
 				bool forward = (pass & 1) == 0;
 				IEnumerable<int> levels = forward
 					? Enumerable.Range(0, maxLevel + 1)
 					: Enumerable.Range(0, maxLevel + 1).Reverse();
-
 				foreach (int level in levels)
 				{
 					List<InstanceDecl> column = instances.Where(i => i.Level == level).ToList();
@@ -931,26 +1040,27 @@ namespace DLS.RHDL
 							order[instance] = neighbours.Average(n => order[n]);
 					}
 
-					int slot = 0;
+					float slot = 0f;
+					int previousGroup = -1;
 					foreach (InstanceDecl instance in column
-						.OrderBy(LayoutClass)
+						.OrderBy(i => i.LayoutGroup)
 						.ThenBy(i => order[i])
 						.ThenBy(i => i.Line)
 						.ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase))
 					{
+						if (previousGroup >= 0 && previousGroup != instance.LayoutGroup) slot += 1.5f;
 						order[instance] = slot++;
+						previousGroup = instance.LayoutGroup;
 					}
 				}
 			}
 
-			// Dynamic X positions prevent large memory/custom blocks from colliding
-			// with the next logic column.
 			Dictionary<int, float> columnWidth = new();
 			for (int level = 0; level <= maxLevel; level++)
 			{
-				float width = 2.0f;
+				float width = 2f;
 				foreach (InstanceDecl instance in instances.Where(i => i.Level == level))
-					width = Math.Max(width, Math.Max(2.0f, instance.Description.Size.x));
+					width = Math.Max(width, Math.Max(2f, instance.Description.Size.x));
 				columnWidth[level] = width;
 			}
 
@@ -959,76 +1069,157 @@ namespace DLS.RHDL
 			for (int level = 0; level <= maxLevel; level++)
 			{
 				float width = columnWidth[level];
-				if (level == 0)
-					cursorX = 0f;
-				else
-					cursorX += columnWidth[level - 1] * 0.5f + 3.0f + width * 0.5f;
+				if (level > 0)
+					cursorX += columnWidth[level - 1] * 0.5f + 4f + width * 0.5f;
 				columnX[level] = cursorX;
 			}
-
-			// Centre the full layout around X=0 so generated chips open naturally
-			// in the editor rather than drifting endlessly to the right.
 			float xCentre = (columnX[0] + columnX[maxLevel]) * 0.5f;
 
-			foreach (int level in Enumerable.Range(0, maxLevel + 1))
+			// Reserve one horizontal band per output cone. Each column centres its
+			// local gates inside the same band, producing recognisable logic rows.
+			int[] groups = instances.Select(i => i.LayoutGroup).Distinct().OrderBy(value => value).ToArray();
+			Dictionary<int, float> groupHeight = new();
+			foreach (int layoutGroup in groups)
 			{
-				InstanceDecl[] column = instances
-					.Where(i => i.Level == level)
-					.OrderBy(LayoutClass)
-					.ThenBy(i => order[i])
-					.ThenBy(i => i.Line)
-					.ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
-					.ToArray();
-
-				if (column.Length == 0) continue;
-
-				float totalHeight = 0f;
-				int previousClass = -1;
-				for (int i = 0; i < column.Length; i++)
+				float height = 1.5f;
+				for (int level = 0; level <= maxLevel; level++)
 				{
-					int cls = LayoutClass(column[i]);
-					if (i > 0)
-						totalHeight += cls == previousClass ? 1.25f : 2.5f;
-					totalHeight += Math.Max(1.5f, column[i].Description.Size.y);
-					previousClass = cls;
+					InstanceDecl[] members = instances
+						.Where(i => i.Level == level && i.LayoutGroup == layoutGroup)
+						.ToArray();
+					if (members.Length == 0) continue;
+					float localHeight = members.Sum(i => Math.Max(1.5f, i.Description.Size.y));
+					localHeight += (members.Length - 1) * 1.25f;
+					height = Math.Max(height, localHeight);
 				}
+				groupHeight[layoutGroup] = height;
+			}
 
-				float y = totalHeight * 0.5f;
-				previousClass = -1;
-				for (int i = 0; i < column.Length; i++)
+			const float groupGap = 3f;
+			float fullHeight = groups.Sum(layoutGroup => groupHeight[layoutGroup]);
+			fullHeight += Math.Max(0, groups.Length - 1) * groupGap;
+			Dictionary<int, float> groupCentreY = new();
+			float groupCursor = fullHeight * 0.5f;
+			foreach (int layoutGroup in groups)
+			{
+				groupCursor -= groupHeight[layoutGroup] * 0.5f;
+				groupCentreY[layoutGroup] = groupCursor;
+				groupCursor -= groupHeight[layoutGroup] * 0.5f + groupGap;
+			}
+
+			for (int level = 0; level <= maxLevel; level++)
+			{
+				foreach (int layoutGroup in groups)
 				{
-					InstanceDecl instance = column[i];
-					int cls = LayoutClass(instance);
-					float height = Math.Max(1.5f, instance.Description.Size.y);
+					InstanceDecl[] members = instances
+						.Where(i => i.Level == level && i.LayoutGroup == layoutGroup)
+						.OrderBy(i => order[i])
+						.ThenBy(i => i.Line)
+						.ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+						.ToArray();
+					if (members.Length == 0) continue;
 
-					if (i > 0)
-						y -= cls == previousClass ? 1.25f : 2.5f;
-
-					y -= height * 0.5f;
-					instance.Position = Snap(new Vector2(columnX[level] - xCentre, y));
-					y -= height * 0.5f;
-					previousClass = cls;
+					float localHeight = members.Sum(i => Math.Max(1.5f, i.Description.Size.y));
+					localHeight += (members.Length - 1) * 1.25f;
+					float y = groupCentreY[layoutGroup] + localHeight * 0.5f;
+					foreach (InstanceDecl instance in members)
+					{
+						float height = Math.Max(1.5f, instance.Description.Size.y);
+						y -= height * 0.5f;
+						instance.Position = Snap(new Vector2(columnX[level] - xCentre, y));
+						y -= height * 0.5f + 1.25f;
+					}
 				}
 			}
 		}
 
-		static int LayoutClass(InstanceDecl instance)
+		static List<List<InstanceDecl>> FindStrongComponents(
+			List<InstanceDecl> instances,
+			Dictionary<InstanceDecl, List<InstanceDecl>> outgoing)
 		{
-			// Stable coarse grouping makes generated designs read as blocks rather
-			// than as an arbitrary list of primitive gates.
-			ChipType type = instance.Description.ChipType;
-			if (type == ChipType.Rom_256x16) return 0;
-			if (type == ChipType.Custom) return 1;
+			int nextIndex = 0;
+			Dictionary<InstanceDecl, int> index = new();
+			Dictionary<InstanceDecl, int> lowLink = new();
+			Stack<InstanceDecl> stack = new();
+			HashSet<InstanceDecl> onStack = new();
+			List<List<InstanceDecl>> result = new();
 
-			string name = instance.Name ?? string.Empty;
-			if (name.StartsWith("__rhdl_", StringComparison.OrdinalIgnoreCase)) return 2;
+			foreach (InstanceDecl instance in instances
+				.OrderBy(i => i.Line)
+				.ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase))
+				if (!index.ContainsKey(instance)) StrongConnect(instance);
 
-			string typeName = instance.Description.Name ?? string.Empty;
-			if (typeName.StartsWith("BUS", StringComparison.OrdinalIgnoreCase) ||
-			    typeName.Contains("BIT"))
-				return 3;
+			return result;
 
-			return 2;
+			void StrongConnect(InstanceDecl instance)
+			{
+				index[instance] = nextIndex;
+				lowLink[instance] = nextIndex;
+				nextIndex++;
+				stack.Push(instance);
+				onStack.Add(instance);
+
+				foreach (InstanceDecl next in outgoing[instance]
+					.OrderBy(i => i.Line)
+					.ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase))
+				{
+					if (!index.ContainsKey(next))
+					{
+						StrongConnect(next);
+						lowLink[instance] = Math.Min(lowLink[instance], lowLink[next]);
+					}
+					else if (onStack.Contains(next))
+					{
+						lowLink[instance] = Math.Min(lowLink[instance], index[next]);
+					}
+				}
+
+				if (lowLink[instance] != index[instance]) return;
+
+				List<InstanceDecl> component = new();
+				InstanceDecl member;
+				do
+				{
+					member = stack.Pop();
+					onStack.Remove(member);
+					component.Add(member);
+				}
+				while (member != instance);
+				result.Add(component);
+			}
+		}
+
+		readonly struct RoutingObstacle
+		{
+			public readonly int OwnerID;
+			public readonly float Left;
+			public readonly float Right;
+			public readonly float Bottom;
+			public readonly float Top;
+
+			public RoutingObstacle(InstanceDecl instance, float clearance)
+			{
+				OwnerID = instance.ID;
+				float halfWidth = Math.Max(1f, instance.Description.Size.x * 0.5f) + clearance;
+				float halfHeight = Math.Max(0.75f, instance.Description.Size.y * 0.5f) + clearance;
+				Left = instance.Position.x - halfWidth;
+				Right = instance.Position.x + halfWidth;
+				Bottom = instance.Position.y - halfHeight;
+				Top = instance.Position.y + halfHeight;
+			}
+		}
+
+		readonly struct RoutedSegment
+		{
+			public readonly Vector2 A;
+			public readonly Vector2 B;
+			public bool Horizontal => Math.Abs(A.y - B.y) < 0.01f;
+
+			public RoutedSegment(Vector2 a, Vector2 b)
+			{
+				A = a;
+				B = b;
+			}
 		}
 
 		static WireDescription[] BuildBlockWires(
@@ -1042,80 +1233,56 @@ namespace DLS.RHDL
 				.Concat(outputPins)
 				.ToDictionary(p => p.ID);
 
-			float top = 3f;
-			foreach (InstanceDecl instance in instances)
-				top = Math.Max(top, instance.Position.y + Math.Max(1.5f, instance.Description.Size.y) * 0.5f + 2f);
+			const float obstacleClearance = 0.4f;
+			List<RoutingObstacle> obstacles = instances
+				.Select(instance => new RoutingObstacle(instance, obstacleClearance))
+				.ToList();
+			float top = obstacles.Count == 0 ? 3f : obstacles.Max(obstacle => obstacle.Top) + 1.5f;
+			float bottom = obstacles.Count == 0 ? -3f : obstacles.Min(obstacle => obstacle.Bottom) - 1.5f;
 			foreach (PinDescription pin in inputPins.Concat(outputPins))
-				top = Math.Max(top, pin.Position.y + 2f);
+			{
+				top = Math.Max(top, pin.Position.y + 1.5f);
+				bottom = Math.Min(bottom, pin.Position.y - 1.5f);
+			}
 
 			WireDescription[] result = new WireDescription[connections.Count];
-			int feedbackLane = 0;
-			Dictionary<(float SourceX, float TargetX), int> forwardLaneCounts = new();
-			Dictionary<float, int> sameColumnLaneCounts = new();
-
+			Vector2[] sources = new Vector2[connections.Count];
+			Vector2[] targets = new Vector2[connections.Count];
 			for (int i = 0; i < connections.Count; i++)
 			{
+				sources[i] = EndpointPosition(connections[i].Source.Address, instanceById, rootPins);
+				targets[i] = EndpointPosition(connections[i].Target.Address, instanceById, rootPins);
+			}
+
+			// Short local connections claim the cleanest lanes first. Long buses and
+			// feedback then route around them, like a person would draw the circuit.
+			int[] routeOrder = Enumerable.Range(0, connections.Count)
+				.OrderBy(i => Math.Abs(targets[i].x - sources[i].x) + Math.Abs(targets[i].y - sources[i].y))
+				.ThenBy(i => i)
+				.ToArray();
+			List<RoutedSegment> occupied = new();
+			int fallbackLane = 0;
+			foreach (int i in routeOrder)
+			{
 				ConnectionDecl connection = connections[i];
-				Vector2 source = EndpointPosition(connection.Source.Address, instanceById, rootPins);
-				Vector2 target = EndpointPosition(connection.Target.Address, instanceById, rootPins);
+				List<Vector2> route = RouteOrthogonal(
+					sources[i],
+					targets[i],
+					connection.Source.Address.PinOwnerID,
+					connection.Target.Address.PinOwnerID,
+					obstacles,
+					occupied,
+					top,
+					bottom,
+					ref fallbackLane);
 
-				Vector2[] points;
-				float dx = target.x - source.x;
+				for (int segment = 1; segment < route.Count; segment++)
+					occupied.Add(new RoutedSegment(route[segment - 1], route[segment]));
 
-				if (dx > 1.0f)
-				{
-					// Normal left-to-right route: horizontal -> vertical -> horizontal.
-					// Parallel wires get neighbouring routing lanes instead of rendering
-					// on top of one another at the exact same midpoint.
-					(float SourceX, float TargetX) laneKey = (SnapScalar(source.x), SnapScalar(target.x));
-					forwardLaneCounts.TryGetValue(laneKey, out int lane);
-					forwardLaneCounts[laneKey] = lane + 1;
-
-					float baseMidX = (source.x + target.x) * 0.5f;
-					float margin = Math.Min(1.0f, dx * 0.25f);
-					float midX = baseMidX + AlternatingLaneOffset(lane, 0.55f);
-					midX = SnapScalar(Math.Clamp(midX, source.x + margin, target.x - margin));
-					points = new[]
-					{
-						new Vector2(),
-						Snap(new Vector2(midX, source.y)),
-						Snap(new Vector2(midX, target.y)),
-						new Vector2()
-					};
-				}
-				else if (Math.Abs(dx) <= 1.0f)
-				{
-					// Same-column routes use lanes local to that column. This prevents a
-					// busy column from forcing unrelated columns into arbitrary channels.
-					float columnKey = SnapScalar(Math.Max(source.x, target.x));
-					sameColumnLaneCounts.TryGetValue(columnKey, out int lane);
-					sameColumnLaneCounts[columnKey] = lane + 1;
-					float sideX = columnKey + 2.0f + (lane % 6) * 0.5f;
-					points = new[]
-					{
-						new Vector2(),
-						Snap(new Vector2(sideX, source.y)),
-						Snap(new Vector2(sideX, target.y)),
-						new Vector2()
-					};
-				}
-				else
-				{
-					// Feedback/back-edge: route above the block diagram so it cannot
-					// cut diagonally through the datapath.
-					float laneY = top + (feedbackLane++ * 0.75f);
-					float sourceEscapeX = source.x + 1.5f;
-					float targetEscapeX = target.x - 1.5f;
-					points = new[]
-					{
-						new Vector2(),
-						Snap(new Vector2(sourceEscapeX, source.y)),
-						Snap(new Vector2(sourceEscapeX, laneY)),
-						Snap(new Vector2(targetEscapeX, laneY)),
-						Snap(new Vector2(targetEscapeX, target.y)),
-						new Vector2()
-					};
-				}
+				Vector2[] points = new Vector2[route.Count];
+				points[0] = new Vector2();
+				points[points.Length - 1] = new Vector2();
+				for (int point = 1; point < route.Count - 1; point++) points[point] = route[point];
 
 				result[i] = new WireDescription
 				{
@@ -1129,6 +1296,248 @@ namespace DLS.RHDL
 			}
 
 			return result;
+		}
+
+		static List<Vector2> RouteOrthogonal(
+			Vector2 source,
+			Vector2 target,
+			int sourceOwner,
+			int targetOwner,
+			List<RoutingObstacle> obstacles,
+			List<RoutedSegment> occupied,
+			float top,
+			float bottom,
+			ref int fallbackLane)
+		{
+			RoutingObstacle? sourceObstacle = FindObstacle(sourceOwner, obstacles);
+			RoutingObstacle? targetObstacle = FindObstacle(targetOwner, obstacles);
+
+			float escapeX = sourceObstacle.HasValue ? sourceObstacle.Value.Right + 0.35f : source.x;
+			float entryX = targetObstacle.HasValue ? targetObstacle.Value.Left - 0.35f : target.x;
+			List<List<Vector2>> candidates = new();
+
+			if (Math.Abs(source.y - target.y) < 0.01f)
+				candidates.Add(new List<Vector2> { source, target });
+
+			List<float> xLanes = new()
+			{
+				(source.x + target.x) * 0.5f,
+				(escapeX + entryX) * 0.5f,
+				escapeX,
+				entryX
+			};
+			if (escapeX < entryX)
+			{
+				xLanes.Add(escapeX + (entryX - escapeX) / 3f);
+				xLanes.Add(escapeX + (entryX - escapeX) * 2f / 3f);
+			}
+			else
+			{
+				float right = obstacles.Count == 0 ? Math.Max(source.x, target.x) + 2f : obstacles.Max(o => o.Right) + 0.75f;
+				float left = obstacles.Count == 0 ? Math.Min(source.x, target.x) - 2f : obstacles.Min(o => o.Left) - 0.75f;
+				xLanes.Add(right);
+				xLanes.Add(left);
+			}
+			float routeMinY = Math.Min(source.y, target.y) - 2f;
+			float routeMaxY = Math.Max(source.y, target.y) + 2f;
+			foreach (RoutingObstacle obstacle in obstacles)
+			{
+				if (obstacle.Top < routeMinY || obstacle.Bottom > routeMaxY) continue;
+				xLanes.Add(obstacle.Left);
+				xLanes.Add(obstacle.Right);
+			}
+
+			float preferredX = (escapeX + entryX) * 0.5f;
+			foreach (float lane in xLanes
+				.Select(SnapScalar)
+				.Distinct()
+				.OrderBy(value => Math.Abs(value - preferredX))
+				.Take(18))
+				candidates.Add(new List<Vector2>
+				{
+					source,
+					new Vector2(lane, source.y),
+					new Vector2(lane, target.y),
+					target
+				});
+
+			List<float> yLanes = new()
+			{
+				source.y,
+				target.y,
+				(source.y + target.y) * 0.5f,
+				top,
+				bottom
+			};
+			float routeMinX = Math.Min(escapeX, entryX) - 2f;
+			float routeMaxX = Math.Max(escapeX, entryX) + 2f;
+			foreach (RoutingObstacle obstacle in obstacles)
+			{
+				if (obstacle.Right < routeMinX || obstacle.Left > routeMaxX) continue;
+				yLanes.Add(obstacle.Top);
+				yLanes.Add(obstacle.Bottom);
+			}
+
+			float preferredY = (source.y + target.y) * 0.5f;
+			foreach (float lane in yLanes
+				.Select(SnapScalar)
+				.Distinct()
+				.OrderBy(value => Math.Abs(value - preferredY))
+				.Take(18))
+				candidates.Add(new List<Vector2>
+				{
+					source,
+					new Vector2(escapeX, source.y),
+					new Vector2(escapeX, lane),
+					new Vector2(entryX, lane),
+					new Vector2(entryX, target.y),
+					target
+				});
+
+			List<Vector2> best = null;
+			float bestScore = float.MaxValue;
+			foreach (List<Vector2> rawCandidate in candidates)
+			{
+				List<Vector2> candidate = NormalizeRoute(rawCandidate);
+				if (!RouteIsClear(candidate, sourceOwner, targetOwner, obstacles)) continue;
+				float score = ScoreRoute(candidate, occupied);
+				if (score >= bestScore) continue;
+				best = candidate;
+				bestScore = score;
+			}
+
+			if (best != null) return best;
+
+			// Extremely dense or cyclic circuits can exhaust the local channels.
+			// The deterministic outer lane is deliberately a last resort.
+			bool useTop = (fallbackLane & 1) == 0;
+			float outerY = useTop
+				? top + (fallbackLane / 2) * 0.75f
+				: bottom - (fallbackLane / 2) * 0.75f;
+			fallbackLane++;
+			return NormalizeRoute(new List<Vector2>
+			{
+				source,
+				new Vector2(escapeX, source.y),
+				new Vector2(escapeX, outerY),
+				new Vector2(entryX, outerY),
+				new Vector2(entryX, target.y),
+				target
+			});
+		}
+
+		static RoutingObstacle? FindObstacle(int ownerID, List<RoutingObstacle> obstacles)
+		{
+			foreach (RoutingObstacle obstacle in obstacles)
+				if (obstacle.OwnerID == ownerID) return obstacle;
+			return null;
+		}
+
+		static bool RouteIsClear(
+			List<Vector2> route,
+			int sourceOwner,
+			int targetOwner,
+			List<RoutingObstacle> obstacles)
+		{
+			for (int i = 1; i < route.Count; i++)
+			{
+				Vector2 a = route[i - 1];
+				Vector2 b = route[i];
+				bool horizontal = Math.Abs(a.y - b.y) < 0.01f;
+				bool vertical = Math.Abs(a.x - b.x) < 0.01f;
+				if (!horizontal && !vertical) return false;
+
+				foreach (RoutingObstacle obstacle in obstacles)
+				{
+					bool leavesSource = i == 1 && obstacle.OwnerID == sourceOwner;
+					bool entersTarget = i == route.Count - 1 && obstacle.OwnerID == targetOwner;
+					if (leavesSource || entersTarget) continue;
+					if (horizontal)
+					{
+						float minX = Math.Min(a.x, b.x);
+						float maxX = Math.Max(a.x, b.x);
+						if (a.y > obstacle.Bottom + 0.01f && a.y < obstacle.Top - 0.01f &&
+						    maxX > obstacle.Left + 0.01f && minX < obstacle.Right - 0.01f)
+							return false;
+					}
+					else
+					{
+						float minY = Math.Min(a.y, b.y);
+						float maxY = Math.Max(a.y, b.y);
+						if (a.x > obstacle.Left + 0.01f && a.x < obstacle.Right - 0.01f &&
+						    maxY > obstacle.Bottom + 0.01f && minY < obstacle.Top - 0.01f)
+							return false;
+					}
+				}
+			}
+			return true;
+		}
+
+		static float ScoreRoute(List<Vector2> route, List<RoutedSegment> occupied)
+		{
+			float score = Math.Max(0, route.Count - 2) * 0.6f;
+			for (int i = 1; i < route.Count; i++)
+			{
+				RoutedSegment candidate = new(route[i - 1], route[i]);
+				score += Math.Abs(candidate.B.x - candidate.A.x) + Math.Abs(candidate.B.y - candidate.A.y);
+				// Checking the most recent routes is enough to spread neighbouring
+				// wires and keeps very large generated netlists responsive.
+				int firstOccupied = Math.Max(0, occupied.Count - 768);
+				for (int occupiedIndex = firstOccupied; occupiedIndex < occupied.Count; occupiedIndex++)
+					score += SegmentConflictPenalty(candidate, occupied[occupiedIndex]);
+			}
+			return score;
+		}
+
+		static float SegmentConflictPenalty(RoutedSegment a, RoutedSegment b)
+		{
+			if (a.Horizontal == b.Horizontal)
+			{
+				float fixedA = a.Horizontal ? a.A.y : a.A.x;
+				float fixedB = b.Horizontal ? b.A.y : b.A.x;
+				if (Math.Abs(fixedA - fixedB) > 0.01f) return 0f;
+				float a0 = a.Horizontal ? Math.Min(a.A.x, a.B.x) : Math.Min(a.A.y, a.B.y);
+				float a1 = a.Horizontal ? Math.Max(a.A.x, a.B.x) : Math.Max(a.A.y, a.B.y);
+				float b0 = b.Horizontal ? Math.Min(b.A.x, b.B.x) : Math.Min(b.A.y, b.B.y);
+				float b1 = b.Horizontal ? Math.Max(b.A.x, b.B.x) : Math.Max(b.A.y, b.B.y);
+				float overlap = Math.Min(a1, b1) - Math.Max(a0, b0);
+				return overlap > 0.01f ? 10f + overlap * 2f : 0f;
+			}
+
+			RoutedSegment horizontal = a.Horizontal ? a : b;
+			RoutedSegment vertical = a.Horizontal ? b : a;
+			float horizontalMin = Math.Min(horizontal.A.x, horizontal.B.x);
+			float horizontalMax = Math.Max(horizontal.A.x, horizontal.B.x);
+			float verticalMin = Math.Min(vertical.A.y, vertical.B.y);
+			float verticalMax = Math.Max(vertical.A.y, vertical.B.y);
+			return vertical.A.x > horizontalMin + 0.01f && vertical.A.x < horizontalMax - 0.01f &&
+			       horizontal.A.y > verticalMin + 0.01f && horizontal.A.y < verticalMax - 0.01f
+				? 2.5f
+				: 0f;
+		}
+
+		static List<Vector2> NormalizeRoute(List<Vector2> raw)
+		{
+			List<Vector2> route = new();
+			foreach (Vector2 rawPoint in raw)
+			{
+				Vector2 point = Snap(rawPoint);
+				if (route.Count > 0 && (route[route.Count - 1] - point).sqrMagnitude < 0.0001f) continue;
+				route.Add(point);
+				while (route.Count >= 3)
+				{
+					Vector2 a = route[route.Count - 3];
+					Vector2 b = route[route.Count - 2];
+					Vector2 c = route[route.Count - 1];
+					bool sameX = Math.Abs(a.x - b.x) < 0.01f && Math.Abs(b.x - c.x) < 0.01f;
+					bool sameY = Math.Abs(a.y - b.y) < 0.01f && Math.Abs(b.y - c.y) < 0.01f;
+					if (!sameX && !sameY) break;
+					route.RemoveAt(route.Count - 2);
+				}
+			}
+
+			if (route.Count == 1) route.Add(route[0]);
+			return route;
 		}
 
 		static Vector2 EndpointPosition(
@@ -1170,13 +1579,6 @@ namespace DLS.RHDL
 		{
 			float grid = DLS.Graphics.DrawSettings.GridSize;
 			return Mathf.Round(value / grid) * grid;
-		}
-
-		static float AlternatingLaneOffset(int lane, float spacing)
-		{
-			if (lane <= 0) return 0f;
-			int step = (lane + 1) / 2;
-			return (lane & 1) != 0 ? step * spacing : -step * spacing;
 		}
 
 		static PinDescription[] CreateRootPins(

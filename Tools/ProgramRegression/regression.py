@@ -178,6 +178,11 @@ def test_csharp_integration_guards() -> None:
     assert "float y = totalHeight * 0.5f - i * 1.5f;" in rhdl_compiler
     assert "result[i] = new PinDescription(" in rhdl_compiler
     assert "DesiredY" not in rhdl_compiler
+    assert "FindStrongComponents" in rhdl_compiler
+    assert "instance.LayoutGroup = group[instance]" in rhdl_compiler
+    assert "RouteOrthogonal" in rhdl_compiler
+    assert "RouteIsClear" in rhdl_compiler
+    assert "SegmentConflictPenalty" in rhdl_compiler
     assert not (ROOT / "Assets/Scripts/Game/Project/SimulationFacade.cs").exists()
     assert not (ROOT / "Assets/Scripts/Graphics/UI/Menus/SimulationFacade.cs").exists()
 
