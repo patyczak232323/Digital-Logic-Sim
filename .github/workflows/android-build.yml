@@ -1,4 +1,4 @@
-name: Android APK Smoke Build
+name: Unofficial All-Platform Build
 
 on:
   workflow_dispatch:
@@ -15,12 +15,90 @@ permissions:
   contents: write
 
 concurrency:
-  group: android-smoke-${{ github.ref }}
+  group: unofficial-all-platforms-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  desktop:
+    name: ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - targetPlatform: StandaloneWindows64
+            label: Windows x64
+            packageName: DLSRewired-Windows-x64
+          - targetPlatform: StandaloneLinux64
+            label: Linux x86_64
+            packageName: DLSRewired-Linux-x86_64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify Unity CI secrets
+        shell: bash
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          missing=0
+          for name in UNITY_LICENSE UNITY_EMAIL UNITY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing GitHub Actions secret: $name"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-${{ matrix.targetPlatform }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-${{ matrix.targetPlatform }}-
+
+      - name: Build with Unity
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: auto
+          targetPlatform: ${{ matrix.targetPlatform }}
+          buildName: DLSRewired
+          buildsPath: build
+
+      - name: Package build
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_dir="build/${{ matrix.targetPlatform }}"
+          if [ ! -d "$build_dir" ]; then
+            echo "::error::Expected build directory not found: $build_dir"
+            find build -maxdepth 3 -type f -print || true
+            exit 1
+          fi
+          (
+            cd "$build_dir"
+            zip -r "$GITHUB_WORKSPACE/${{ matrix.packageName }}.zip" .
+          )
+
+      - name: Upload packaged build
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.packageName }}
+          path: ${{ matrix.packageName }}.zip
+          if-no-files-found: error
+          retention-days: 7
+
   android:
-    name: Android ARM64 APK
+    name: Android ARM64
     runs-on: ubuntu-latest
     timeout-minutes: 80
 
@@ -82,8 +160,6 @@ jobs:
         if: steps.android_build_primary.outcome == 'failure'
         shell: bash
         run: |
-          # unity-builder runs Unity in Docker as root, so transient build files
-          # can be root-owned on the host runner.
           sudo rm -rf Library/Bee Library/BuildCache build
           mkdir -p build
 
@@ -114,29 +190,60 @@ jobs:
           cp "$apk" DLSRewired-Android-arm64.apk
           ls -lh DLSRewired-Android-arm64.apk
 
-      - name: Upload APK artifact
+      - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: DLSRewired-Android-arm64
+          name: release-DLSRewired-Android-arm64
           path: DLSRewired-Android-arm64.apk
           if-no-files-found: error
           retention-days: 7
 
-      - name: Publish unofficial Android prerelease
+  release:
+    name: Publish one unofficial release
+    runs-on: ubuntu-latest
+    needs: [desktop, android]
+
+    steps:
+      - name: Download all builds
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish all platforms together
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: android-unofficial
+          TITLE: Rewired — Unofficial
+          NOTES: Unofficial development build of Rewired for Windows x64, Linux x86_64, and Android ARM64. All three files come from the same commit and workflow run.
         run: |
           set -euo pipefail
 
-          TAG="android-unofficial"
-          TITLE="Rewired Android — Unofficial"
-          NOTES="Unofficial Android ARM64 build of Rewired. Experimental development/smoke build; Android support is not part of the stable release."
-
-          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create "$TAG"               --repo "$GITHUB_REPOSITORY"               --title "$TITLE"               --prerelease               --notes "$NOTES"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh api \
+              --method PATCH \
+              "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG" \
+              -f sha="$GITHUB_SHA" \
+              -F force=true
+            gh release edit "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$TITLE" \
+              --prerelease \
+              --notes "$NOTES"
           else
-            gh release edit "$TAG"               --repo "$GITHUB_REPOSITORY"               --title "$TITLE"               --prerelease               --notes "$NOTES"
+            gh release create "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "$TITLE" \
+              --prerelease \
+              --notes "$NOTES"
           fi
 
-          gh release upload "$TAG" DLSRewired-Android-arm64.apk             --repo "$GITHUB_REPOSITORY"             --clobber
+          gh release upload "$TAG" \
+            release-assets/DLSRewired-Windows-x64.zip \
+            release-assets/DLSRewired-Linux-x86_64.zip \
+            release-assets/DLSRewired-Android-arm64.apk \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
