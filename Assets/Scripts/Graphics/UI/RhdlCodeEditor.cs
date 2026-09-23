@@ -72,6 +72,7 @@ namespace DLS.Graphics
 		bool focused;
 		bool mouseSelecting;
 		float lastInputTime;
+		int mobileKeyboardRevision;
 
 		InputFieldTheme activeTheme;
 		RhdlEditorCommand commands;
@@ -144,7 +145,7 @@ namespace DLS.Graphics
 			int localColumn = Mathf.Clamp(column - 1, 0, lines[lineIndex].Length);
 			SetCaret(lineStarts[lineIndex] + localColumn, false);
 			focused = true;
-			MobileInputBridge.RequestKeyboard(MobileKeyboardMode.Code);
+			OpenMobileKeyboard();
 			UI.GetScrollbarState(scrollID).scrollY = Mathf.Max(0, (lineIndex - 2) * RowHeight);
 		}
 
@@ -174,7 +175,11 @@ namespace DLS.Graphics
 
 			if (InputHelper.IsMouseUpThisFrame(MouseButton.Left)) mouseSelecting = false;
 
-			if (focused) MobileInputBridge.NotifyTextFocus(MobileKeyboardMode.Code);
+			if (focused)
+			{
+				MobileInputBridge.NotifyTextFocus(this, MobileKeyboardMode.Code);
+				ApplyMobileKeyboardState();
+			}
 			HandleKeyboard();
 			return commands;
 		}
@@ -371,7 +376,6 @@ namespace DLS.Graphics
 			{
 				focused = true;
 				mouseSelecting = true;
-				MobileInputBridge.RequestKeyboard(MobileKeyboardMode.Code);
 
 				float mouseX = UI.ScreenToUISpace(InputHelper.MousePos).x;
 				if (mouseX < textX)
@@ -383,6 +387,7 @@ namespace DLS.Graphics
 					caret = end;
 					preferredColumn = -1;
 					Touch();
+					OpenMobileKeyboard();
 					return;
 				}
 
@@ -391,6 +396,8 @@ namespace DLS.Graphics
 					SetCaret(index, true);
 				else
 					SetCaret(index, false);
+
+				OpenMobileKeyboard();
 			}
 
 			if (focused && mouseSelecting && inside && InputHelper.IsMouseHeld(MouseButton.Left))
@@ -609,6 +616,53 @@ namespace DLS.Graphics
 					if (char.IsControl(c) || char.IsSurrogate(c)) continue;
 					HandleTypedCharacter(c);
 				}
+			}
+		}
+
+		void OpenMobileKeyboard()
+		{
+			MobileInputBridge.RequestKeyboard(
+				this,
+				MobileKeyboardMode.Code,
+				text,
+				SelectionMin,
+				SelectionMax - SelectionMin);
+		}
+
+		void ApplyMobileKeyboardState()
+		{
+			if (!MobileInputBridge.TryConsumeKeyboardState(
+				this,
+				ref mobileKeyboardRevision,
+				out string newText,
+				out int selectionStart,
+				out int selectionLength))
+			{
+				return;
+			}
+
+			string nativeText = newText ?? string.Empty;
+			newText = NormalizeNewlines(nativeText);
+			if (!string.Equals(text, newText, StringComparison.Ordinal))
+			{
+				CaptureUndo();
+				text = newText;
+				cacheDirty = true;
+				redoHistory.Clear();
+			}
+
+			anchor = Mathf.Clamp(selectionStart, 0, text.Length);
+			caret = Mathf.Clamp(selectionStart + selectionLength, 0, text.Length);
+			preferredColumn = -1;
+			Touch();
+
+			if (!string.Equals(nativeText, newText, StringComparison.Ordinal))
+			{
+				MobileInputBridge.SynchronizeKeyboardState(
+					this,
+					text,
+					SelectionMin,
+					SelectionMax - SelectionMin);
 			}
 		}
 

@@ -370,11 +370,11 @@ namespace Seb.Vis.UI
 					state.SetFocus(mouseInBounds);
 					state.isMouseDownInBounds = mouseInBounds;
 
-					// Set caret pos based on pointer position and explicitly open the in-app keyboard.
+					// Set caret pos based on pointer position and explicitly open the Android keyboard.
 					if (mouseInBounds)
 					{
 						state.SetCursorIndex(CharIndexBeforeMouse(textCentreLeft_ss.x), InputHelper.ShiftIsHeld);
-						MobileInputBridge.RequestKeyboard(MobileKeyboardMode.Text);
+						OpenMobileKeyboard();
 					}
 				}
 
@@ -387,13 +387,27 @@ namespace Seb.Vis.UI
 				if (forceFocus && !state.focused)
 				{
 					state.SetFocus(true);
-					MobileInputBridge.RequestKeyboard(MobileKeyboardMode.Text);
+					OpenMobileKeyboard();
 				}
 
 				// Draw focus outline and update text
 				if (state.focused)
 				{
-					MobileInputBridge.NotifyTextFocus(MobileKeyboardMode.Text);
+					MobileInputBridge.NotifyTextFocus(state, MobileKeyboardMode.Text);
+					if (MobileInputBridge.TryConsumeKeyboardState(
+						state,
+						ref state.mobileKeyboardRevision,
+						out string mobileText,
+						out int mobileSelectionStart,
+						out int mobileSelectionLength) &&
+					    !state.TryApplyMobileKeyboardState(mobileText, mobileSelectionStart, mobileSelectionLength, validation))
+					{
+						MobileInputBridge.SynchronizeKeyboardState(
+							state,
+							state.text,
+							state.SelectionMinIndex,
+							state.SelectionMaxIndex - state.SelectionMinIndex);
+					}
 					const float outlineWidth = 0.05f;
 					Draw.QuadOutline(ss.centre, ss.size, outlineWidth * scale, theme.focusBorderCol);
 					foreach (char c in InputHelper.InputStringThisFrame)
@@ -510,6 +524,16 @@ namespace Seb.Vis.UI
 
 			OnFinishedDrawingUIElement(centre, size);
 			return state;
+
+			void OpenMobileKeyboard()
+			{
+				MobileInputBridge.RequestKeyboard(
+					state,
+					MobileKeyboardMode.Text,
+					state.text,
+					state.SelectionMinIndex,
+					state.SelectionMaxIndex - state.SelectionMinIndex);
+			}
 
 			static bool CanTrigger(ref InputFieldState.TriggerState triggerState, KeyCode key)
 			{

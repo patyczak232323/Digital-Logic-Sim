@@ -32,6 +32,13 @@ namespace DLS.Game
 		Vector2 longPressStartPos;
 		float longPressStartTime;
 
+		TouchScreenKeyboard systemKeyboard;
+		int handledKeyboardOpenVersion;
+		int handledKeyboardSynchronizeVersion;
+		string lastSystemKeyboardText = string.Empty;
+		int lastSystemSelectionStart;
+		int lastSystemSelectionLength;
+
 		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterAssembliesLoaded)]
 		static void Bootstrap()
 		{
@@ -55,10 +62,12 @@ namespace DLS.Game
 			inputSource = new MobileInputSource();
 			InputHelper.InputSource = inputSource;
 			MobileInputBridge.EnableRuntime(true);
+			handledKeyboardOpenVersion = MobileInputBridge.OpenRequestVersion;
+			handledKeyboardSynchronizeVersion = MobileInputBridge.SynchronizeRequestVersion;
 
 			Input.multiTouchEnabled = true;
 			Input.simulateMouseWithTouches = false;
-			TouchScreenKeyboard.hideInput = true;
+			TouchScreenKeyboard.hideInput = false;
 			Screen.autorotateToPortrait = false;
 			Screen.autorotateToPortraitUpsideDown = false;
 			Screen.autorotateToLandscapeLeft = true;
@@ -97,6 +106,7 @@ namespace DLS.Game
 		void OnDestroy()
 		{
 			if (instance != this) return;
+			CloseSystemKeyboard(false);
 			MobileInputBridge.EnableRuntime(false);
 			if (ReferenceEquals(InputHelper.InputSource, inputSource))
 				InputHelper.InputSource = new UnityInputSource();
@@ -107,6 +117,7 @@ namespace DLS.Game
 		{
 			if (inputSource == null) return;
 			inputSource.PrepareFrame();
+			UpdateSystemKeyboard();
 			RefreshKeyboardScreenRect();
 
 			// Main.Update processes world interaction before drawing UI. Pre-mark the
@@ -123,7 +134,7 @@ namespace DLS.Game
 				}
 			}
 
-			// Android Back first closes the custom keyboard, then the current mobile
+			// Android Back first closes the system keyboard, then the current mobile
 			// screen/drawer. Only an unhandled Back is allowed to reach normal shortcuts.
 			if (Input.GetKeyDown(KeyCode.Escape))
 			{
@@ -352,16 +363,148 @@ namespace DLS.Game
 				return;
 			}
 
-			MobileInputBridge.SetKeyboardScreenRect(CalculateKeyboardScreenRect());
+			Rect nativeArea = TouchScreenKeyboard.area;
+			MobileInputBridge.SetKeyboardScreenRect(nativeArea.height > 0 ? nativeArea : CalculateKeyboardScreenRect());
 		}
 
 		Rect CalculateKeyboardScreenRect()
 		{
 			Rect safe = Screen.safeArea;
 			bool code = MobileInputBridge.RequestedMode == MobileKeyboardMode.Code;
-			float keyboardHeight = Mathf.Clamp(safe.height * (code ? 0.43f : 0.36f), 220f, 500f);
+			float keyboardHeight = Mathf.Clamp(
+				safe.height * (code ? 0.48f : 0.42f),
+				220f,
+				safe.height * 0.65f);
 			keyboardHeight = Mathf.Min(keyboardHeight, safe.height);
 			return new Rect(safe.xMin, safe.yMin, safe.width, keyboardHeight);
+		}
+
+		void UpdateSystemKeyboard()
+		{
+			if (handledKeyboardOpenVersion != MobileInputBridge.OpenRequestVersion)
+			{
+				handledKeyboardOpenVersion = MobileInputBridge.OpenRequestVersion;
+				OpenSystemKeyboard();
+			}
+
+			if (systemKeyboard == null) return;
+
+			if (!MobileInputBridge.ShouldKeepSystemKeyboardOpen())
+			{
+				CloseSystemKeyboard(false);
+				return;
+			}
+
+			if (handledKeyboardSynchronizeVersion != MobileInputBridge.SynchronizeRequestVersion)
+			{
+				handledKeyboardSynchronizeVersion = MobileInputBridge.SynchronizeRequestVersion;
+				SetSystemKeyboardState(
+					MobileInputBridge.RequestedText,
+					MobileInputBridge.RequestedSelectionStart,
+					MobileInputBridge.RequestedSelectionLength);
+			}
+
+			TouchScreenKeyboard.Status status = systemKeyboard.status;
+			if (status is TouchScreenKeyboard.Status.Done or TouchScreenKeyboard.Status.Canceled or TouchScreenKeyboard.Status.LostFocus)
+			{
+				PublishSystemKeyboardState();
+				CloseSystemKeyboard(true);
+				return;
+			}
+
+			PublishSystemKeyboardState();
+		}
+
+		void OpenSystemKeyboard()
+		{
+			CloseSystemKeyboard(false);
+			bool multiline = MobileInputBridge.RequestedMode == MobileKeyboardMode.Code;
+			systemKeyboard = TouchScreenKeyboard.Open(
+				MobileInputBridge.RequestedText,
+				TouchScreenKeyboardType.Default,
+				false,
+				multiline,
+				false,
+				false,
+				string.Empty);
+
+			lastSystemKeyboardText = MobileInputBridge.RequestedText;
+			lastSystemSelectionStart = MobileInputBridge.RequestedSelectionStart;
+			lastSystemSelectionLength = MobileInputBridge.RequestedSelectionLength;
+			handledKeyboardSynchronizeVersion = MobileInputBridge.SynchronizeRequestVersion;
+			MobileInputBridge.SetSystemKeyboardActive(systemKeyboard != null);
+			SetSystemKeyboardSelection(lastSystemSelectionStart, lastSystemSelectionLength);
+		}
+
+		void PublishSystemKeyboardState()
+		{
+			if (systemKeyboard == null) return;
+
+			string currentText = systemKeyboard.text ?? string.Empty;
+			int selectionStart = currentText.Length;
+			int selectionLength = 0;
+			try
+			{
+				if (systemKeyboard.canGetSelection)
+				{
+					RangeInt selection = systemKeyboard.selection;
+					selectionStart = Mathf.Clamp(selection.start, 0, currentText.Length);
+					selectionLength = Mathf.Clamp(selection.length, 0, currentText.Length - selectionStart);
+				}
+			}
+			catch
+			{
+				// Some Android keyboards do not expose selection. Text input still works.
+			}
+
+			if (currentText == lastSystemKeyboardText &&
+			    selectionStart == lastSystemSelectionStart &&
+			    selectionLength == lastSystemSelectionLength)
+			{
+				return;
+			}
+
+			lastSystemKeyboardText = currentText;
+			lastSystemSelectionStart = selectionStart;
+			lastSystemSelectionLength = selectionLength;
+			MobileInputBridge.PublishNativeState(currentText, selectionStart, selectionLength);
+		}
+
+		void SetSystemKeyboardState(string text, int selectionStart, int selectionLength)
+		{
+			if (systemKeyboard == null) return;
+			text ??= string.Empty;
+			if (systemKeyboard.text != text) systemKeyboard.text = text;
+			lastSystemKeyboardText = text;
+			lastSystemSelectionStart = Mathf.Clamp(selectionStart, 0, text.Length);
+			lastSystemSelectionLength = Mathf.Clamp(selectionLength, 0, text.Length - lastSystemSelectionStart);
+			SetSystemKeyboardSelection(lastSystemSelectionStart, lastSystemSelectionLength);
+		}
+
+		void SetSystemKeyboardSelection(int selectionStart, int selectionLength)
+		{
+			if (systemKeyboard == null) return;
+			try
+			{
+				if (systemKeyboard.canSetSelection)
+					systemKeyboard.selection = new RangeInt(selectionStart, selectionLength);
+			}
+			catch
+			{
+				// Selection support varies between Android keyboard implementations.
+			}
+		}
+
+		void CloseSystemKeyboard(bool dismissedByKeyboard)
+		{
+			if (systemKeyboard != null)
+			{
+				systemKeyboard.active = false;
+				systemKeyboard = null;
+			}
+
+			if (dismissedByKeyboard) MobileInputBridge.NotifySystemKeyboardDismissed();
+			else MobileInputBridge.SetSystemKeyboardActive(false);
 		}
 
 
@@ -408,7 +551,7 @@ namespace DLS.Game
 		{
 			get
 			{
-				string native = hardware.InputString ?? string.Empty;
+				string native = MobileInputBridge.ConsumesNativeTextInput ? string.Empty : hardware.InputString ?? string.Empty;
 				string injected = virtualTextFrame == Time.frameCount ? virtualText : string.Empty;
 				return native + injected;
 			}
@@ -475,20 +618,25 @@ namespace DLS.Game
 
 		public bool IsKeyDownThisFrame(KeyCode key)
 		{
-			bool hardwareDown = !(key == KeyCode.Escape && suppressEscapeFrame == Time.frameCount) && hardware.IsKeyDownThisFrame(key);
+			bool suppressTextEditingKey = MobileInputBridge.ConsumesNativeTextInput && IsNativeTextEditingKey(key);
+			bool hardwareDown = !suppressTextEditingKey &&
+			                    !(key == KeyCode.Escape && suppressEscapeFrame == Time.frameCount) &&
+			                    hardware.IsKeyDownThisFrame(key);
 			return hardwareDown ||
 				(virtualDownFrame.TryGetValue(key, out int frame) && frame == Time.frameCount);
 		}
 
 		public bool IsKeyUpThisFrame(KeyCode key)
 		{
-			return hardware.IsKeyUpThisFrame(key) ||
+			bool hardwareUp = !(MobileInputBridge.ConsumesNativeTextInput && IsNativeTextEditingKey(key)) &&
+			                  hardware.IsKeyUpThisFrame(key);
+			return hardwareUp ||
 				(virtualDownFrame.TryGetValue(key, out int frame) && frame == Time.frameCount);
 		}
 
 		public bool IsKeyHeld(KeyCode key)
 		{
-			if (hardware.IsKeyHeld(key)) return true;
+			if (!(MobileInputBridge.ConsumesNativeTextInput && IsNativeTextEditingKey(key)) && hardware.IsKeyHeld(key)) return true;
 			if (key is KeyCode.LeftControl or KeyCode.RightControl) return virtualCtrlFrame == Time.frameCount;
 			if (key is KeyCode.LeftShift or KeyCode.RightShift) return virtualShiftFrame == Time.frameCount;
 			return virtualDownFrame.TryGetValue(key, out int frame) && frame == Time.frameCount;
@@ -533,6 +681,13 @@ namespace DLS.Game
 			foreach (KeyValuePair<KeyCode, int> pair in virtualDownFrame)
 				if (pair.Value == Time.frameCount) return true;
 			return false;
+		}
+
+		static bool IsNativeTextEditingKey(KeyCode key)
+		{
+			return key is KeyCode.Backspace or KeyCode.Delete or KeyCode.Return or KeyCode.KeypadEnter or
+				KeyCode.LeftArrow or KeyCode.RightArrow or KeyCode.UpArrow or KeyCode.DownArrow or
+				KeyCode.Home or KeyCode.End or KeyCode.PageUp or KeyCode.PageDown;
 		}
 	}
 }

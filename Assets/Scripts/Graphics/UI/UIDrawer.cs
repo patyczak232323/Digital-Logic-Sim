@@ -38,7 +38,6 @@ namespace DLS.Graphics
 				using (UI.CreateUIScope())
 				{
 					MobileUI.Draw();
-					MobileKeyboardUI.Draw();
 				}
 			}
 			else
@@ -151,7 +150,6 @@ namespace DLS.Graphics
 			ChipLibraryMenu.Reset();
 			SearchPopup.Reset();
 			MobileUI.Reset();
-			MobileKeyboardUI.Reset();
 		}
 	}
 }

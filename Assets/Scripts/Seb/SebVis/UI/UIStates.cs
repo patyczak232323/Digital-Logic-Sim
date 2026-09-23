@@ -76,6 +76,7 @@ namespace Seb.Vis.UI
 		public bool isMouseDownInBounds;
 		public bool isSelecting;
 		public float lastInputTime;
+		public int mobileKeyboardRevision;
 		public int selectionStartIndex;
 		public string text { get; private set; } = string.Empty;
 		public bool focused { get; private set; }
@@ -199,6 +200,25 @@ namespace Seb.Vis.UI
 				SetCursorIndex(cursorBeforeCharIndex + textToAdd.Length);
 			}
 			else text = originalText;
+		}
+
+		public bool TryApplyMobileKeyboardState(
+			string newText,
+			int selectionStart,
+			int selectionLength,
+			Func<string, bool> validation = null)
+		{
+			newText ??= string.Empty;
+			if (validation != null && !validation(newText)) return false;
+
+			text = newText;
+			selectionStart = Mathf.Clamp(selectionStart, 0, text.Length);
+			selectionLength = Mathf.Clamp(selectionLength, 0, text.Length - selectionStart);
+			selectionStartIndex = selectionStart;
+			cursorBeforeCharIndex = selectionStart + selectionLength;
+			isSelecting = selectionLength > 0;
+			UpdateLastInputTime();
+			return true;
 		}
 
 		public void IncrementCursor(bool select = false)
