@@ -238,28 +238,66 @@ namespace DLS.Game
 
 		public void SaveFromDescription(ChipDescription saveChipDescription, SaveMode saveMode = SaveMode.Normal)
 		{
-			// If this chip hasn't been saved before, it can't have been used anyway so no need to update anything
-			// (same thing if saving a new version of it)
-			if (ViewedChip.LastSavedDescription != null && saveMode != SaveMode.SaveAs)
+			bool saveGlobally = ViewedChip.LastSavedDescription != null &&
+			                    chipLibrary.IsGlobalChip(ViewedChip.LastSavedDescription.Name);
+			if (!TrySaveFromDescription(saveChipDescription, saveMode, saveGlobally, out string error))
 			{
-				UpdateAndSaveAffectedChips(ViewedChip.LastSavedDescription, saveChipDescription, false);
+				Debug.LogWarning("Could not save chip: " + error);
+			}
+		}
+
+		public bool TrySaveFromDescription(
+			ChipDescription saveChipDescription,
+			SaveMode saveMode,
+			bool saveGlobally,
+			out string error)
+		{
+			if (!GlobalChipManager.ValidateSave(saveChipDescription, this, saveMode, saveGlobally, out error))
+			{
+				return false;
 			}
 
-			if (saveMode is SaveMode.Rename)
+			ChipDescription previousDescription = ViewedChip.LastSavedDescription;
+			bool updatingExisting = previousDescription != null && saveMode != SaveMode.SaveAs;
+			bool wasGlobal = updatingExisting && chipLibrary.IsGlobalChip(previousDescription.Name);
+			bool scopeChanged = updatingExisting && wasGlobal != saveGlobally;
+			bool renaming = updatingExisting &&
+			                !string.Equals(previousDescription.Name, saveChipDescription.Name, StringComparison.Ordinal);
+
+			// If this chip hasn't been saved before, it can't have been used anyway so no need to update anything
+			// (same thing if saving a new version of it)
+			if (updatingExisting)
 			{
-				string nameOld = ViewedChip.LastSavedDescription.Name;
-				Saver.RenameChip(nameOld, saveChipDescription, description.ProjectName);
+				UpdateAndSaveAffectedChips(previousDescription, saveChipDescription, false);
+			}
+
+			if (saveMode is SaveMode.Rename || scopeChanged)
+			{
+				string nameOld = previousDescription.Name;
+				Saver.RenameChip(nameOld, saveChipDescription, description.ProjectName, wasGlobal, saveGlobally);
 				CombinationalChipCacheManager.DeletePersistentCache(nameOld, description.ProjectName);
-				chipLibrary.NotifyChipRenamed(saveChipDescription, nameOld);
-				RenameStarred(saveChipDescription.Name, nameOld, false, false);
-				EnsureChipRenamedInCollections(nameOld, saveChipDescription.Name);
+				chipLibrary.NotifyChipRenamed(saveChipDescription, nameOld, saveGlobally);
+				if (renaming)
+				{
+					RenameStarred(saveChipDescription.Name, nameOld, false, false);
+					EnsureChipRenamedInCollections(nameOld, saveChipDescription.Name);
+				}
 				UpdateAndSaveProjectDescription();
+
+				if (wasGlobal && saveGlobally && renaming)
+				{
+					GlobalChipManager.PropagateGlobalRename(nameOld, saveChipDescription.Name, description.ProjectName);
+				}
+				else if (wasGlobal && !saveGlobally)
+				{
+					GlobalChipManager.RemoveMenuReferencesAfterDemotion(nameOld, description.ProjectName);
+				}
 			}
 			else
 			{
-				Saver.SaveChip(saveChipDescription, description.ProjectName);
+				Saver.SaveChip(saveChipDescription, description.ProjectName, saveGlobally);
 
-				chipLibrary.NotifyChipSaved(saveChipDescription);
+				chipLibrary.NotifyChipSaved(saveChipDescription, saveGlobally);
 				bool isNewChip = !ChipHasBeenSavedBefore || saveMode is SaveMode.SaveAs;
 
 				// New chips are automatically starred
@@ -281,6 +319,8 @@ namespace DLS.Game
 			ViewedChip.NotifySaved(saveChipDescription);
 			SearchPopup.AddRecentChip(saveChipDescription.Name);
 			CameraController.NotifyChipNameChanged(saveChipDescription.Name);
+			error = string.Empty;
+			return true;
 		}
 
 		public bool ActiveChipHasUnsavedChanges()
@@ -386,6 +426,7 @@ namespace DLS.Game
 
 		public void DeleteChip(string chipToDeleteName)
 		{
+			bool deletingGlobalChip = chipLibrary.IsGlobalChip(chipToDeleteName);
 			// If the current chip only contains the deleted chip directly as a subchip, it will be removed from the sim and everything is fine.
 			// However, if it is contained indirectly somewhere within one of the chip's subchips (or their subchips, etc), then it's a bit tricky (and
 			// potentially expensive for large chips) to hunt down all references within the simulation and remove them. So, for now at least, simply
@@ -403,13 +444,18 @@ namespace DLS.Game
 			UpdateAndSaveAffectedChips(chipLibrary.GetChipDescription(chipToDeleteName), null, true);
 
 			// Delete chip save file, remove from library, and update project description
-			Saver.DeleteChip(chipToDeleteName, description.ProjectName);
+			if (deletingGlobalChip) Saver.DeleteGlobalChip(chipToDeleteName);
+			else Saver.DeleteChip(chipToDeleteName, description.ProjectName);
 			CombinationalChipCacheManager.DeletePersistentCache(chipToDeleteName, description.ProjectName);
 			chipLibrary.RemoveChip(chipToDeleteName);
 			CombinationalChipCacheManager.NotifyProjectDescriptionsChanged();
 			SetStarred(chipToDeleteName, false, false, false); // ensure removed from starred list
 			EnsureChipRemovedFromCollections(chipToDeleteName);
 			UpdateAndSaveProjectDescription();
+			if (deletingGlobalChip)
+			{
+				GlobalChipManager.RemoveMenuReferencesAfterDemotion(chipToDeleteName, description.ProjectName);
+			}
 
 
 			// If has deleted the chip that's currently being edited, then open a blank chip
@@ -549,7 +595,7 @@ namespace DLS.Game
 						}
 					}
 
-					Saver.SaveChip(updatedDesc, this.description.ProjectName);
+					Saver.SaveChip(updatedDesc, this.description.ProjectName, chipLibrary.IsGlobalChip(desc.Name));
 					chipLibrary.NotifyChipSaved(updatedDesc);
 				}
 			}

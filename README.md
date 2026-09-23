@@ -33,6 +33,7 @@ The repository includes a compact example progression ending with a **4-bit CPU*
 - dirty-gate scheduling
 - fixed-point settling for signal propagation
 - support for deeply nested Custom Chips
+- global Custom Chips shared safely between projects
 - combinational JIT acceleration
 - feedback JIT for supported cyclic gate networks
 - persistent FULL LUT cache for suitable combinational circuits

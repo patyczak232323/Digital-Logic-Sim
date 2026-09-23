@@ -144,7 +144,8 @@ namespace DLS.Graphics
 			float nameWidth = width * 0.46f;
 			float actionWidth = (width - nameWidth - gap * 3f) / 3f;
 
-			UI.Button(chipName, theme.ChipLibraryChipToggleOn, topLeft,
+			string displayName = project.chipLibrary.IsGlobalChip(chipName) ? chipName + "  [GLOBAL]" : chipName;
+			UI.Button(displayName, theme.ChipLibraryChipToggleOn, topLeft,
 				new Vector2(nameWidth, rowHeight), true, false, false, Anchor.TopLeft, true, 0.8f, true);
 
 			bool canPlace = project.ViewedChip.CanAddSubchip(chipName);
@@ -208,7 +209,8 @@ namespace DLS.Graphics
 
 				// Draw chip name (drawn as non-interactive button)
 				ButtonTheme nameTheme = ActiveUITheme.ChipLibraryChipToggleOn;
-				UI.Button(chipName, nameTheme, topLeft, new Vector2(nameWidth, ButtonHeight), true, false, false, Anchor.TopLeft, true, 1, true);
+				string displayName = Project.ActiveProject.chipLibrary.IsGlobalChip(chipName) ? chipName + "  [GLOBAL]" : chipName;
+				UI.Button(displayName, nameTheme, topLeft, new Vector2(nameWidth, ButtonHeight), true, false, false, Anchor.TopLeft, true, 1, true);
 
 				// Draw buttons
 				Vector2 buttonsTopLeft = topLeft + Vector2.right * (nameWidth + DefaultButtonSpacing);

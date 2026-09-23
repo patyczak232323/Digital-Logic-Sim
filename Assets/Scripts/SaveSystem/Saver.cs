@@ -48,10 +48,27 @@ namespace DLS.SaveSystem
 			WriteToFile(serializedDescription, GetChipFilePath(chipDescription.Name, projectName));
 		}
 
+		public static void SaveGlobalChip(ChipDescription chipDescription)
+		{
+			string serializedDescription = CreateSerializedChipDescription(chipDescription);
+			WriteToFile(serializedDescription, SavePaths.GetGlobalChipPath(chipDescription.Name));
+		}
+
+		public static void SaveChip(ChipDescription chipDescription, string projectName, bool global)
+		{
+			if (global) SaveGlobalChip(chipDescription);
+			else SaveChip(chipDescription, projectName);
+		}
+
 		public static void RenameChip(string oldName, ChipDescription chipDescription, string projectName)
 		{
-			string oldPath = GetChipFilePath(oldName, projectName);
-			string newPath = GetChipFilePath(chipDescription.Name, projectName);
+			RenameChip(oldName, chipDescription, projectName, false, false);
+		}
+
+		public static void RenameChip(string oldName, ChipDescription chipDescription, string projectName, bool wasGlobal, bool makeGlobal)
+		{
+			string oldPath = wasGlobal ? SavePaths.GetGlobalChipPath(oldName) : GetChipFilePath(oldName, projectName);
+			string newPath = makeGlobal ? SavePaths.GetGlobalChipPath(chipDescription.Name) : GetChipFilePath(chipDescription.Name, projectName);
 			string serializedDescription = CreateSerializedChipDescription(chipDescription);
 
 			// A case-only rename maps to the same path on Windows/macOS. First update
@@ -61,16 +78,10 @@ namespace DLS.SaveSystem
 				WriteToFile(serializedDescription, oldPath);
 				if (!string.Equals(oldPath, newPath, StringComparison.Ordinal))
 				{
-					string temporaryPath = SaveUtils.EnsureUniqueFileName(oldPath + ".rename");
-					File.Move(oldPath, temporaryPath);
-					try
+					MoveFileSupportingCaseOnlyRename(oldPath, newPath);
+					if (File.Exists(oldPath + ".bak"))
 					{
-						File.Move(temporaryPath, newPath);
-					}
-					catch
-					{
-						if (File.Exists(temporaryPath)) File.Move(temporaryPath, oldPath);
-						throw;
+						MoveFileSupportingCaseOnlyRename(oldPath + ".bak", newPath + ".bak");
 					}
 				}
 
@@ -80,7 +91,10 @@ namespace DLS.SaveSystem
 			// Write the new file before removing the old one, so a failed save never
 			// destroys the last usable copy.
 			WriteToFile(serializedDescription, newPath);
-			File.Delete(oldPath);
+			if (File.Exists(oldPath)) File.Delete(oldPath);
+			// Global chips are discovered by enumerating both primaries and backups.
+			// Leaving the old backup behind would resurrect a renamed/demoted chip.
+			if (wasGlobal && File.Exists(oldPath + ".bak")) File.Delete(oldPath + ".bak");
 		}
 
 
@@ -98,6 +112,7 @@ namespace DLS.SaveSystem
 		public static void DeleteChip(string chipName, string projectName, bool backupInDeletedFolder = true)
 		{
 			string filePath = GetChipFilePath(chipName, projectName);
+			if (!File.Exists(filePath)) return;
 			if (backupInDeletedFolder)
 			{
 				string deletedChipDirectoryPath = SavePaths.GetDeletedChipsPath(projectName);
@@ -109,6 +124,27 @@ namespace DLS.SaveSystem
 			{
 				File.Delete(filePath);
 			}
+		}
+
+		public static void DeleteGlobalChip(string chipName, bool backupInDeletedFolder = true)
+		{
+			string filePath = SavePaths.GetGlobalChipPath(chipName);
+			string backupPath = filePath + ".bak";
+			bool primaryExists = File.Exists(filePath);
+			bool backupExists = File.Exists(backupPath);
+			if (!primaryExists && !backupExists) return;
+
+			if (backupInDeletedFolder)
+			{
+				SavePaths.EnsureDirectoryExists(SavePaths.DeletedGlobalChipsPath);
+				string deletedPath = SaveUtils.EnsureUniqueFileName(Path.Combine(SavePaths.DeletedGlobalChipsPath, chipName + ".json"));
+				File.Move(primaryExists ? filePath : backupPath, deletedPath);
+			}
+			else if (primaryExists) File.Delete(filePath);
+
+			// Unlike project chips, global chips have no manifest. An orphaned backup
+			// would therefore be loaded as if the deleted chip still existed.
+			if (File.Exists(backupPath)) File.Delete(backupPath);
 		}
 
 		public static void DeleteProject(string projectName, bool backupInDeletedFolder = true)
@@ -195,6 +231,23 @@ namespace DLS.SaveSystem
 			catch
 			{
 				if (Directory.Exists(temporaryPath)) Directory.Move(temporaryPath, sourcePath);
+				throw;
+			}
+		}
+
+		static void MoveFileSupportingCaseOnlyRename(string sourcePath, string destinationPath)
+		{
+			if (string.Equals(sourcePath, destinationPath, StringComparison.Ordinal)) return;
+
+			string temporaryPath = SaveUtils.EnsureUniqueFileName(sourcePath + ".rename");
+			File.Move(sourcePath, temporaryPath);
+			try
+			{
+				File.Move(temporaryPath, destinationPath);
+			}
+			catch
+			{
+				if (File.Exists(temporaryPath)) File.Move(temporaryPath, sourcePath);
 				throw;
 			}
 		}

@@ -69,6 +69,7 @@ namespace DLS.SaveSystem
 		public static ProjectDescription[] LoadAllProjectDescriptions()
 		{
 			List<ProjectDescription> projectDescriptions = new();
+			if (!Directory.Exists(SavePaths.ProjectsPath)) return Array.Empty<ProjectDescription>();
 
 			foreach (string dir in Directory.EnumerateDirectories(SavePaths.ProjectsPath))
 			{
@@ -87,6 +88,58 @@ namespace DLS.SaveSystem
 			return projectDescriptions.ToArray();
 		}
 
+		public static ChipDescription LoadProjectChipDescription(string projectName, string chipName)
+		{
+			string path = Path.Combine(SavePaths.GetChipsPath(projectName), chipName + ".json");
+			return NormalizeChipDescription(LoadWithBackup(path, Serializer.DeserializeChipDescription), path);
+		}
+
+		public static ChipDescription LoadGlobalChipDescription(string chipName)
+		{
+			string path = SavePaths.GetGlobalChipPath(chipName);
+			return NormalizeChipDescription(LoadWithBackup(path, Serializer.DeserializeChipDescription), path);
+		}
+
+		public static bool GlobalChipExists(string chipName)
+		{
+			string path = SavePaths.GetGlobalChipPath(chipName);
+			return File.Exists(path) || File.Exists(path + ".bak");
+		}
+
+		public static ChipDescription[] LoadAllGlobalChipDescriptions()
+		{
+			if (!Directory.Exists(SavePaths.GlobalChipsPath)) return Array.Empty<ChipDescription>();
+
+			List<ChipDescription> chips = new();
+			HashSet<string> names = new(ChipDescription.NameComparer);
+			IEnumerable<string> primaryPaths = Directory.EnumerateFiles(SavePaths.GlobalChipsPath, "*.json");
+			IEnumerable<string> backupPrimaryPaths = Directory.EnumerateFiles(SavePaths.GlobalChipsPath, "*.json.bak")
+				.Select(path => path[..^4]);
+			foreach (string path in primaryPaths.Concat(backupPrimaryPaths).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(path => Path.GetFileName(path), StringComparer.OrdinalIgnoreCase))
+			{
+				try
+				{
+					ChipDescription chip = NormalizeChipDescription(
+						LoadWithBackup(path, Serializer.DeserializeChipDescription),
+						path);
+					if (!names.Add(chip.Name))
+					{
+						Debug.LogWarning("Ignoring duplicate global chip name: " + chip.Name);
+						continue;
+					}
+
+					chips.Add(chip);
+				}
+				catch (Exception e)
+				{
+					// One damaged shared chip must not make every project impossible to open.
+					Debug.LogWarning("Could not load global chip '" + path + "': " + e.Message);
+				}
+			}
+
+			return chips.ToArray();
+		}
+
 		static ChipLibrary LoadChipLibrary(ProjectDescription projectDescription)
 		{
 			string chipDirectoryPath = SavePaths.GetChipsPath(projectDescription.ProjectName);
@@ -100,28 +153,39 @@ namespace DLS.SaveSystem
 			for (int i = 0; i < loadedChips.Length; i++)
 			{
 				string chipPath = Path.Combine(chipDirectoryPath, projectDescription.AllCustomChipNames[i] + ".json");
-				ChipDescription chipDesc = LoadWithBackup(chipPath, Serializer.DeserializeChipDescription);
-				if (chipDesc == null || string.IsNullOrWhiteSpace(chipDesc.Name))
-				{
-					throw new InvalidDataException("Invalid chip description at " + chipPath);
-				}
-
-				chipDesc.InputPins ??= Array.Empty<PinDescription>();
-				chipDesc.OutputPins ??= Array.Empty<PinDescription>();
-				chipDesc.SubChips ??= Array.Empty<SubChipDescription>();
-				chipDesc.Wires ??= Array.Empty<WireDescription>();
-				chipDesc.Displays ??= Array.Empty<DisplayDescription>();
+				ChipDescription chipDesc = NormalizeChipDescription(
+					LoadWithBackup(chipPath, Serializer.DeserializeChipDescription),
+					chipPath);
 				loadedChips[i] = chipDesc;
 				customChipNameHashset.Add(chipDesc.Name);
 			}
 
+			ChipDescription[] globalChips = LoadAllGlobalChipDescriptions()
+				.Where(chip => !customChipNameHashset.Contains(chip.Name))
+				.ToArray();
+			foreach (ChipDescription chip in globalChips) customChipNameHashset.Add(chip.Name);
 
 			// If built-in chip name conflicts with a custom chip, the built-in chip must have been added in a newer version.
 			// In that case, simply exclude the built-in chip. TODO: warn player that they should rename their chip if they want access to new builtin version
 			builtinChips = builtinChips.Where(b => !customChipNameHashset.Contains(b.Name)).ToArray();
 
-			UpgradeHelper.ApplyVersionChanges(loadedChips, builtinChips);
-			return new ChipLibrary(loadedChips, builtinChips);
+			UpgradeHelper.ApplyVersionChanges(loadedChips.Concat(globalChips).ToArray(), builtinChips);
+			return new ChipLibrary(loadedChips, globalChips, builtinChips);
+		}
+
+		static ChipDescription NormalizeChipDescription(ChipDescription chipDesc, string path)
+		{
+			if (chipDesc == null || string.IsNullOrWhiteSpace(chipDesc.Name))
+			{
+				throw new InvalidDataException("Invalid chip description at " + path);
+			}
+
+			chipDesc.InputPins ??= Array.Empty<PinDescription>();
+			chipDesc.OutputPins ??= Array.Empty<PinDescription>();
+			chipDesc.SubChips ??= Array.Empty<SubChipDescription>();
+			chipDesc.Wires ??= Array.Empty<WireDescription>();
+			chipDesc.Displays ??= Array.Empty<DisplayDescription>();
+			return chipDesc;
 		}
 
 		static T LoadWithBackup<T>(string path, Func<string, T> deserialize)

@@ -15,6 +15,8 @@ namespace DLS.SaveSystem
 		// Path to save folder for all projects
 		public static readonly string ProjectsPath = Path.Combine(AllData, "Projects");
 		public static readonly string DeletedProjectsPath = Path.Combine(AllData, "Deleted Projects");
+		public static readonly string GlobalChipsPath = Path.Combine(AllData, "Global Chips");
+		public static readonly string DeletedGlobalChipsPath = Path.Combine(AllData, "Deleted Global Chips");
 		public static readonly string AppSettingsPath = Path.Combine(AllData, "AppSettings.json");
 
 		public static void EnsureDirectoryExists(string directoryPath) => Directory.CreateDirectory(directoryPath);
@@ -25,5 +27,6 @@ namespace DLS.SaveSystem
 		public static string GetChipsPath(string projectName) => Path.Combine(GetProjectPath(projectName), "Chips");
 		public static string GetDeletedChipsPath(string projectName) => Path.Combine(GetProjectPath(projectName), "Deleted Chips");
 		public static string GetProjectDescriptionPath(string projectName) => Path.Combine(GetProjectPath(projectName), ProjectFileName);
+		public static string GetGlobalChipPath(string chipName) => Path.Combine(GlobalChipsPath, chipName + ".json");
 	}
 }

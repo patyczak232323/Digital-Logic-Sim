@@ -100,6 +100,23 @@ def test_topology_invalidation_race_model() -> None:
     assert topology_changed
 
 
+def test_global_chip_storage_model() -> None:
+    # A missing primary must still be discoverable through its backup because
+    # global chips do not have a per-project manifest listing their names.
+    files = {"ALU.json.bak", "MUX.json", "notes.txt", "MUX.json.bak"}
+    primary_paths = {name for name in files if name.endswith(".json")}
+    backup_primary_paths = {name[:-4] for name in files if name.endswith(".json.bak")}
+    discovered = {name.casefold() for name in primary_paths | backup_primary_paths}
+    assert discovered == {"alu.json", "mux.json"}
+
+    # Project-local and global namespaces may not silently alias by case.
+    global_names = {"alu", "decoder"}
+    other_project_local_names = {"counter", "ALU"}
+    assert {name.casefold() for name in global_names} & {
+        name.casefold() for name in other_project_local_names
+    } == {"alu"}
+
+
 def test_csharp_integration_guards() -> None:
     saver = source("Assets/Scripts/SaveSystem/Saver.cs")
     loader = source("Assets/Scripts/SaveSystem/Loader.cs")
@@ -114,6 +131,9 @@ def test_csharp_integration_guards() -> None:
     project = source("Assets/Scripts/Game/Project/Project.cs")
     camera = source("Assets/Scripts/Game/Interaction/CameraController.cs")
     simulation_facade = source("Assets/Scripts/Simulation/RewiredEngine.cs")
+    save_paths = source("Assets/Scripts/SaveSystem/SavePaths.cs")
+    chip_library = source("Assets/Scripts/Game/Project/ChipLibrary.cs")
+    global_chips = source("Assets/Scripts/SaveSystem/GlobalChipManager.cs")
 
     assert 'string temporaryPath = path + ".tmp";' in saver
     assert 'string backupPath = path + ".bak";' in saver
@@ -146,6 +166,14 @@ def test_csharp_integration_guards() -> None:
     assert "if (Simulator.ApplyModifications())" in simulation_facade
     assert "DeterministicSimulator.InvalidateTopology();" in simulation_facade
     assert "pendingTopologyModification" not in simulation_facade
+    assert 'GlobalChipsPath = Path.Combine(AllData, "Global Chips")' in save_paths
+    assert "LoadAllGlobalChipDescriptions" in loader
+    assert 'Directory.EnumerateFiles(SavePaths.GlobalChipsPath, "*.json.bak")' in loader
+    assert "public bool IsGlobalChip(string name)" in chip_library
+    assert "Make dependency '" in global_chips
+    assert "PropagateGlobalRename" in global_chips
+    assert "TrySaveFromDescription" in project
+    assert '"ALL PROJECTS"' in chip_menu
     assert not (ROOT / "Assets/Scripts/Game/Project/SimulationFacade.cs").exists()
     assert not (ROOT / "Assets/Scripts/Graphics/UI/Menus/SimulationFacade.cs").exists()
 
@@ -156,6 +184,7 @@ TESTS = (
     test_address_mask_model,
     test_backup_recovery_model,
     test_topology_invalidation_race_model,
+    test_global_chip_storage_model,
     test_csharp_integration_guards,
 )
 

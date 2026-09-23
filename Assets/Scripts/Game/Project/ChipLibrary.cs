@@ -9,11 +9,13 @@ namespace DLS.Game
 		public readonly List<ChipDescription> allChips = new();
 
 		readonly HashSet<string> builtinChipNames = new(ChipDescription.NameComparer);
+		readonly HashSet<string> globalChipNames = new(ChipDescription.NameComparer);
+		readonly HashSet<string> localChipNames = new(ChipDescription.NameComparer);
 		readonly Dictionary<string, ChipDescription> descriptionFromNameLookup = new(ChipDescription.NameComparer);
 
 		readonly List<ChipDescription> hiddenChips = new();
 
-		public ChipLibrary(ChipDescription[] customChips, ChipDescription[] builtinChips)
+		public ChipLibrary(ChipDescription[] localChips, ChipDescription[] globalChips, ChipDescription[] builtinChips)
 		{
 			// Add built-in chips to list of all chips
 			foreach (ChipDescription chip in builtinChips)
@@ -25,10 +27,19 @@ namespace DLS.Game
 				builtinChipNames.Add(chip.Name);
 			}
 
-			// Add custom chips to list of all chips
-			foreach (ChipDescription chip in customChips)
+			// Global chips are shared by every project. Local names take precedence when
+			// opening old data that predates the global-name collision checks.
+			foreach (ChipDescription chip in globalChips)
 			{
 				AddChipToLibrary(chip);
+				globalChipNames.Add(chip.Name);
+			}
+
+			foreach (ChipDescription chip in localChips)
+			{
+				if (globalChipNames.Remove(chip.Name)) allChips.RemoveAll(c => c.NameMatch(chip.Name));
+				AddChipToLibrary(chip);
+				localChipNames.Add(chip.Name);
 			}
 
 			RebuildChipDescriptionLookup();
@@ -50,6 +61,8 @@ namespace DLS.Game
 
 
 		public bool IsBuiltinChip(string name) => builtinChipNames.Contains(name);
+		public bool IsGlobalChip(string name) => globalChipNames.Contains(name);
+		public bool IsLocalChip(string name) => localChipNames.Contains(name);
 
 		public bool HasChip(string name) => TryGetChipDescription(name, out _);
 
@@ -60,10 +73,17 @@ namespace DLS.Game
 		public void RemoveChip(string chipName)
 		{
 			allChips.RemoveAll(c => c.NameMatch(chipName));
+			globalChipNames.Remove(chipName);
+			localChipNames.Remove(chipName);
 			RebuildChipDescriptionLookup();
 		}
 
 		public void NotifyChipSaved(ChipDescription description)
+		{
+			NotifyChipSaved(description, IsGlobalChip(description.Name));
+		}
+
+		public void NotifyChipSaved(ChipDescription description, bool isGlobal)
 		{
 			// Replace chip description if already exists
 			bool foundChip = false;
@@ -81,10 +101,26 @@ namespace DLS.Game
 			// Otherwise add as new description
 			if (!foundChip) AddChipToLibrary(description);
 
+			if (isGlobal)
+			{
+				localChipNames.Remove(description.Name);
+				globalChipNames.Add(description.Name);
+			}
+			else
+			{
+				globalChipNames.Remove(description.Name);
+				localChipNames.Add(description.Name);
+			}
+
 			RebuildChipDescriptionLookup();
 		}
 
 		public void NotifyChipRenamed(ChipDescription description, string nameOld)
+		{
+			NotifyChipRenamed(description, nameOld, IsGlobalChip(nameOld));
+		}
+
+		public void NotifyChipRenamed(ChipDescription description, string nameOld, bool isGlobal)
 		{
 			// Replace chip description
 			for (int i = 0; i < allChips.Count; i++)
@@ -96,6 +132,11 @@ namespace DLS.Game
 				}
 			}
 
+			globalChipNames.Remove(nameOld);
+			localChipNames.Remove(nameOld);
+			if (isGlobal) globalChipNames.Add(description.Name);
+			else localChipNames.Add(description.Name);
+
 			RebuildChipDescriptionLookup();
 		}
 
@@ -105,7 +146,7 @@ namespace DLS.Game
 
 			foreach (ChipDescription chip in allChips)
 			{
-				if (!IsBuiltinChip(chip.Name))
+				if (IsLocalChip(chip.Name))
 				{
 					customChipNames.Add(chip.Name);
 				}

@@ -318,7 +318,10 @@ namespace DLS.Graphics
 						ButtonTheme colSource = GetButtonTheme(false, true);
 						ButtonTheme colSourceCollection = GetButtonTheme(true, true);
 						DrawHeader(collection.Name, colSourceCollection.buttonCols.normal, colSourceCollection.textCols.normal, ref topLeft, panelContentBounds.Width);
-						DrawHeader(selectedChipName, colSource.buttonCols.normal, colSource.textCols.normal, ref topLeft, panelContentBounds.Width);
+						string selectedDisplayName = project.chipLibrary.IsGlobalChip(selectedChipName)
+							? selectedChipName + "  [GLOBAL]"
+							: selectedChipName;
+						DrawHeader(selectedDisplayName, colSource.buttonCols.normal, colSource.textCols.normal, ref topLeft, panelContentBounds.Width);
 
 						bool isStarred = project.description.IsStarred(selectedChipName, false);
 						bool toggleStarred = DrawHorizontalButtonGroup(buttonName_starUnstar[isStarred ? 1 : 0], null, ref topLeft, panelContentBounds.Width) == 0;
@@ -783,8 +786,12 @@ namespace DLS.Graphics
 				parentNames.Insert(0, "the CURRENT CHIP");
 			}
 
-			string message = "Are you sure you want to delete this chip? ";
+			bool isGlobal = project.chipLibrary.IsGlobalChip(chipName);
+			string message = isGlobal
+				? "This is a GLOBAL chip. Deleting it removes it from every project. Continue? "
+				: "Are you sure you want to delete this chip? ";
 			bool warn = parentNames.Count > 0;
+			warn |= isGlobal;
 
 			if (Project.ActiveProject.ViewedChip.LastSavedDescription?.NameMatch(chipName) == true)
 			{
@@ -792,7 +799,10 @@ namespace DLS.Graphics
 				warn = true;
 			}
 
-			if (parentNames.Count == 0) message += "It is not used anywhere.";
+			if (parentNames.Count == 0)
+			{
+				message += isGlobal ? "Other projects may still depend on it." : "It is not used anywhere.";
+			}
 			else message += CreateChipInUseWarningMessage(parentNames);
 
 			string formattedMessage = UI.LineBreakByCharCount(message, deleteMessageMaxCharsPerLine);

@@ -577,8 +577,16 @@ namespace DLS.Graphics
 			}
 
 			bool existed = project.chipLibrary.HasChip(description.Name);
-			Saver.SaveChip(description, project.description.ProjectName);
-			project.chipLibrary.NotifyChipSaved(description);
+			bool isGlobal = existed && project.chipLibrary.IsGlobalChip(description.Name);
+			if (isGlobal && !GlobalChipManager.ValidateGlobalDependencies(description, project.chipLibrary, out string globalError))
+			{
+				statusSuccess = false;
+				statusText = globalError;
+				return;
+			}
+
+			Saver.SaveChip(description, project.description.ProjectName, isGlobal);
+			project.chipLibrary.NotifyChipSaved(description, isGlobal);
 			RhdlSourceStore.SaveChipSource(project.description.ProjectName, description.Name, source);
 
 			if (!existed)

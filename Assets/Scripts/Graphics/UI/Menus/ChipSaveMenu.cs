@@ -20,9 +20,12 @@ namespace DLS.Graphics
 		const int SaveButtonIndex = 2;
 		const int SaveAsButtonIndex = 3;
 		static readonly UIHandle ID_ChipNameField = new("SaveMenu_ChipNameField");
+		static readonly UIHandle ID_ChipScope = new("SaveMenu_ChipScope");
 		static readonly Func<string, bool> chipNameValidator = ValidateChipNameInput;
 		static readonly Random rng = new();
 		static Vector2 sizeBeyondNameMinimum;
+		static string saveErrorMessage = string.Empty;
+		static readonly string[] ChipScopeOptions = { "THIS PROJECT", "ALL PROJECTS" };
 
 		public static SubChipInstance ActiveCustomizeChip;
 		static SubChipInstance CustomizeStateBeforeEnteringCustomizeMenu;
@@ -42,6 +45,7 @@ namespace DLS.Graphics
 
 		public static void OnMenuOpened()
 		{
+			bool startingNewSaveSession = ActiveCustomizeChip == null;
 			ActiveCustomizeChip ??= CreateCustomizationState();
 			Vector2 currentMinimum = SubChipInstance.CalculateMinChipSize(
 				ActiveCustomizeDescription.InputPins,
@@ -49,6 +53,13 @@ namespace DLS.Graphics
 				ActiveCustomizeDescription.Name);
 			sizeBeyondNameMinimum = Vector2.Max(Vector2.zero, ActiveCustomizeDescription.Size - currentMinimum);
 			InitUIFromDescription(ActiveCustomizeChip.Description);
+			if (startingNewSaveSession)
+			{
+				saveErrorMessage = string.Empty;
+				bool isGlobal = Project.ActiveProject.ChipHasBeenSavedBefore &&
+				                Project.ActiveProject.chipLibrary.IsGlobalChip(Project.ActiveProject.ViewedChip.LastSavedDescription.Name);
+				UI.GetWheelSelectorState(ID_ChipScope).index = isGlobal ? 1 : 0;
+			}
 		}
 
 		public static (Vector2 size, float pad) GetTextInputSize()
@@ -84,6 +95,18 @@ namespace DLS.Graphics
 				RewiredUI.DrawSectionHeader("SAVE CHIP", headerTopLeft, inputFieldSize.x, true);
 				inputFieldState = UI.InputField(ID_ChipNameField, inputTheme, inputCentre, inputFieldSize, "Name", Anchor.Centre, inputFieldTextPad, chipNameValidator, true);
 
+				Vector2 scopeLabelPos = UI.PrevBounds.BottomLeft + Vector2.down * 1.35f;
+				UI.DrawText("AVAILABILITY", theme.FontBold, theme.FontSizeRegular * 0.7f,
+					scopeLabelPos, Anchor.TextCentreLeft, new Color(1, 1, 1, 0.72f));
+				Vector2 scopeTopLeft = scopeLabelPos + Vector2.down * 1.25f;
+				UI.WheelSelector(
+					ID_ChipScope,
+					ChipScopeOptions,
+					scopeTopLeft,
+					new Vector2(inputFieldSize.x, DrawSettings.ButtonHeight),
+					theme.OptionsWheel,
+					Anchor.TopLeft);
+
 				Vector2 buttonTopLeft = UI.PrevBounds.BottomLeft + Vector2.down * (DrawSettings.DefaultButtonSpacing * 2);
 				bool renaming = Project.ActiveProject.ChipHasBeenSavedBefore &&
 				                !string.Equals(inputFieldState.text, Project.ActiveProject.ViewedChip.LastSavedDescription.Name, StringComparison.Ordinal);
@@ -110,6 +133,14 @@ namespace DLS.Graphics
 				else if (buttonIndex == SaveAsButtonIndex)
 				{
 					Save(Project.SaveMode.SaveAs);
+				}
+
+				if (!string.IsNullOrEmpty(saveErrorMessage))
+				{
+					Vector2 errorPos = UI.PrevBounds.BottomLeft + Vector2.down * 1.2f;
+					string formatted = UI.LineBreakByCharCount(saveErrorMessage, 45);
+					UI.DrawText(formatted, theme.FontRegular, theme.FontSizeRegular * 0.68f,
+						errorPos, Anchor.TopLeft, new Color(1f, 0.45f, 0.4f));
 				}
 
 				Bounds2D uiBounds = UI.GetCurrentBoundsScope();
@@ -161,6 +192,18 @@ namespace DLS.Graphics
 			bool canSave = IsValidSaveName(newName);
 
 			topLeft = UI.PrevBounds.BottomLeft + Vector2.down * 0.8f;
+			UI.DrawText("AVAILABILITY", theme.FontBold, theme.FontSizeRegular * 0.68f,
+				topLeft + new Vector2(0.2f, -0.9f), Anchor.TextCentreLeft, new Color(1, 1, 1, 0.72f));
+			float scopeWidth = Mathf.Min(25f, width * 0.48f);
+			UI.WheelSelector(
+				ID_ChipScope,
+				ChipScopeOptions,
+				new Vector2(topLeft.x + width, topLeft.y),
+				new Vector2(scopeWidth, 4.3f),
+				theme.OptionsWheel,
+				Anchor.TopRight);
+
+			topLeft.y -= 5.1f;
 			float gap = 0.5f;
 			float buttonHeight = MobileInputBridge.KeyboardVisible ? 4.8f : 5.5f;
 
@@ -212,11 +255,17 @@ namespace DLS.Graphics
 			topLeft.y -= buttonHeight + gap;
 			if (!MobileInputBridge.KeyboardVisible)
 			{
-				string hint = Project.ActiveProject.ChipHasBeenSavedBefore
-					? "Change the name to rename or save a copy."
-					: "Choose a name, optionally customize the chip, then save.";
+				string hint = SaveGlobally
+					? "One shared copy will be available in every project."
+					: "This copy is stored only in the current project.";
 				UI.DrawText(hint, theme.FontRegular, theme.FontSizeRegular * 0.76f,
 					topLeft + new Vector2(0.2f, -1.1f), Anchor.TextCentreLeft, RewiredUI.SecondaryText);
+				if (!string.IsNullOrEmpty(saveErrorMessage))
+				{
+					UI.DrawText(UI.LineBreakByCharCount(saveErrorMessage, 70), theme.FontRegular,
+						theme.FontSizeRegular * 0.68f, topLeft + new Vector2(0.2f, -3.0f),
+						Anchor.TopLeft, new Color(1f, 0.45f, 0.4f));
+				}
 			}
 
 			if (KeyboardShortcuts.CancelShortcutTriggered)
@@ -296,10 +345,19 @@ namespace DLS.Graphics
 		}
 
 
+		static bool SaveGlobally => UI.GetWheelSelectorState(ID_ChipScope).index == 1;
+
 		static void Save(Project.SaveMode mode)
 		{
-			Project.ActiveProject.SaveFromDescription(ActiveCustomizeDescription, mode);
-			CloseMenu();
+			if (Project.ActiveProject.TrySaveFromDescription(
+				    ActiveCustomizeDescription,
+				    mode,
+				    SaveGlobally,
+				    out string error))
+			{
+				CloseMenu();
+			}
+			else saveErrorMessage = error;
 		}
 
 		static void Cancel()
@@ -317,6 +375,7 @@ namespace DLS.Graphics
 		{
 			ActiveCustomizeChip = null;
 			CustomizeStateBeforeEnteringCustomizeMenu = null;
+			saveErrorMessage = string.Empty;
 		}
 
 		static Color RandomInitialColour()

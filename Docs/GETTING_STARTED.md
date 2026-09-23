@@ -64,6 +64,15 @@ Build the source in RHDL Studio to generate an ordinary Rewired circuit.
 
 For syntax, components, buses and structural wiring, read [RHDL_GUIDE.md](RHDL_GUIDE.md).
 
+## Global custom chips
+
+The save dialog has an `AVAILABILITY` selector:
+
+- `THIS PROJECT` stores the custom chip only in the open project.
+- `ALL PROJECTS` stores one shared copy and makes it available in every project.
+
+A global chip may use built-in chips and other global chips. Make custom dependencies global first. Rewired blocks conflicting global names and blocks moving a shared chip back to one project while another project still depends on it.
+
 ## 5. Try the RAM example
 
 `Examples/RHDL/Memory/00_RAM4x4.rhdl` implements four 4-bit words using normal registers.
