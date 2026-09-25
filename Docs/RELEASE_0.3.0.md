@@ -56,11 +56,12 @@ The repository intentionally keeps the current example set compact:
 
 CPU4 is the largest processor example and uses a 4-bit datapath.
 
-## Compatibility
+## Project independence
 
 Rewired is derived from Sebastian Lague's Digital Logic Sim but is maintained as an independent simulator.
 
-Project/file-format compatibility is useful and generally intended, but exact traversal-order, race-condition and timing-dependent behaviour is not guaranteed to match the original runtime.
+Compatibility with the original simulation engine is not a project goal. Rewired's deterministic semantics, correctness, performance and architecture take priority over legacy traversal order, race outcomes or timing quirks.
+
 
 ## Downloads
 

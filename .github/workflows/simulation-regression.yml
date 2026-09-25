@@ -2,7 +2,7 @@ name: Full simulation and computer regression
 
 on:
   push:
-    branches: [ main, 'fix/**', 'perf/**', 'exp/**' ]
+    branches: [ main, 'fix/**', 'perf/**', 'exp/**', 'feature/**' ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -20,8 +20,56 @@ jobs:
       - name: Run deterministic propagation stress suite
         run: python3 Tools/SimulationRegression/regression.py
 
+      - name: Run Rewired semantic regression suite
+        run: python3 Tools/CompatibilityRegression/regression.py
+
       - name: Run 8-bit computer behavioral suite
         run: python3 Tools/ComputerRegression/regression.py
 
       - name: Run whole-program regression suite
         run: python3 Tools/ProgramRegression/regression.py
+
+  live-engine-regression:
+    name: Unity live-engine regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify Unity CI secrets
+        shell: bash
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          missing=0
+          for name in UNITY_LICENSE UNITY_EMAIL UNITY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing GitHub Actions secret: $name"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-rewired-regression-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-compatibility-
+            Library-StandaloneLinux64-
+
+      - name: Compile project and run live semantic self-test
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          REWIRED_RUN_COMPATIBILITY: "1"
+        with:
+          unityVersion: auto
+          targetPlatform: StandaloneLinux64
+          buildName: RewiredRegressionCheck
+          buildsPath: regression-build
