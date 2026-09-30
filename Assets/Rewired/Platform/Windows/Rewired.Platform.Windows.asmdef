@@ -1,0 +1,19 @@
+{
+  "name": "Rewired.Platform.Windows",
+  "rootNamespace": "Rewired.Platform.Windows",
+  "references": [
+    "Rewired.Core"
+  ],
+  "includePlatforms": [
+    "Editor",
+    "WindowsStandalone64"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

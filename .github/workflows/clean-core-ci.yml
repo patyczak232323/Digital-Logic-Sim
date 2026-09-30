@@ -1,0 +1,25 @@
+name: Clean core CI
+
+on:
+  push:
+    branches:
+      - rewrite/clean-architecture
+  pull_request:
+    paths:
+      - "Assets/Rewired/Core/**"
+      - "Assets/Rewired/Platform/Windows/WindowsComEndpoint.cs"
+      - "tests/**"
+      - ".github/workflows/clean-core-ci.yml"
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Run core tests
+        run: dotnet run --project tests/Rewired.Core.Tests/Rewired.Core.Tests.csproj
+      - name: Compile Windows COM transport
+        run: dotnet build tests/Rewired.Platform.Windows.Compile/Rewired.Platform.Windows.Compile.csproj --configuration Release
