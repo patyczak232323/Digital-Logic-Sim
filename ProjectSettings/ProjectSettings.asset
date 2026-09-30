@@ -16,7 +16,7 @@ PlayerSettings:
   resizableWindow: 1
   usePlayerLog: 1
   scriptingBackend:
-    Standalone: 1
+    Standalone: 0
   il2cppCompilerConfiguration:
     Standalone: 0
   apiCompatibilityLevelPerPlatform:
