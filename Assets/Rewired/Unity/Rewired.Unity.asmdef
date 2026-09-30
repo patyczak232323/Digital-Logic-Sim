@@ -1,0 +1,16 @@
+{
+  "name": "Rewired.Unity",
+  "rootNamespace": "Rewired.Unity",
+  "references": [
+    "Rewired.Core"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

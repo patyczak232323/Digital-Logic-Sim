@@ -1,223 +1,83 @@
-# Rewired — Digital Logic Simulator
+# Rewired Next
 
-**Rewired** is an open-source **digital logic simulator and logic gate circuit simulator** for building and testing digital circuits, CPUs, registers, memory and custom chips. It includes a high-performance simulation runtime, a graphical editor and **RHDL**, a small hardware description language for generating circuits from source.
+Rewired Next is a from-scratch digital logic simulator architecture. The rewrite keeps the project name and product goals, but no simulator, editor, UI, save-system, or runtime source file from the previous implementation is present in this branch.
 
-Rewired is based on Sebastian Lague's [Digital Logic Sim](https://github.com/SebLague/Digital-Logic-Sim), but uses its own simulation engine and should be treated as an independent simulator rather than a drop-in compatible replacement.
+The current branch is an architectural foundation, not yet a replacement release.
 
-[![Latest Release](https://img.shields.io/github/v/release/patyczak232323/Digital-Logic-Sim?label=release)](https://github.com/patyczak232323/Digital-Logic-Sim/releases/latest)
-[![Regression](https://github.com/patyczak232323/Digital-Logic-Sim/actions/workflows/simulation-regression.yml/badge.svg)](https://github.com/patyczak232323/Digital-Logic-Sim/actions/workflows/simulation-regression.yml)
-[![License](https://img.shields.io/github/license/patyczak232323/Digital-Logic-Sim)](LICENSE)
+## Current milestone
 
-## What you can build
+Implemented:
 
-Rewired is intended for learning and experimenting with **digital electronics, Boolean logic, computer architecture and CPU design**.
+- Unity 6 project shell
+- engine-independent core assembly
+- deterministic settle/tick/settle simulation cycle
+- width-checked digital signals
+- NAND primitive
+- byte-oriented serial adapter
+- Windows COM transport using Win32 directly
+- 256-byte receive and transmit queues
+- edge-triggered TX/RX handshake
+- tests that run without Unity
+- CI for the core and Windows transport compilation
 
-You can build:
+Still to rebuild:
 
-- logic gates and combinational circuits
-- multiplexers, adders and ALUs
-- latches, flip-flops and registers
-- counters and state machines
-- RAM and other gate-level memory structures
-- custom reusable chips
-- small CPUs and complete computer architectures
-- source-generated circuits with RHDL
+- circuit graph and wires
+- graphical editor
+- project persistence
+- reusable custom chips
+- RHDL
+- diagnostics and waveform viewer
+- performance compilation and LUT cache
+- Android UI
 
-The repository includes a compact example progression ending with a **4-bit CPU** and a separate **4×4-bit RAM** example.
+## Repository layout
 
-## Main features
+- Assets/Rewired/Core — pure C# simulation domain; no Unity dependency
+- Assets/Rewired/Platform — operating-system adapters
+- Assets/Rewired/Unity — Unity lifecycle integration
+- tests — fast tests and platform compile checks
+- Docs — architecture and protocol documentation
 
-- graphical digital circuit editor
-- deterministic event-driven simulation
-- compiled circuit/netlist topology
-- dirty-gate scheduling
-- fixed-point settling for signal propagation
-- support for deeply nested Custom Chips
-- global Custom Chips shared safely between projects
-- combinational JIT acceleration
-- feedback JIT for supported cyclic gate networks
-- persistent FULL LUT cache for suitable combinational circuits
-- simulation diagnostics and profiling
-- waveform capture and deterministic replay
-- non-convergence diagnostics
-- **RHDL v0.6** hardware description language
-- Windows x64 and Linux x86_64 release builds
+Dependencies point inward:
 
-## Download
+    Unity/UI -> application services -> core <- platform adapters
 
-The latest prebuilt version is available in **GitHub Releases**:
+The core never opens files, COM ports, windows, or Unity objects directly.
 
-**[Download the latest Rewired release](https://github.com/patyczak232323/Digital-Logic-Sim/releases/latest)**
+## Byte serial adapter
 
-Release packages:
+The serial adapter exposes these circuit pins:
 
-- Windows x64: `DLSRewired-Windows-x64.zip`
-- Linux x86_64: `DLSRewired-Linux-x86_64.zip`
+| Pin | Direction | Width | Meaning |
+| --- | --- | ---: | --- |
+| TX DATA | input | 8 | byte to transmit |
+| TX SEND | input | 1 | rising edge queues TX DATA |
+| TX READY | output | 1 | transport can accept a byte |
+| RX DATA | output | 8 | current received byte |
+| RX VALID | output | 1 | RX DATA is valid |
+| RX READ | input | 1 | rising edge acknowledges RX DATA |
+| RESET | input | 1 | clears adapter and COM queues |
+| CONNECTED | output | 1 | COM endpoint is open |
 
-On Linux, after extracting the archive, the executable may need permission:
+For PuTTY, create a virtual COM pair such as COM10 <-> COM11. Rewired opens COM10 and PuTTY opens COM11. Both applications must not open the same side of the pair.
 
-```bash
-chmod +x DLSRewired.x86_64
-./DLSRewired.x86_64
-```
+Recommended PuTTY configuration is 115200 baud, 8 data bits, no parity, one stop bit, and no flow control.
 
-For a first project, see **[Getting Started](Docs/GETTING_STARTED.md)**.
-
-## RHDL — hardware description language
-
-Rewired includes **RHDL Studio**, a source-driven circuit generator. RHDL describes hardware concurrently and lowers into normal Rewired components and wires; it does not use a separate simulation runtime.
-
-Example:
-
-```text
-circuit Adder
-    input A: 8
-    input B: 8
-    output Y: 8
-
-    Y = A + B
-end
-```
-
-RHDL supports:
-
-- 1, 4 and 8-bit signals
-- Boolean logic: `and`, `or`, `xor`, `not`
-- arithmetic and comparisons
-- bit indexing and slicing
-- `join(...)`
-- `choose(...)` multiplexing
-- reusable component instances
-- explicit structural `connect` wiring
-- feedback/stateful circuits through ordinary Rewired topology
-
-See the **[RHDL v0.6 Guide](Docs/RHDL_GUIDE.md)**.
-
-## Examples
-
-The curated RHDL examples are intentionally small and easy to follow:
-
-```text
-AND
- └─ Half Adder
-     └─ Full Adder
-         └─ MUX4
-             └─ D Flip-Flop
-                 └─ 4-bit Register
-                     ├─ RAM 4×4
-                     └─ CPU4
-```
-
-Files are under **[Examples/RHDL](Examples/RHDL/)**.
-
-### CPU4
-
-CPU4 is a simple educational processor example with:
-
-- 4-bit accumulator
-- 4-bit program counter
-- 4-bit output port
-- 16 program addresses
-- fixed 8-bit instructions
-- arithmetic, logic, jumps, output and halt
-
-See **[CPU4 documentation](Examples/RHDL/CPU4/README.md)**.
-
-### RAM4x4
-
-The memory example contains four 4-bit words built from normal RHDL registers rather than a hidden RAM primitive.
-
-See **[RAM4x4 documentation](Examples/RHDL/Memory/README.md)**.
-
-## Simulation engine
-
-Rewired's runtime is organized around a single integration boundary:
-
-```text
-Editor / Project / UI
-        |
-        v
-   RewiredEngine
-        |
-        +-- deterministic runtime
-        +-- simulation graph/backend
-        +-- JIT / feedback JIT
-        +-- FULL LUT cache
-        +-- diagnostics / replay / waveform
-```
-
-The goal is predictable simulation semantics while still allowing acceleration of suitable circuit regions.
-
-More detail:
-
-- **[Simulation Diagnostics](Docs/SIMULATION_DIAGNOSTICS.md)**
-- **[Native JIT](Docs/NATIVE_JIT.md)**
-- **[Persistent FULL LUT Cache](Docs/PERSISTENT_FULL_LUT_CACHE.md)**
-
-## Compatibility with Digital Logic Sim
-
-Rewired keeps much of the original Digital Logic Sim editor workflow, project structure and visual language, so many existing projects can be opened.
-
-However, exact simulation behaviour is **not guaranteed to match** Digital Logic Sim.
-
-In particular, circuits that depend on:
-
-- traversal order
-- race conditions
-- propagation timing quirks
-- feedback initialization side effects
-
-may behave differently under Rewired's deterministic simulation model.
-
-Rewired is therefore best considered a separate **digital circuit simulator** derived from the original project.
-
-## Documentation
-
-Start here:
-
-- **[Documentation index](Docs/README.md)**
-- **[Getting Started](Docs/GETTING_STARTED.md)**
-- **[RHDL Guide](Docs/RHDL_GUIDE.md)**
-- **[Simulation Diagnostics](Docs/SIMULATION_DIAGNOSTICS.md)**
-- **[Native JIT](Docs/NATIVE_JIT.md)**
-- **[Persistent FULL LUT Cache](Docs/PERSISTENT_FULL_LUT_CACHE.md)**
-- **[Rewired v0.3.0 release notes](Docs/RELEASE_0.3.0.md)**
+See Docs/SERIAL_COM.md.
 
 ## Development
 
-Current version: **Rewired v0.3.0**
+Required Unity version:
 
-The Unity version is defined in `ProjectSettings/ProjectVersion.txt`.
+    6000.0.46f1
 
-Clone:
+Run the core tests:
 
-```bash
-git clone https://github.com/patyczak232323/Digital-Logic-Sim.git
-cd Digital-Logic-Sim
-```
+    dotnet run --project tests/Rewired.Core.Tests/Rewired.Core.Tests.csproj
 
-The repository includes regression tooling for the simulation engine and computer-level behaviour.
+Compile-check the Windows COM implementation:
 
-Release builds are produced automatically by GitHub Actions when a version tag such as `v0.3.0` is pushed.
+    dotnet build tests/Rewired.Platform.Windows.Compile/Rewired.Platform.Windows.Compile.csproj
 
-## Project status
-
-Rewired is under active development. Complex stateful circuits and very large designs may still expose engine bugs or unsupported edge cases.
-
-Bug reports and reproducible test circuits are useful, especially for:
-
-- sequential logic
-- feedback networks
-- large nested chips
-- CPU designs
-- imported Digital Logic Sim projects
-
-## Credits
-
-Rewired is based on [Sebastian Lague's Digital Logic Sim](https://github.com/SebLague/Digital-Logic-Sim).
-
-The original project provides the foundation for much of the editor, project format and surrounding application code. Rewired develops a separate simulation runtime, diagnostics tooling, acceleration paths and RHDL authoring workflow on top of that foundation.
-
-## License
-
-Licensed under the **MIT License**. See [LICENSE](LICENSE).
+See Docs/ARCHITECTURE.md and Docs/MIGRATION.md before adding features.
