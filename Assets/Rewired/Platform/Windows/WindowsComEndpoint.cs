@@ -165,7 +165,9 @@ namespace Rewired.Platform.Windows
             SafeFileHandle current = handle;
             if (IsOpen && current != null && !current.IsInvalid && !current.IsClosed)
             {
-                PurgeComm(current, PurgeTxAbort | PurgeRxAbort | PurgeTxClear | PurgeRxClear);
+                // Do not use ABORT here: reset may run while the worker is blocked in ReadFile.
+                // Clearing queued driver bytes is sufficient and keeps the connection alive.
+                PurgeComm(current, PurgeTxClear | PurgeRxClear);
             }
         }
 
