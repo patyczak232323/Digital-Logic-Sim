@@ -165,122 +165,68 @@ namespace DLS.Graphics
 		{
 			MenuHelper.DrawBackgroundOverlay();
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
-			Rect safe = MobileUI.SafeRectUI;
-			float pad = 1.2f;
-			float width = safe.width - pad * 2f;
-			Vector2 topLeft = new(safe.xMin + pad, safe.yMax - 7.2f);
+			Rect safe = MobileUI.KeyboardAwareSafeRectUI;
+			bool keyboard = MobileInputBridge.KeyboardVisible;
+			float width = Mathf.Min(72f, safe.width - 3.2f);
+			float left = safe.center.x - width * 0.5f;
+			Vector2 topLeft = new(left, safe.yMax - (keyboard ? 0.8f : 8.4f));
+			if (!keyboard)
+				MobileUI.DrawLabel("Save chip", new Vector2(safe.xMin + 13.2f, safe.yMax - 3f), safe.width - 15f, 1.15f, Color.white, true);
 
-			UI.DrawText("SAVE CHIP", theme.FontBold, theme.FontSizeRegular * 1.1f,
-				topLeft + new Vector2(12.5f, -1f), Anchor.TextCentreLeft, Color.white);
-
-			topLeft.y -= 3.2f;
-			InputFieldTheme inputTheme = theme.ChipNameInputField;
-			InputFieldState inputFieldState = UI.InputField(
-				ID_ChipNameField,
-				inputTheme,
-				topLeft,
-				new Vector2(width, 6.3f),
-				"CHIP NAME",
-				Anchor.TopLeft,
-				1.2f,
-				chipNameValidator,
-				true);
-
-			string newName = inputFieldState.text;
+			float inputLeft = keyboard ? Mathf.Max(left, safe.xMin + 13.2f) : left;
+			InputFieldState field = UI.InputField(ID_ChipNameField, theme.ChipNameInputField,
+				new Vector2(inputLeft, topLeft.y), new Vector2(left + width - inputLeft, 5.6f),
+				"Chip name", Anchor.TopLeft, 1.2f, chipNameValidator, true);
+			string name = field.text;
+			UpdateCustomizationName(name);
 			bool renaming = Project.ActiveProject.ChipHasBeenSavedBefore &&
-			                !string.Equals(newName, Project.ActiveProject.ViewedChip.LastSavedDescription.Name, StringComparison.Ordinal);
-			bool canSave = IsValidSaveName(newName);
+				!string.Equals(name, Project.ActiveProject.ViewedChip.LastSavedDescription.Name, StringComparison.Ordinal);
+			bool canSave = IsValidSaveName(name);
+			topLeft.y -= 6.4f;
 
-			topLeft = UI.PrevBounds.BottomLeft + Vector2.down * 0.8f;
-			UI.DrawText("AVAILABILITY", theme.FontBold, theme.FontSizeRegular * 0.68f,
-				topLeft + new Vector2(0.2f, -0.9f), Anchor.TextCentreLeft, new Color(1, 1, 1, 0.72f));
-			float scopeWidth = Mathf.Min(25f, width * 0.48f);
-			UI.WheelSelector(
-				ID_ChipScope,
-				ChipScopeOptions,
-				new Vector2(topLeft.x + width, topLeft.y),
-				new Vector2(scopeWidth, 4.3f),
-				theme.OptionsWheel,
-				Anchor.TopRight);
-
-			topLeft.y -= 5.1f;
-			float gap = 0.5f;
-			float buttonHeight = MobileInputBridge.KeyboardVisible ? 4.8f : 5.5f;
-
-			if (renaming)
+			if (!keyboard)
 			{
-				float third = (width - gap * 2f) / 3f;
-				if (UI.Button("CUSTOMIZE", theme.MenuButtonTheme, topLeft, new Vector2(third, buttonHeight),
-					true, false, false, Anchor.TopLeft))
-				{
-					OpenCustomizationMenu();
-					return;
-				}
-
-				if (UI.Button("RENAME", theme.MainMenuButtonTheme,
-					topLeft + Vector2.right * (third + gap), new Vector2(third, buttonHeight),
-					canSave, false, false, Anchor.TopLeft))
-				{
-					Save(Project.SaveMode.Rename);
-					return;
-				}
-
-				if (UI.Button("SAVE AS", theme.MenuButtonTheme,
-					topLeft + Vector2.right * ((third + gap) * 2f), new Vector2(third, buttonHeight),
-					canSave, false, false, Anchor.TopLeft))
-				{
-					Save(Project.SaveMode.SaveAs);
-					return;
-				}
-			}
-			else
-			{
-				float half = (width - gap) / 2f;
-				if (UI.Button("CUSTOMIZE", theme.MenuButtonTheme, topLeft, new Vector2(half, buttonHeight),
-					true, false, false, Anchor.TopLeft))
-				{
-					OpenCustomizationMenu();
-					return;
-				}
-
-				if (UI.Button("SAVE", theme.MainMenuButtonTheme,
-					topLeft + Vector2.right * (half + gap), new Vector2(half, buttonHeight),
-					canSave, false, false, Anchor.TopLeft))
-				{
-					Save(Project.SaveMode.Normal);
-					return;
-				}
+				MobileUI.DrawLabel("Available in", topLeft, width, 0.85f);
+				topLeft.y -= 2.2f;
+				WheelSelectorState scope = UI.GetWheelSelectorState(ID_ChipScope);
+				float half = (width - 0.6f) / 2f;
+				if (UI.Button("THIS PROJECT", scope.index == 0 ? theme.ChipLibraryCollectionToggleOn : theme.MenuButtonTheme,
+					topLeft, new Vector2(half, 5.2f), true, false, false, Anchor.TopLeft)) scope.index = 0;
+				if (UI.Button("ALL PROJECTS", scope.index == 1 ? theme.ChipLibraryCollectionToggleOn : theme.MenuButtonTheme,
+					topLeft + Vector2.right * (half + 0.6f), new Vector2(half, 5.2f), true, false, false, Anchor.TopLeft)) scope.index = 1;
+				topLeft.y -= 6.2f;
 			}
 
-			topLeft.y -= buttonHeight + gap;
-			if (!MobileInputBridge.KeyboardVisible)
+			const float gap = 0.6f;
+			float h = keyboard ? 4.8f : 5.4f;
+			float buttonWidth = (width - gap * (renaming ? 2 : 1)) / (renaming ? 3 : 2);
+			if (UI.Button("CUSTOMIZE", theme.MenuButtonTheme, topLeft, new Vector2(buttonWidth, h), true, false, false, Anchor.TopLeft))
 			{
-				string hint = SaveGlobally
-					? "One shared copy will be available in every project."
-					: "This copy is stored only in the current project.";
-				UI.DrawText(hint, theme.FontRegular, theme.FontSizeRegular * 0.76f,
-					topLeft + new Vector2(0.2f, -1.1f), Anchor.TextCentreLeft, RewiredUI.SecondaryText);
-				if (!string.IsNullOrEmpty(saveErrorMessage))
-				{
-					UI.DrawText(UI.LineBreakByCharCount(saveErrorMessage, 70), theme.FontRegular,
-						theme.FontSizeRegular * 0.68f, topLeft + new Vector2(0.2f, -3.0f),
-						Anchor.TopLeft, new Color(1f, 0.45f, 0.4f));
-				}
+				MobileInputBridge.DismissKeyboard();
+				OpenCustomizationMenu();
+				return;
 			}
-
-			if (KeyboardShortcuts.CancelShortcutTriggered)
+			if (UI.Button(renaming ? "RENAME" : "SAVE CHIP", theme.MainMenuButtonTheme,
+				topLeft + Vector2.right * (buttonWidth + gap), new Vector2(buttonWidth, h), canSave, false, false, Anchor.TopLeft))
 			{
-				Cancel();
+				Save(renaming ? Project.SaveMode.Rename : Project.SaveMode.Normal);
+				return;
+			}
+			if (renaming && UI.Button("SAVE AS", theme.MenuButtonTheme,
+				topLeft + Vector2.right * ((buttonWidth + gap) * 2f), new Vector2(buttonWidth, h), canSave, false, false, Anchor.TopLeft))
+			{
+				Save(Project.SaveMode.SaveAs);
 				return;
 			}
 
-			if (!renaming && canSave && KeyboardShortcuts.ConfirmShortcutTriggered)
+			topLeft.y -= h + 1.2f;
+			if (!keyboard)
 			{
-				Save(Project.SaveMode.Normal);
-				return;
+				string hint = !string.IsNullOrEmpty(saveErrorMessage) ? saveErrorMessage : SaveGlobally ? "One shared chip for all your projects." : "Saved in this project.";
+				MobileUI.DrawParagraph(hint, topLeft, width, 0.85f, string.IsNullOrEmpty(saveErrorMessage) ? RewiredUI.SecondaryText : new Color(1f, 0.45f, 0.4f));
 			}
-
-			UpdateCustomizationName(newName);
+			if (KeyboardShortcuts.CancelShortcutTriggered) Cancel();
+			else if (!renaming && canSave && KeyboardShortcuts.ConfirmShortcutTriggered) Save(Project.SaveMode.Normal);
 		}
 
 		static void UpdateCustomizationName(string newName)
@@ -357,7 +303,11 @@ namespace DLS.Graphics
 			{
 				CloseMenu();
 			}
-			else saveErrorMessage = error;
+			else
+			{
+				saveErrorMessage = error;
+				if (MobileUI.IsActive) MobileInputBridge.DismissKeyboard();
+			}
 		}
 
 		static void Cancel()
@@ -367,6 +317,7 @@ namespace DLS.Graphics
 
 		static void CloseMenu()
 		{
+			if (MobileUI.IsActive) MobileInputBridge.DismissKeyboard();
 			ActiveCustomizeChip = null;
 			UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
 		}

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using DLS.Description;
 using DLS.Game;
+using Seb.Helpers.InputHandling;
 using Seb.Helpers;
 using Seb.Types;
 using Seb.Vis;
@@ -95,87 +96,57 @@ namespace DLS.Graphics
 			MenuHelper.DrawBackgroundOverlay();
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
 			Rect safe = MobileUI.KeyboardAwareSafeRectUI;
+			float width = Mathf.Min(46f, safe.width * 0.52f);
+			Vector2 topLeft = new(safe.xMax - width - 1.2f, safe.yMax - 0.8f);
+			float height = Mathf.Max(1f, safe.height - 1.6f);
+			UI.DrawRoundedPanel(topLeft, new Vector2(width, height), 0.8f, RewiredUI.SurfaceRaised, Anchor.TopLeft);
+			Bounds2D panel = UI.PrevBounds;
 
-			float pad = 1.2f;
-			float top = safe.yMax - 6.8f;
-			float width = safe.width - pad * 2f;
-			Vector2 topLeft = new(safe.xMin + pad, top);
+			MobileUI.DrawLabel("Add chip", topLeft + new Vector2(1.2f, -2.5f), width - 14f, 1.2f, Color.white, true);
+			if (UI.Button("CLOSE", theme.MenuButtonTheme, panel.TopRight + new Vector2(-0.8f, -0.6f), new Vector2(10.5f, 4.8f), true, false, false, Anchor.TopRight))
+			{
+				MobileInputBridge.DismissKeyboard();
+				UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
+				return;
+			}
 
-			UI.DrawText("ADD CHIP", theme.FontBold, theme.FontSizeRegular * 1.05f,
-				topLeft + new Vector2(12.5f, -1.2f), Anchor.TextCentreLeft, Color.white);
-
-			topLeft.y -= 3.1f;
-			InputFieldTheme inputTheme = theme.ChipNameInputField;
-			UI.InputField(ID_SearchInput, inputTheme, topLeft, new Vector2(width, 5.6f),
-				"SEARCH CHIPS", Anchor.TopLeft, 1.2f, searchStringValidator, true);
-
-			topLeft = UI.PrevBounds.BottomLeft + Vector2.down * 0.8f;
-			float bottom = safe.yMin + 1.0f;
-			float listHeight = Mathf.Max(1f, topLeft.y - bottom);
-			ScrollBarState scrollState = UI.DrawScrollView(
-				ID_Scrollbar,
-				topLeft,
-				new Vector2(width, listHeight),
-				0.5f,
-				Anchor.TopLeft,
-				theme.ScrollTheme,
-				drawChipSearchEntryMobile,
-				filteredChipNames.Length);
-			isDraggingScrollbar = scrollState.isDragging;
-
+			topLeft += new Vector2(1.2f, -6f);
+			float contentWidth = width - 2.4f;
+			UI.InputField(ID_SearchInput, theme.ChipNameInputField, topLeft, new Vector2(contentWidth, 5.2f),
+				"Search chips", Anchor.TopLeft, 1f, searchStringValidator, false);
+			topLeft = UI.PrevBounds.BottomLeft + Vector2.down * 1.2f;
+			float listHeight = Mathf.Max(1f, topLeft.y - safe.yMin - 1.8f);
+			if (filteredChipNames.Length == 0)
+				MobileUI.DrawParagraph("No matching chips. Try a different name.", topLeft, contentWidth, 0.95f);
+			else
+			{
+				ScrollBarState scroll = UI.DrawScrollView(ID_Scrollbar, topLeft, new Vector2(contentWidth, listHeight),
+					0.65f, Anchor.TopLeft, theme.ScrollTheme, drawChipSearchEntryMobile, filteredChipNames.Length);
+				isDraggingScrollbar = scroll.isDragging;
+			}
 			HandleMobileShortcuts();
 		}
 
 		static void DrawChipSearchEntryMobile(Vector2 topLeft, float width, int index, bool isLayoutPass)
 		{
-			const float rowHeight = 5.6f;
-			Bounds2D entryBounds = Bounds2D.CreateFromTopLeftAndSize(topLeft, new Vector2(width, rowHeight));
+			const float height = 6.2f;
+			Bounds2D bounds = Bounds2D.CreateFromTopLeftAndSize(topLeft, new Vector2(width, height));
 			if (isLayoutPass)
 			{
-				UI.OverridePreviousBounds(entryBounds);
+				UI.OverridePreviousBounds(bounds);
 				return;
 			}
-
 			string chipName = filteredChipNames[index];
 			Project project = Project.ActiveProject;
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
-
-			const float gap = 0.35f;
-			float nameWidth = width * 0.46f;
-			float actionWidth = (width - nameWidth - gap * 3f) / 3f;
-
-			string displayName = project.chipLibrary.IsGlobalChip(chipName) ? chipName + "  [GLOBAL]" : chipName;
-			UI.Button(displayName, theme.ChipLibraryChipToggleOn, topLeft,
-				new Vector2(nameWidth, rowHeight), true, false, false, Anchor.TopLeft, true, 0.8f, true);
-
 			bool canPlace = project.ViewedChip.CanAddSubchip(chipName);
-			bool canOpen = !project.chipLibrary.IsBuiltinChip(chipName);
-			bool starred = project.description.IsStarred(chipName, false);
-			float x = topLeft.x + nameWidth + gap;
-
-			if (UI.Button("USE", theme.MainMenuButtonTheme, new Vector2(x, topLeft.y), new Vector2(actionWidth, rowHeight),
-				canPlace, false, false, Anchor.TopLeft))
-			{
-				UseChip(chipName);
-				return;
-			}
-			x += actionWidth + gap;
-
-			if (UI.Button("OPEN", theme.MenuButtonTheme, new Vector2(x, topLeft.y), new Vector2(actionWidth, rowHeight),
-				canOpen, false, false, Anchor.TopLeft))
-			{
-				OpenChip(chipName);
-				return;
-			}
-			x += actionWidth + gap;
-
-			if (UI.Button(starred ? "UNSTAR" : "STAR", theme.MenuButtonTheme, new Vector2(x, topLeft.y), new Vector2(actionWidth, rowHeight),
-				true, false, false, Anchor.TopLeft))
-			{
-				project.SetStarred(chipName, !starred, false);
-			}
-
-			UI.OverridePreviousBounds(entryBounds);
+			bool pressed = UI.Button(string.Empty, theme.MenuButtonTheme, topLeft, new Vector2(width, height), canPlace, false, false, Anchor.TopLeft);
+			MobileUI.DrawLabel(chipName, bounds.TopLeft + new Vector2(1f, -1.85f), width - 5f, 1.05f, canPlace ? Color.white : RewiredUI.DimText, true);
+			string kind = !canPlace ? "Already used in this hierarchy" : project.chipLibrary.IsBuiltinChip(chipName) ? "Built-in chip" : project.chipLibrary.IsGlobalChip(chipName) ? "Shared chip" : "Project chip";
+			MobileUI.DrawLabel(kind, bounds.BottomLeft + new Vector2(1f, 1.55f), width - 5f, 0.72f);
+			UI.DrawText("+", theme.FontBold, 2.3f, bounds.CentreRight + Vector2.left * 1.5f, Anchor.Centre, canPlace ? RewiredUI.Accent : RewiredUI.DimText);
+			UI.OverridePreviousBounds(bounds);
+			if (pressed) UseChip(chipName);
 		}
 
 		static void HandleMobileShortcuts()
@@ -313,6 +284,7 @@ namespace DLS.Graphics
 
 		static void UseChip(string chipName)
 		{
+			if (MobileUI.IsActive) MobileInputBridge.DismissKeyboard();
 			AddRecentChip(chipName);
 			Project.ActiveProject.controller.StartPlacing(chipName);
 			UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);

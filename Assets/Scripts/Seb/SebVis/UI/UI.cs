@@ -233,6 +233,7 @@ namespace Seb.Vis.UI
 					contentBounds = DrawContent(false, buttonTopLeft, drawContentFunc, scrollArea);
 
 					float maxScrollOffsetY = Mathf.Max(0, contentBounds.Height - scrollArea.Height);
+					UpdateTouchScroll(scrollState, scrollArea);
 					scrollState.scrollY = Mathf.Max(0, Mathf.Min(maxScrollOffsetY, scrollState.scrollY));
 					DrawContent(true, buttonTopLeft + Vector2.up * scrollState.scrollY, drawContentFunc, scrollArea);
 				}
@@ -265,6 +266,26 @@ namespace Seb.Vis.UI
 					return GetCurrentBoundsScope();
 				}
 			}
+		}
+
+		static void UpdateTouchScroll(ScrollBarState state, Bounds2D scrollArea)
+		{
+			if (!MobileInputBridge.RuntimeEnabled) return;
+			(Vector2 centre, Vector2 size) ss = UIToScreenSpace(scrollArea.Centre, scrollArea.Size);
+			if (InputHelper.IsMouseDownThisFrame(MouseButton.Left) &&
+			    InputHelper.MouseInBounds_ScreenSpace(ss.centre, ss.size))
+			{
+				state.contentTouchActive = true;
+				state.contentTouchStart = InputHelper.MousePos;
+				state.contentScrollStart = state.scrollY;
+			}
+			if (!state.contentTouchActive) return;
+			if (!InputHelper.IsMouseHeld(MouseButton.Left))
+			{
+				state.contentTouchActive = false;
+				return;
+			}
+			state.scrollY = state.contentScrollStart + (InputHelper.MousePos.y - state.contentTouchStart.y) * invScale;
 		}
 
 		public static ScrollBarState DrawScrollbar(Bounds2D scrollViewArea, Bounds2D scrollbarArea, float contentHeight, ScrollViewTheme theme, UIHandle id)
@@ -349,6 +370,22 @@ namespace Seb.Vis.UI
 		}
 
 		public static Vector2 CalculateTextSize(ReadOnlySpan<char> text, float fontSize, FontType font) => Draw.CalculateTextBoundsSize(text, fontSize, font);
+
+		public static string TruncateText(string text, float width, float fontSize, FontType font)
+		{
+			if (string.IsNullOrEmpty(text) || CalculateTextSize(text, fontSize, font).x <= width) return text;
+			const string suffix = "...";
+			if (CalculateTextSize(suffix, fontSize, font).x > width) return string.Empty;
+			int low = 0;
+			int high = text.Length;
+			while (low < high)
+			{
+				int mid = (low + high + 1) / 2;
+				if (CalculateTextSize(text.Substring(0, mid) + suffix, fontSize, font).x <= width) low = mid;
+				else high = mid - 1;
+			}
+			return text.Substring(0, low) + suffix;
+		}
 
 		public static InputFieldState InputField(UIHandle id, InputFieldTheme theme, Vector2 pos, Vector2 size, string defaultText, Anchor anchor, float textPad, Func<string, bool> validation = null, bool forceFocus = false)
 		{
@@ -611,6 +648,25 @@ namespace Seb.Vis.UI
 			OnFinishedDrawingUIElement(centre, size);
 		}
 
+		public static void DrawRoundedPanel(Vector2 pos, Vector2 size, float radius, Color col, Anchor anchor = Anchor.Centre)
+		{
+			Vector2 centre = CalculateCentre(pos, size, anchor);
+			radius = Mathf.Clamp(radius, 0, Mathf.Min(size.x, size.y) * 0.5f);
+			if (IsRendering)
+			{
+				(Vector2 centre, Vector2 size) ss = UIToScreenSpace(centre, size);
+				float r = radius * scale;
+				Draw.Quad(ss.centre, new Vector2(ss.size.x - r * 2, ss.size.y), col);
+				Draw.Quad(ss.centre, new Vector2(ss.size.x, ss.size.y - r * 2), col);
+				Vector2 corner = ss.size * 0.5f - Vector2.one * r;
+				Draw.Point(ss.centre + new Vector2(corner.x, corner.y), r, col);
+				Draw.Point(ss.centre + new Vector2(-corner.x, corner.y), r, col);
+				Draw.Point(ss.centre + new Vector2(corner.x, -corner.y), r, col);
+				Draw.Point(ss.centre - corner, r, col);
+			}
+			OnFinishedDrawingUIElement(centre, size);
+		}
+
 		public static void DrawLine(Vector2 a, Vector2 b, float thickness, Color col)
 		{
 			if (IsRendering)
@@ -773,21 +829,27 @@ namespace Seb.Vis.UI
 
 				// --- Handle interaction ---
 				bool mouseInsideMask = Draw.IsPointInsideActiveMask(InputHelper.MousePos) && !ignoreInputs;
-				bool mouseOver = mouseInsideMask && PointerInTouchableBounds(ss.centre, ss.size, expandTouchTarget);
+				bool mobile = MobileInputBridge.RuntimeEnabled;
+				bool mouseOver = mouseInsideMask && PointerInTouchableBounds(ss.centre, ss.size, expandTouchTarget && !mobile);
 				bool mouseIsDown = InputHelper.IsMouseHeld(MouseButton.Left);
 
 				if (mouseOver && enabled)
 				{
-					buttonPressedThisFrame = InputHelper.IsMouseDownThisFrame(MouseButton.Left);
+					buttonPressedThisFrame = mobile
+						? InputHelper.IsMouseUpThisFrame(MouseButton.Left) && MobileInputBridge.TryConsumeUITap(ss.centre, ss.size)
+						: InputHelper.IsMouseDownThisFrame(MouseButton.Left);
 				}
 
 				// --- Draw ---
 				Color buttonCol = theme.buttonCols.GetCol(mouseOver, mouseIsDown, enabled);
-				Draw.Quad(ss.centre, ss.size, buttonCol);
+				if (mobile) DrawRoundedPanel(centre, size, 0.65f, buttonCol);
+				else Draw.Quad(ss.centre, ss.size, buttonCol);
 
 				Color textCol = theme.textCols.GetCol(mouseOver, mouseIsDown, enabled);
 				if (!string.IsNullOrEmpty(text))
 				{
+					if (mobile && !fitTextX)
+						text = TruncateText(text, Mathf.Max(0, size.x - (leftAlignText ? textOffsetX + 0.8f : 1.6f)), theme.fontSize, theme.font);
 					Anchor textAnchor = leftAlignText ? Anchor.TextCentreLeft : Anchor.TextFirstLineCentre;
 					Vector2 textPos = leftAlignText ? ss.centre + Vector2.right * (-ss.size.x / 2 + textOffsetX * scale) : ss.centre + Vector2.right * (textOffsetX * scale);
 					Draw.Text(theme.font, text, fontSize_ss, textPos, textAnchor, textCol);

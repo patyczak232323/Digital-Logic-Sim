@@ -117,6 +117,7 @@ namespace DLS.Game
 		{
 			if (inputSource == null) return;
 			inputSource.PrepareFrame();
+			UpdateUITap();
 			UpdateSystemKeyboard();
 			RefreshKeyboardScreenRect();
 
@@ -154,6 +155,24 @@ namespace DLS.Game
 			if (!MobileUI.PanMode && !edgeSwipeTracking) UpdateLongPress();
 			else CancelLongPress();
 			UpdateTwoFingerGesture();
+		}
+
+		void UpdateUITap()
+		{
+			if (Input.touchCount != 1)
+			{
+				MobileInputBridge.CancelPointer();
+				return;
+			}
+			Touch touch = Input.GetTouch(0);
+			float tolerance = Mathf.Max(12f, Mathf.Min(Screen.width, Screen.height) * 0.025f);
+			switch (touch.phase)
+			{
+				case TouchPhase.Began: MobileInputBridge.BeginPointer(touch.position); break;
+				case TouchPhase.Moved: MobileInputBridge.MovePointer(touch.position, tolerance); break;
+				case TouchPhase.Ended: MobileInputBridge.EndPointer(touch.position, tolerance); break;
+				case TouchPhase.Canceled: MobileInputBridge.CancelPointer(); break;
+			}
 		}
 
 

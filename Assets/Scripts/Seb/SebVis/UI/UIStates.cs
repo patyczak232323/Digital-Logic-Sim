@@ -14,6 +14,9 @@ namespace Seb.Vis.UI
 		public float dragScrollOffset;
 		public bool isDragging;
 		public float scrollY;
+		public bool contentTouchActive;
+		public Vector2 contentTouchStart;
+		public float contentScrollStart;
 	}
 
 	public struct SliderState

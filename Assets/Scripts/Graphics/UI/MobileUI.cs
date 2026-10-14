@@ -17,13 +17,13 @@ namespace DLS.Graphics
 	/// </summary>
 	public static class MobileUI
 	{
-		public const float TopBarHeight = 5.4f;
+		public const float TopBarHeight = 6.0f;
 		public const float DockHeight = 7.0f;
 
 		const string PrefPanDefault = "rewired.mobile.panDefault";
 		const string PrefTargetFps = "rewired.mobile.targetFps";
 
-		static readonly string[] DockLabels = { "PAN", "ADD", "SAVE", "LIBRARY", "MORE" };
+		static readonly string[] DockLabels = { "MOVE", "ADD CHIP", "SAVE", "TOOLS" };
 		static bool panMode;
 
 		public static bool IsActive => MobileInputBridge.RuntimeEnabled || Application.isMobilePlatform;
@@ -99,6 +99,22 @@ namespace DLS.Graphics
 			Application.targetFrameRate = fps;
 		}
 
+		public static void DrawLabel(string text, Vector2 pos, float width, float scale = 1f, Color? colour = null, bool bold = false)
+		{
+			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
+			FontType font = bold ? theme.FontBold : theme.FontRegular;
+			float size = theme.FontSizeRegular * scale;
+			UI.DrawText(UI.TruncateText(text, Mathf.Max(0, width), size, font), font, size, pos, Anchor.TextCentreLeft, colour ?? RewiredUI.SecondaryText);
+		}
+
+		public static void DrawParagraph(string text, Vector2 topLeft, float width, float scale = 0.85f, Color? colour = null)
+		{
+			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
+			float size = theme.FontSizeRegular * scale;
+			int chars = Mathf.Max(1, Mathf.FloorToInt(width / UI.CalculateTextSize("M", size, theme.FontRegular).x));
+			UI.DrawText(UI.LineBreakByCharCount(text, chars), theme.FontRegular, size, topLeft, Anchor.TopLeft, colour ?? RewiredUI.SecondaryText);
+		}
+
 		public static void Draw()
 		{
 			if (UIDrawer.ActiveMenu == UIDrawer.MenuType.MainMenu)
@@ -154,8 +170,11 @@ namespace DLS.Graphics
 		static void DrawProjectChrome(Project project)
 		{
 			Rect safe = SafeRectUI;
-			DrawTopBar(project, safe);
-			DrawDock(project, safe);
+			using (UI.BeginDisabledScope(UIDrawer.ActiveMenu == UIDrawer.MenuType.BottomBarMenuPopup))
+			{
+				DrawTopBar(project, safe);
+				DrawDock(project, safe);
+			}
 
 			if (UIDrawer.ActiveMenu == UIDrawer.MenuType.BottomBarMenuPopup)
 			{
@@ -166,34 +185,42 @@ namespace DLS.Graphics
 		static void DrawTopBar(Project project, Rect safe)
 		{
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
-			Vector2 topLeft = new(safe.xMin, safe.yMax);
-			UI.DrawPanel(topLeft, new Vector2(safe.width, TopBarHeight), theme.InfoBarCol, Anchor.TopLeft);
+			UI.DrawPanel(new Vector2(safe.xMin, safe.yMax), new Vector2(safe.width, TopBarHeight), RewiredUI.SurfaceRaised, Anchor.TopLeft);
 			Bounds2D bar = UI.PrevBounds;
-			UI.DrawLine(bar.BottomLeft, bar.BottomRight, 0.08f, RewiredUI.Accent);
-
-			float buttonH = TopBarHeight - 0.8f;
+			float x = bar.Left + 1.2f;
 			if (project.chipViewStack.Count > 1)
 			{
-				if (UI.Button("BACK", theme.MainMenuButtonTheme, bar.CentreLeft + Vector2.right * 0.5f, new Vector2(11f, buttonH), true, false, false, Anchor.CentreLeft))
-				{
+				if (UI.Button("BACK", theme.MenuButtonTheme, new Vector2(x, bar.Centre.y), new Vector2(10f, 4.8f), true, false, false, Anchor.CentreLeft))
 					project.ReturnToPreviousViewedChip();
-				}
+				x += 11f;
 			}
 
-			float textX = project.chipViewStack.Count > 1 ? bar.Left + 12.5f : bar.Left + 1.2f;
-			string chipName = string.IsNullOrWhiteSpace(project.ActiveDevChipName) ? "NEW CHIP" : project.ActiveDevChipName.ToUpperInvariant();
-			string label = $"{project.description.ProjectName.ToUpperInvariant()}  /  {chipName}";
-			UI.DrawText(label, theme.FontBold, theme.FontSizeRegular * 0.9f, new Vector2(textX, bar.Centre.y), Anchor.TextCentreLeft, Color.white);
-
-			string mode = panMode ? "PAN MODE" : "SELECT MODE";
-			Color modeCol = panMode ? RewiredUI.Accent : RewiredUI.SecondaryText;
-			UI.DrawText(mode, theme.FontBold, theme.FontSizeRegular * 0.72f, bar.CentreRight + Vector2.left * 1.1f, Anchor.TextCentreRight, modeCol);
-
-			if (project.simPaused)
+			float right = bar.Right - 1.2f;
+			if (UI.Button(project.simPaused ? "RUN" : "PAUSE", theme.MainMenuButtonTheme,
+				new Vector2(right, bar.Centre.y), new Vector2(11f, 4.8f), true, false, false, Anchor.CentreRight))
 			{
-				UI.DrawText("PAUSED", theme.FontBold, theme.FontSizeRegular * 0.72f, bar.CentreRight + Vector2.left * 13f, Anchor.TextCentreRight, Color.yellow);
+				project.description.Prefs_SimPaused = !project.simPaused;
+				project.SaveCurrentProjectDescription();
 			}
+			right -= 11.6f;
+			if (UI.Button("REDO", theme.MenuButtonTheme, new Vector2(right, bar.Centre.y), new Vector2(9f, 4.8f), project.CanEditViewedChip, false, false, Anchor.CentreRight))
+			{
+				project.controller.CancelEverything();
+				project.ViewedChip.UndoController.TryRedo();
+			}
+			right -= 9.6f;
+			if (UI.Button("UNDO", theme.MenuButtonTheme, new Vector2(right, bar.Centre.y), new Vector2(9f, 4.8f), project.CanEditViewedChip, false, false, Anchor.CentreRight))
+			{
+				project.controller.CancelEverything();
+				project.ViewedChip.UndoController.TryUndo();
+			}
+			right -= 10.2f;
+
+			string chipName = string.IsNullOrWhiteSpace(project.ActiveDevChipName) ? "Untitled chip" : project.ActiveDevChipName;
+			DrawLabel(chipName, new Vector2(x, bar.Centre.y + 1f), right - x, 1.05f, Color.white, true);
+			DrawLabel(project.description.ProjectName, new Vector2(x, bar.Centre.y - 1.25f), right - x, 0.78f, RewiredUI.SecondaryText);
 		}
+
 
 		static void DrawDock(Project project, Rect safe)
 		{
@@ -212,8 +239,9 @@ namespace DLS.Graphics
 			for (int i = 0; i < DockLabels.Length; i++)
 			{
 				ButtonTheme buttonTheme = i == 0 && panMode ? theme.ChipLibraryCollectionToggleOn : theme.MenuButtonTheme;
-				bool enabled = i != 2 || project.CanEditViewedChip;
-				if (UI.Button(DockLabels[i], buttonTheme, new Vector2(x, safe.yMin + innerPad), new Vector2(buttonW, buttonH), enabled, false, false, Anchor.BottomLeft))
+				bool enabled = (i != 1 && i != 2) || project.CanEditViewedChip;
+				string label = i == 0 && panMode ? "EDIT" : DockLabels[i];
+				if (UI.Button(label, buttonTheme, new Vector2(x, safe.yMin + innerPad), new Vector2(buttonW, buttonH), enabled, false, false, Anchor.BottomLeft))
 				{
 					HandleDockButton(project, i);
 				}
@@ -236,9 +264,6 @@ namespace DLS.Graphics
 					UIDrawer.SetActiveMenu(UIDrawer.MenuType.ChipSave);
 					break;
 				case 3:
-					UIDrawer.SetActiveMenu(UIDrawer.MenuType.ChipLibrary);
-					break;
-				case 4:
 					ToggleDrawer();
 					break;
 			}
@@ -247,88 +272,60 @@ namespace DLS.Graphics
 		static void DrawMoreSheet(Project project, Rect safe)
 		{
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
-			float sheetW = Mathf.Min(52f, safe.width - 2f);
-			float sheetH = Mathf.Min(35f, safe.height - TopBarHeight - DockHeight - 1.5f);
-			Vector2 bottomRight = new(safe.xMax - 0.6f, safe.yMin + DockHeight + 0.5f);
-
+			Bounds2D sheet = GetToolsBounds(safe);
 			UI.StartNewLayer();
-			UI.DrawPanel(bottomRight, new Vector2(sheetW, sheetH), RewiredUI.SurfaceRaised, Anchor.BottomRight);
-			Bounds2D sheet = UI.PrevBounds;
-			RewiredUI.DrawFrame(sheet);
-
-			UI.DrawText("TOOLS", theme.FontBold, theme.FontSizeRegular * 1.05f, sheet.TopLeft + new Vector2(1.2f, -2.2f), Anchor.TextCentreLeft, Color.white);
-
-			float x = sheet.Left + 1.0f;
-			float y = sheet.Top - 4.3f;
-			float w = sheet.Width - 2.0f;
-			float h = 4.45f;
-			float gap = 0.45f;
-
-			if (UI.Button("NEW CHIP", theme.MainMenuButtonTheme, new Vector2(x, y), new Vector2(w, h), project.CanEditViewedChip, false, false, Anchor.TopLeft))
+			UI.DrawFullscreenPanel(new Color(0, 0, 0, 0.55f));
+			Vector2 pointer = InputHelper.MousePos * (UI.Width / Screen.width);
+			if (!new Rect(sheet.Left, sheet.Bottom, sheet.Width, sheet.Height).Contains(pointer) &&
+			    InputHelper.IsMouseUpThisFrame(MouseButton.Left) &&
+			    MobileInputBridge.TryConsumeUITap(new Vector2(Screen.width, Screen.height) * 0.5f, new Vector2(Screen.width, Screen.height)))
 			{
-				CreateNewChip(project);
+				UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
+				return;
 			}
-			y -= h + gap;
 
-			if (UI.Button("RHDL STUDIO", theme.MainMenuButtonTheme, new Vector2(x, y), new Vector2(w, h), true, false, false, Anchor.TopLeft))
-				UIDrawer.SetActiveMenu(UIDrawer.MenuType.RhdlStudio);
-			y -= h + gap;
-
-			if (UI.Button("PREFERENCES", theme.MainMenuButtonTheme, new Vector2(x, y), new Vector2(w, h), true, false, false, Anchor.TopLeft))
-				UIDrawer.SetActiveMenu(UIDrawer.MenuType.Preferences);
-			y -= h + gap;
-
-			if (UI.Button("SIM DIAGNOSTICS", theme.MainMenuButtonTheme, new Vector2(x, y), new Vector2(w, h), true, false, false, Anchor.TopLeft))
-				UIDrawer.SetActiveMenu(UIDrawer.MenuType.SimulationDiagnostics);
-			y -= h + gap;
-
-			DrawQuickChips(project, sheet, ref y, h, gap);
-
-			if (UI.Button("MAIN MENU", theme.MenuPopupButtonTheme, sheet.BottomLeft + new Vector2(1f, 1f), new Vector2(w, h), true, false, false, Anchor.BottomLeft))
+			UI.DrawRoundedPanel(sheet.Centre, sheet.Size, 1f, RewiredUI.SurfaceRaised);
+			DrawLabel("Tools", sheet.TopLeft + new Vector2(1.2f, -2.1f), sheet.Width - 15f, 1.1f, Color.white, true);
+			if (UI.Button("CLOSE", theme.MenuButtonTheme, sheet.TopRight + new Vector2(-0.8f, -0.6f), new Vector2(11f, 4.2f), true, false, false, Anchor.TopRight))
 			{
-				ExitToMainMenu(project);
+				UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
+				return;
+			}
+
+			string[] labels = { "NEW CHIP", "CHIP LIBRARY", "RHDL STUDIO", "PREFERENCES", "DIAGNOSTICS", "MAIN MENU" };
+			const float gap = 0.65f;
+			float h = Mathf.Min(5.2f, (sheet.Height - 5.8f - gap * 2f) / 3f);
+			float w = (sheet.Width - 2.4f - gap) / 2f;
+			for (int i = 0; i < labels.Length; i++)
+			{
+				Vector2 pos = sheet.TopLeft + new Vector2(1.2f + (i % 2) * (w + gap), -5f - (i / 2) * (h + gap));
+				if (!UI.Button(labels[i], theme.MenuButtonTheme, pos, new Vector2(w, h), i != 0 || project.CanEditViewedChip, false, false, Anchor.TopLeft)) continue;
+				switch (i)
+				{
+					case 0: CreateNewChip(project); break;
+					case 1: UIDrawer.SetActiveMenu(UIDrawer.MenuType.ChipLibrary); break;
+					case 2: UIDrawer.SetActiveMenu(UIDrawer.MenuType.RhdlStudio); break;
+					case 3: UIDrawer.SetActiveMenu(UIDrawer.MenuType.Preferences); break;
+					case 4: UIDrawer.SetActiveMenu(UIDrawer.MenuType.SimulationDiagnostics); break;
+					case 5: ExitToMainMenu(project); break;
+				}
+				return;
 			}
 		}
 
-		static void DrawQuickChips(Project project, Bounds2D sheet, ref float y, float h, float gap)
+		public static Bounds2D GetToolsBounds(Rect safe)
 		{
-			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
-			int count = 0;
-			float x = sheet.Left + 1f;
-			float width = sheet.Width - 2f;
-			float buttonGap = 0.35f;
-			float buttonW = (width - buttonGap * 2f) / 3f;
-
-			foreach (StarredItem item in project.description.StarredList)
-			{
-				if (item.IsCollection) continue;
-				if (!project.ViewedChip.CanAddSubchip(item.Name)) continue;
-				if (count == 0)
-				{
-					y -= 0.3f;
-					UI.DrawText("QUICK CHIPS", theme.FontBold, theme.FontSizeRegular * 0.72f, new Vector2(x, y), Anchor.TextCentreLeft, RewiredUI.SecondaryText);
-					y -= 1.35f;
-				}
-
-				int col = count % 3;
-				if (col == 0 && count > 0) y -= h + gap;
-				Vector2 pos = new(x + col * (buttonW + buttonGap), y);
-				if (UI.Button(item.Name.ToUpperInvariant(), theme.ChipButton, pos, new Vector2(buttonW, h), true, false, false, Anchor.TopLeft, true, 0.5f))
-				{
-					project.controller.StartPlacing(project.chipLibrary.GetChipDescription(item.Name));
-					UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
-					return;
-				}
-
-				count++;
-				if (count >= 6) break;
-			}
+			float width = Mathf.Min(64f, safe.width - 2.4f);
+			float height = Mathf.Min(23.5f, safe.height - TopBarHeight - DockHeight - 1.2f);
+			return Bounds2D.CreateFromTopLeftAndSize(
+				new Vector2(safe.center.x - width * 0.5f, safe.yMin + DockHeight + 0.6f + height), new Vector2(width, height));
 		}
+
 
 		static void DrawModalBackButton(UIDrawer.MenuType menu)
 		{
 			// UnsavedChanges owns an explicit decision and should not be visually obscured.
-			if (menu == UIDrawer.MenuType.UnsavedChanges) return;
+			if (menu is UIDrawer.MenuType.UnsavedChanges or UIDrawer.MenuType.Search) return;
 
 			Rect safe = SafeRectUI;
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;

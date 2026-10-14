@@ -21,6 +21,12 @@ namespace Seb.Helpers.InputHandling
 		static object keyboardOwner;
 		static MobileKeyboardMode requestedMode = MobileKeyboardMode.Text;
 		static Rect keyboardScreenRect;
+		static Vector2 pointerStart;
+		static bool pointerTracking;
+		static bool pointerMoved;
+		static float pointerStartTime;
+		static int tapFrame = -1;
+		static int consumedTapFrame = -1;
 
 		static string requestedText = string.Empty;
 		static int requestedSelectionStart;
@@ -57,6 +63,47 @@ namespace Seb.Helpers.InputHandling
 			systemKeyboardActive = false;
 			keyboardOwner = null;
 			keyboardScreenRect = default;
+			CancelPointer();
+		}
+
+		// A button activates on release, only if the same finger stayed inside it.
+		// Scrolling, pinching and long presses must never activate a list entry.
+		public static void BeginPointer(Vector2 position)
+		{
+			pointerStart = position;
+			pointerStartTime = Time.unscaledTime;
+			pointerTracking = true;
+			pointerMoved = false;
+			tapFrame = -1;
+		}
+
+		public static void MovePointer(Vector2 position, float tolerance)
+		{
+			if (pointerTracking && Vector2.Distance(pointerStart, position) > tolerance)
+				pointerMoved = true;
+		}
+
+		public static void EndPointer(Vector2 position, float tolerance)
+		{
+			MovePointer(position, tolerance);
+			if (pointerTracking && !pointerMoved && Time.unscaledTime - pointerStartTime < 0.55f)
+				tapFrame = Time.frameCount;
+			pointerTracking = false;
+		}
+
+		public static void CancelPointer()
+		{
+			pointerTracking = false;
+			tapFrame = -1;
+		}
+
+		public static bool TryConsumeUITap(Vector2 centre, Vector2 size)
+		{
+			if (tapFrame != Time.frameCount || consumedTapFrame == Time.frameCount) return false;
+			Vector2 delta = pointerStart - centre;
+			if (Mathf.Abs(delta.x) > size.x * 0.5f || Mathf.Abs(delta.y) > size.y * 0.5f) return false;
+			consumedTapFrame = Time.frameCount;
+			return true;
 		}
 
 		/// <summary>Call every frame while a text control owns native keyboard focus.</summary>
