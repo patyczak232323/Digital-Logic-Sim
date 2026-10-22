@@ -138,13 +138,24 @@ namespace DLS.Tests
 			b.Wire(NandOutput(nand), Pin(nand, NandInB));
 			b.Wire(NandOutput(nand), y);
 
+			// Diagnostics describe the last step only. The guard reports the oscillation when it
+			// first trips and then drops the pending work, so later steps with unchanged inputs
+			// have nothing to settle. Collect the report from every step instead of the last one.
 			Stopwatch watch = Stopwatch.StartNew();
 			TestCircuit circuit = new(b.Build(), TestLibrary.Create());
-			circuit.Step(3);
+			bool reported = !circuit.Diagnostics.SettleConverged;
+			string details = circuit.Diagnostics.NonConvergenceDetails;
+			for (int i = 0; i < 3; i++)
+			{
+				circuit.Step();
+				if (circuit.Diagnostics.SettleConverged) continue;
+				reported = true;
+				details = circuit.Diagnostics.NonConvergenceDetails;
+			}
 			watch.Stop();
 
-			Assert.IsFalse(circuit.Diagnostics.SettleConverged, "an oscillator must be reported as non-convergent");
-			Assert.IsNotEmpty(circuit.Diagnostics.NonConvergenceDetails);
+			Assert.IsTrue(reported, "an oscillator must be reported as non-convergent");
+			Assert.IsNotEmpty(details);
 			Assert.Less(watch.ElapsedMilliseconds, 5000, "oscillation guard must bound the settle loop");
 		}
 
