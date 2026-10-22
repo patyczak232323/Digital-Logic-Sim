@@ -9,7 +9,7 @@ on:
       - "Assets/**"
       - "Packages/**"
       - "ProjectSettings/**"
-      - ".github/workflows/android-build.yml"
+      - ".github/workflows/unofficial-build.yml"
 
 permissions:
   contents: write

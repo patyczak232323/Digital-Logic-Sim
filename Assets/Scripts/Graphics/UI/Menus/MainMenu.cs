@@ -74,6 +74,7 @@ namespace DLS.Graphics
 		static ProjectDescription[] allProjectDescriptions;
 		static string[] allProjectNames;
 		static (bool compatible, string message)[] projectCompatibilities;
+		static string[] projectWarnings;
 
 		static int selectedProjectIndex;
 
@@ -242,6 +243,11 @@ namespace DLS.Graphics
 				Vector2 errorMessagePos = UI.PrevBounds.BottomLeft + Vector2.down * (DrawSettings.DefaultButtonSpacing * 2);
 				UI.DrawText(projectCompatibilities[selectedProjectIndex].message, buttonTheme.font, buttonTheme.fontSize, errorMessagePos, Anchor.TopLeft, Color.yellow);
 			}
+			else if (projectSelected && projectWarnings[selectedProjectIndex].Length > 0)
+			{
+				Vector2 warningMessagePos = UI.PrevBounds.BottomLeft + Vector2.down * (DrawSettings.DefaultButtonSpacing * 2);
+				UI.DrawText(projectWarnings[selectedProjectIndex], buttonTheme.font, buttonTheme.fontSize, warningMessagePos, Anchor.TopLeft, Color.yellow);
+			}
 
 			// ---- Handle button input ----
 			if (buttonIndex == backButtonIndex) BackToMain();
@@ -280,6 +286,7 @@ namespace DLS.Graphics
 			allProjectDescriptions = Loader.LoadAllProjectDescriptions();
 			allProjectNames = allProjectDescriptions.Select(d => d.ProjectName).ToArray();
 			projectCompatibilities = allProjectDescriptions.Select(d => CanOpenProject(d)).ToArray();
+			projectWarnings = allProjectDescriptions.Select(d => Loader.BuiltinNameConflictMessage(Loader.FindBuiltinNameConflicts(d))).ToArray();
 		}
 
 		static (bool canOpen, string failureReason) CanOpenProject(ProjectDescription projectDescription)

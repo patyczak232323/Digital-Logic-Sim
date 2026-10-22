@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using DLS.Description;
 using DLS.Game;
 using DLS.SaveSystem;
@@ -40,6 +41,7 @@ namespace DLS.Graphics
 		static ProjectDescription[] projects = Array.Empty<ProjectDescription>();
 		static int selectedProjectIndex = -1;
 		static string status = string.Empty;
+		static string[] projectWarnings = Array.Empty<string>();
 
 		static bool HasSelectedProject => selectedProjectIndex >= 0 && selectedProjectIndex < projects.Length;
 		static string SelectedProjectName => HasSelectedProject ? projects[selectedProjectIndex].ProjectName : string.Empty;
@@ -184,6 +186,12 @@ namespace DLS.Graphics
 			if (!compatible)
 			{
 				UI.DrawText(message, theme.FontRegular, theme.FontSizeRegular * 0.68f,
+					actionTop, Anchor.TextCentreLeft, Color.yellow);
+				actionTop.y -= 3.0f;
+			}
+			else if (selectedProjectIndex < projectWarnings.Length && projectWarnings[selectedProjectIndex].Length > 0)
+			{
+				UI.DrawText(projectWarnings[selectedProjectIndex], theme.FontRegular, theme.FontSizeRegular * 0.68f,
 					actionTop, Anchor.TextCentreLeft, Color.yellow);
 				actionTop.y -= 3.0f;
 			}
@@ -599,12 +607,14 @@ namespace DLS.Graphics
 			try
 			{
 				projects = Loader.LoadAllProjectDescriptions();
+				projectWarnings = projects.Select(p => Loader.BuiltinNameConflictMessage(Loader.FindBuiltinNameConflicts(p))).ToArray();
 				if (selectedProjectIndex >= projects.Length) selectedProjectIndex = -1;
 				status = string.Empty;
 			}
 			catch (Exception e)
 			{
 				projects = Array.Empty<ProjectDescription>();
+				projectWarnings = Array.Empty<string>();
 				selectedProjectIndex = -1;
 				status = e.Message;
 				Debug.LogException(e);
@@ -667,6 +677,7 @@ namespace DLS.Graphics
 			screen = ScreenKind.Home;
 			projectNameMode = ProjectNameMode.New;
 			projects = Array.Empty<ProjectDescription>();
+			projectWarnings = Array.Empty<string>();
 			selectedProjectIndex = -1;
 			status = string.Empty;
 		}
