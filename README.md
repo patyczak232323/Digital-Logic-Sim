@@ -6,6 +6,7 @@ Rewired is based on Sebastian Lague's [Digital Logic Sim](https://github.com/Seb
 
 [![Latest Release](https://img.shields.io/github/v/release/patyczak232323/Digital-Logic-Sim?label=release)](https://github.com/patyczak232323/Digital-Logic-Sim/releases/latest)
 [![Regression](https://github.com/patyczak232323/Digital-Logic-Sim/actions/workflows/simulation-regression.yml/badge.svg)](https://github.com/patyczak232323/Digital-Logic-Sim/actions/workflows/simulation-regression.yml)
+[![Unity tests](https://github.com/patyczak232323/Digital-Logic-Sim/actions/workflows/unity-tests.yml/badge.svg)](https://github.com/patyczak232323/Digital-Logic-Sim/actions/workflows/unity-tests.yml)
 [![License](https://img.shields.io/github/license/patyczak232323/Digital-Logic-Sim)](LICENSE)
 
 ## What you can build
@@ -41,7 +42,8 @@ The repository includes a compact example progression ending with a **4-bit CPU*
 - waveform capture and deterministic replay
 - non-convergence diagnostics
 - **RHDL v0.6** hardware description language
-- Windows x64 and Linux x86_64 release builds
+- Windows x64, Linux x86_64 and Android ARM64 (experimental) release builds
+- touch interface for Android tablets and phones
 
 ## Download
 
@@ -53,6 +55,7 @@ Release packages:
 
 - Windows x64: `DLSRewired-Windows-x64.zip`
 - Linux x86_64: `DLSRewired-Linux-x86_64.zip`
+- Android ARM64 (experimental): `DLSRewired-Android-arm64.apk`
 
 On Linux, after extracting the archive, the executable may need permission:
 
@@ -181,11 +184,11 @@ Start here:
 - **[Simulation Diagnostics](Docs/SIMULATION_DIAGNOSTICS.md)**
 - **[Native JIT](Docs/NATIVE_JIT.md)**
 - **[Persistent FULL LUT Cache](Docs/PERSISTENT_FULL_LUT_CACHE.md)**
-- **[Rewired v0.3.0 release notes](Docs/RELEASE_0.3.0.md)**
+- **[Rewired v0.4.0 release notes](Docs/RELEASE_0.4.0.md)**
 
 ## Development
 
-Current version: **Rewired v0.3.0**
+Current version: **Rewired v0.4.0**
 
 The Unity version is defined in `ProjectSettings/ProjectVersion.txt`.
 
@@ -196,9 +199,18 @@ git clone https://github.com/patyczak232323/Digital-Logic-Sim.git
 cd Digital-Logic-Sim
 ```
 
-The repository includes regression tooling for the simulation engine and computer-level behaviour.
+Tests:
 
-Release builds are produced automatically by GitHub Actions when a version tag such as `v0.3.0` is pushed.
+- **Unity EditMode tests** in `Assets/Tests/EditMode` run the real C# engine and compile and simulate every example in `Examples/RHDL`. Run them from *Window → General → Test Runner* in the Unity editor; CI runs them in `unity-tests.yml`.
+- **Python regression suites** in `Tools/` check solver rules and source-level invariants without Unity:
+
+```bash
+python3 Tools/SimulationRegression/regression.py
+python3 Tools/ComputerRegression/regression.py
+python3 Tools/ProgramRegression/regression.py
+```
+
+Release builds for Windows, Linux and Android are produced automatically by GitHub Actions when a version tag such as `v0.4.0` is pushed. The release text comes from `Docs/RELEASE_<version>.md` when that file exists. Every change to `main` also refreshes the `android-unofficial` pre-release with development builds for all three platforms.
 
 ## Project status
 

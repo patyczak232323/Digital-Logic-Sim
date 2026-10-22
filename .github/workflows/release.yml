@@ -176,6 +176,11 @@ jobs:
     if: ${{ !cancelled() && needs.build.result == 'success' }}
 
     steps:
+      - name: Checkout release notes
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: Docs
+
       - name: Download packaged builds
         uses: actions/download-artifact@v4
         with:
@@ -192,11 +197,19 @@ jobs:
         run: |
           set -euo pipefail
 
+          notes_file="Docs/RELEASE_${TAG#v}.md"
+          if [ -f "$notes_file" ]; then
+            notes_args=(--notes-file "$notes_file")
+          else
+            echo "::warning::$notes_file not found; using generated release notes."
+            notes_args=(--generate-notes)
+          fi
+
           if ! gh release view "$TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
             gh release create "$TAG" \
               --repo "$REPOSITORY" \
               --title "Rewired $TAG" \
-              --generate-notes
+              "${notes_args[@]}"
           fi
 
           assets=(

@@ -16,7 +16,8 @@ Documentation for **Rewired**, the digital logic simulator, circuit editor and R
 
 ## Releases
 
-- **[Rewired v0.3.0](RELEASE_0.3.0.md)**
+- **[Rewired v0.4.0](RELEASE_0.4.0.md)**
+- [Rewired v0.3.0](RELEASE_0.3.0.md)
 
 The latest downloadable binaries are published under the repository's GitHub Releases page.
 

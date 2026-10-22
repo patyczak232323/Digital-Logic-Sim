@@ -1,6 +1,6 @@
 # Rewired v0.3.0
 
-Rewired v0.3.0 is the current public release of the Rewired digital logic simulator.
+Rewired v0.3.0 was the first public release of the Rewired digital logic simulator. The current release is [v0.4.0](RELEASE_0.4.0.md).
 
 This release focuses on the Rewired simulation runtime, diagnostics, acceleration and the RHDL hardware-description workflow.
 
