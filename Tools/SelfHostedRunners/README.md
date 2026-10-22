@@ -50,6 +50,12 @@ folder under `_work/_actions`. These jobs therefore hand the runner's whole `_wo
 folder back to `ghrunner` (`chown` through a small `alpine` container) at the start and
 end of every job. They need no sudo and do not touch anything outside `_work`.
 
+Unity's `Library` folder stays in each runner's checkout between jobs (checkout runs
+with `clean: false`, then `git clean -ffdx -e /Library` removes everything else), so
+Unity only re-imports what changed. If a Library ever gets corrupted, delete it and the
+next job rebuilds it:
+`sudo rm -rf /mnt/raid/github-runners-work/runner-*/Digital-Logic-Sim/Digital-Logic-Sim/Library`.
+
 If a job was killed before that last step, the next job on that runner fails in
 "Prepare workflow directory" with "Access to the path ... is denied". Fix it once with
 `sudo chown -R ghrunner:ghrunner /mnt/raid/github-runners-work` (or the runner's
