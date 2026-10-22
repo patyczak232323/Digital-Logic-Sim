@@ -13,9 +13,11 @@ namespace DLS.SaveSystem
 			WriteToFile(data, SavePaths.AppSettingsPath);
 		}
 
-		public static void SaveProjectDescription(ProjectDescription projectDescription)
+		// updateSaveTime is false when Rewired rewrites a closed project on the user's
+		// behalf (e.g. a global chip rename), so the project list keeps its real order.
+		public static void SaveProjectDescription(ProjectDescription projectDescription, bool updateSaveTime = true)
 		{
-			projectDescription.LastSaveTime = DateTime.Now;
+			if (updateSaveTime) projectDescription.LastSaveTime = DateTime.Now;
 			projectDescription.DLSVersion_LastSaved = Main.DLSVersion.ToString();
 			projectDescription.DLSVersion_EarliestCompatible = Main.DLSVersion_EarliestCompatible.ToString();
 
@@ -124,6 +126,9 @@ namespace DLS.SaveSystem
 			{
 				File.Delete(filePath);
 			}
+
+			// A stale backup would otherwise be "recovered" into a future chip that reuses this name.
+			if (File.Exists(filePath + ".bak")) File.Delete(filePath + ".bak");
 		}
 
 		public static void DeleteGlobalChip(string chipName, bool backupInDeletedFolder = true)
@@ -154,7 +159,7 @@ namespace DLS.SaveSystem
 			if (backupInDeletedFolder)
 			{
 				SavePaths.EnsureDirectoryExists(SavePaths.DeletedProjectsPath);
-				string deletedPath = Path.Combine(SavePaths.DeletedProjectsPath, projectName);
+				string deletedPath = SavePaths.GetDeletedProjectPath(projectName);
 				deletedPath = SaveUtils.EnsureUniqueDirectoryName(deletedPath);
 				Directory.Move(projectPath, deletedPath);
 			}
@@ -179,6 +184,7 @@ namespace DLS.SaveSystem
 			string temporaryPath = path + ".tmp";
 			string backupPath = path + ".bak";
 			string stagedBackupPath = backupPath + ".next";
+			bool temporaryComplete = false;
 
 			try
 			{
@@ -189,6 +195,8 @@ namespace DLS.SaveSystem
 					writer.Flush();
 					stream.Flush(true);
 				}
+
+				temporaryComplete = true;
 
 				if (File.Exists(path))
 				{
@@ -207,8 +215,34 @@ namespace DLS.SaveSystem
 			}
 			finally
 			{
-				if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
-				if (File.Exists(stagedBackupPath)) File.Delete(stagedBackupPath);
+				// If the swap failed after the old primary was removed (e.g. the file was
+				// locked by an antivirus/sync tool), put a complete copy back instead of
+				// deleting both the new data and the previous version.
+				if (!File.Exists(path))
+				{
+					TryMove(temporaryComplete ? temporaryPath : stagedBackupPath, path);
+					if (!File.Exists(path)) TryMove(stagedBackupPath, path);
+				}
+
+				// Only clean up once a primary is in place; otherwise Loader can still
+				// recover the previous version from the staged backup.
+				if (File.Exists(path))
+				{
+					if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
+					if (File.Exists(stagedBackupPath)) File.Delete(stagedBackupPath);
+				}
+			}
+		}
+
+		static void TryMove(string sourcePath, string destinationPath)
+		{
+			try
+			{
+				if (File.Exists(sourcePath)) File.Move(sourcePath, destinationPath);
+			}
+			catch (Exception)
+			{
+				// Best effort: the original exception from WriteToFile is still propagated.
 			}
 		}
 
@@ -254,8 +288,7 @@ namespace DLS.SaveSystem
 
 		static string GetChipFilePath(string chipName, string projectName)
 		{
-			string saveDirectoryPath = SavePaths.GetChipsPath(projectName);
-			return Path.Combine(saveDirectoryPath, chipName + ".json");
+			return SavePaths.GetProjectChipPath(projectName, chipName);
 		}
 	}
 }

@@ -27,6 +27,7 @@ namespace DLS.Game
 
 		public static void Init(AudioState audioState)
 		{
+			SavePaths.MigrateLegacyDataIfNeeded();
 			SavePaths.EnsureDirectoryExists(SavePaths.ProjectsPath);
 			SaveAndApplyAppSettings(Loader.LoadAppSettings());
 			Main.audioState = audioState;

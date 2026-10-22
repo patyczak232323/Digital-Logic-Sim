@@ -172,6 +172,8 @@ jobs:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
     needs: [build, build_android]
+    # Android is experimental: a failed APK build must not block the desktop release.
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
 
     steps:
       - name: Download packaged builds
@@ -197,9 +199,16 @@ jobs:
               --generate-notes
           fi
 
-          gh release upload "$TAG" \
-            release-assets/DLSRewired-Windows-x64.zip \
-            release-assets/DLSRewired-Linux-x86_64.zip \
-            release-assets/DLSRewired-Android-arm64.apk \
+          assets=(
+            release-assets/DLSRewired-Windows-x64.zip
+            release-assets/DLSRewired-Linux-x86_64.zip
+          )
+          if [ -f release-assets/DLSRewired-Android-arm64.apk ]; then
+            assets+=(release-assets/DLSRewired-Android-arm64.apk)
+          else
+            echo "::warning::Android APK was not built; publishing desktop builds only."
+          fi
+
+          gh release upload "$TAG" "${assets[@]}" \
             --repo "$REPOSITORY" \
             --clobber

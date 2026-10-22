@@ -169,7 +169,7 @@ namespace DLS.SaveSystem
 					}
 				}
 
-				if (projectChanged) Saver.SaveProjectDescription(project);
+				if (projectChanged) Saver.SaveProjectDescription(project, updateSaveTime: false);
 			}
 		}
 
@@ -178,7 +178,7 @@ namespace DLS.SaveSystem
 			foreach (ProjectDescription project in Loader.LoadAllProjectDescriptions())
 			{
 				if (ChipDescription.NameMatch(project.ProjectName, activeProjectName)) continue;
-				if (RemoveMenuReferences(project, chipName)) Saver.SaveProjectDescription(project);
+				if (RemoveMenuReferences(project, chipName)) Saver.SaveProjectDescription(project, updateSaveTime: false);
 			}
 		}
 
