@@ -16,8 +16,8 @@ namespace DLS.Game
 		public const string LastUpdatedString = "5 May 2025";
 
 		// Rewired application branding/version. Keep DLSVersion above for legacy project-format compatibility.
-		public const string RewiredVersion = "0.3.0";
-		public const string RewiredLastUpdatedString = "20 Sep 2026";
+		public const string RewiredVersion = "0.4.0";
+		public const string RewiredLastUpdatedString = "22 Oct 2026";
 		public static AppSettings ActiveAppSettings;
 
 		public static Project ActiveProject { get; private set; }

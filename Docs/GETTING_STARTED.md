@@ -12,8 +12,9 @@ Available packages:
 
 - `DLSRewired-Windows-x64.zip`
 - `DLSRewired-Linux-x86_64.zip`
+- `DLSRewired-Android-arm64.apk` (experimental)
 
-Extract the archive before running it.
+Extract the archive before running it. On Android, open the APK and allow installing apps from that source if asked.
 
 ### Linux
 

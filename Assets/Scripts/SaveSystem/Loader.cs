@@ -35,6 +35,24 @@ namespace DLS.SaveSystem
 			return new Project(projectDescription, chipLibrary);
 		}
 
+		static HashSet<string> builtinChipNames;
+
+		// Custom chips of the project whose names hide a built-in chip added in a newer version.
+		public static string[] FindBuiltinNameConflicts(ProjectDescription projectDescription)
+		{
+			builtinChipNames ??= new HashSet<string>(BuiltinChipCreator.CreateAllBuiltinChipDescriptions().Select(c => c.Name), ChipDescription.NameComparer);
+			string[] customNames = projectDescription.AllCustomChipNames ?? Array.Empty<string>();
+			return customNames.Where(builtinChipNames.Contains).Distinct(ChipDescription.NameComparer).ToArray();
+		}
+
+		public static string BuiltinNameConflictMessage(string[] conflicts)
+		{
+			if (conflicts == null || conflicts.Length == 0) return string.Empty;
+			return conflicts.Length == 1
+				? $"Chip '{conflicts[0]}' hides a new built-in chip. Rename it to use the built-in one."
+				: $"Chips {string.Join(", ", conflicts.Select(n => $"'{n}'"))} hide new built-in chips. Rename them to use the built-in ones.";
+		}
+
 		public static bool ProjectExists(string projectName)
 		{
 			if (!TryGetPath(() => SavePaths.GetProjectDescriptionPath(projectName), out string path)) return false;
@@ -182,7 +200,12 @@ namespace DLS.SaveSystem
 			foreach (ChipDescription chip in globalChips) customChipNameHashset.Add(chip.Name);
 
 			// If built-in chip name conflicts with a custom chip, the built-in chip must have been added in a newer version.
-			// In that case, simply exclude the built-in chip. TODO: warn player that they should rename their chip if they want access to new builtin version
+			// In that case, simply exclude the built-in chip. The project menus show the same conflicts (see FindBuiltinNameConflicts).
+			string[] shadowedBuiltins = builtinChips.Where(b => customChipNameHashset.Contains(b.Name)).Select(b => b.Name).ToArray();
+			if (shadowedBuiltins.Length > 0)
+			{
+				Debug.LogWarning($"Project '{projectDescription.ProjectName}': custom chip(s) {string.Join(", ", shadowedBuiltins)} hide the built-in chip(s) of the same name. Rename them to use the built-in version.");
+			}
 			builtinChips = builtinChips.Where(b => !customChipNameHashset.Contains(b.Name)).ToArray();
 
 			UpgradeHelper.ApplyVersionChanges(loadedChips.Concat(globalChips).ToArray(), builtinChips);

@@ -1,0 +1,106 @@
+name: Unity EditMode tests
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "Assets/**"
+      - "Packages/**"
+      - "ProjectSettings/**"
+      - "Examples/**"
+      - ".github/workflows/unity-tests.yml"
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "Assets/**"
+      - "Packages/**"
+      - "ProjectSettings/**"
+      - "Examples/**"
+      - ".github/workflows/unity-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+
+concurrency:
+  group: unity-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  editmode:
+    name: EditMode tests
+    # Pull requests from forks never reach the self-hosted runners.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, trusted]
+    timeout-minutes: 60
+
+    steps:
+      - name: Restore workspace ownership
+        if: runner.environment == 'self-hosted'
+        shell: bash
+        run: |
+          # Self-hosted workspaces persist between jobs; fix files left by an earlier Unity container.
+          work="$(readlink -f "$RUNNER_WORKSPACE/..")"
+          docker run --rm -v "$work:/w" alpine:3.20 chown -R "$(id -u):$(id -g)" /w
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify Unity CI secrets
+        shell: bash
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          missing=0
+          for name in UNITY_LICENSE UNITY_EMAIL UNITY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing GitHub Actions secret: $name"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-Tests-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-Tests-
+            Library-StandaloneLinux64-
+
+      - name: Run EditMode tests
+        # v4.4.0 (the moving v4 tag) switched to the game-ci CLI, which corrupts the
+        # manual-activation license file and cannot start on the self-hosted runners.
+        uses: game-ci/unity-test-runner@fa6ced25861c16ef56187828c43f76d00df43a23 # v4.3.2
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: auto
+          testMode: editmode
+          artifactsPath: test-results
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          checkName: EditMode test results
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: editmode-test-results
+          path: test-results
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Restore workspace ownership
+        if: always() && runner.environment == 'self-hosted'
+        shell: bash
+        run: |
+          # Unity runs in Docker as root and also writes into the action's own folder under
+          # _work/_actions, which the runner must delete before the next job can start.
+          work="$(readlink -f "$RUNNER_WORKSPACE/..")"
+          docker run --rm -v "$work:/w" alpine:3.20 chown -R "$(id -u):$(id -g)" /w

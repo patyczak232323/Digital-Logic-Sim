@@ -9,7 +9,7 @@ on:
       - "Assets/**"
       - "Packages/**"
       - "ProjectSettings/**"
-      - ".github/workflows/android-build.yml"
+      - ".github/workflows/unofficial-build.yml"
 
 permissions:
   contents: write
@@ -21,7 +21,7 @@ concurrency:
 jobs:
   desktop:
     name: ${{ matrix.label }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, trusted]
     timeout-minutes: 80
     strategy:
       fail-fast: false
@@ -35,6 +35,14 @@ jobs:
             packageName: DLSRewired-Linux-x86_64
 
     steps:
+      - name: Restore workspace ownership
+        if: runner.environment == 'self-hosted'
+        shell: bash
+        run: |
+          # Self-hosted workspaces persist between jobs; fix files left by an earlier Unity container.
+          work="$(readlink -f "$RUNNER_WORKSPACE/..")"
+          docker run --rm -v "$work:/w" alpine:3.20 chown -R "$(id -u):$(id -g)" /w
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -84,25 +92,40 @@ jobs:
             find build -maxdepth 3 -type f -print || true
             exit 1
           fi
-          (
-            cd "$build_dir"
-            zip -r "$GITHUB_WORKSPACE/${{ matrix.packageName }}.zip" .
-          )
+          # tar keeps the Linux executable bit; the publish job turns it into the release zip.
+          tar -C "$build_dir" -cf "$GITHUB_WORKSPACE/${{ matrix.packageName }}.tar" .
 
       - name: Upload packaged build
         uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.packageName }}
-          path: ${{ matrix.packageName }}.zip
+          path: ${{ matrix.packageName }}.tar
           if-no-files-found: error
           retention-days: 7
 
+      - name: Restore workspace ownership
+        if: always() && runner.environment == 'self-hosted'
+        shell: bash
+        run: |
+          # Unity runs in Docker as root and also writes into the action's own folder under
+          # _work/_actions, which the runner must delete before the next job can start.
+          work="$(readlink -f "$RUNNER_WORKSPACE/..")"
+          docker run --rm -v "$work:/w" alpine:3.20 chown -R "$(id -u):$(id -g)" /w
+
   android:
     name: Android ARM64
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, trusted]
     timeout-minutes: 80
 
     steps:
+      - name: Restore workspace ownership
+        if: runner.environment == 'self-hosted'
+        shell: bash
+        run: |
+          # Self-hosted workspaces persist between jobs; fix files left by an earlier Unity container.
+          work="$(readlink -f "$RUNNER_WORKSPACE/..")"
+          docker run --rm -v "$work:/w" alpine:3.20 chown -R "$(id -u):$(id -g)" /w
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -121,17 +144,6 @@ jobs:
             fi
           done
           exit "$missing"
-
-      - name: Free disk space
-        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
-        with:
-          tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: false
-          docker-images: true
-          swap-storage: false
 
       - name: Cache Unity Library
         uses: actions/cache@v4
@@ -160,7 +172,7 @@ jobs:
         if: steps.android_build_primary.outcome == 'failure'
         shell: bash
         run: |
-          sudo rm -rf Library/Bee Library/BuildCache build
+          docker run --rm -v "$GITHUB_WORKSPACE:/w" -w /w alpine:3.20 rm -rf Library/Bee Library/BuildCache build
           mkdir -p build
 
       - name: Retry Android APK build once
@@ -198,6 +210,15 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Restore workspace ownership
+        if: always() && runner.environment == 'self-hosted'
+        shell: bash
+        run: |
+          # Unity runs in Docker as root and also writes into the action's own folder under
+          # _work/_actions, which the runner must delete before the next job can start.
+          work="$(readlink -f "$RUNNER_WORKSPACE/..")"
+          docker run --rm -v "$work:/w" alpine:3.20 chown -R "$(id -u):$(id -g)" /w
+
   release:
     name: Publish one unofficial release
     runs-on: ubuntu-latest
@@ -210,6 +231,18 @@ jobs:
           pattern: release-*
           path: release-assets
           merge-multiple: true
+
+      - name: Package desktop builds
+        shell: bash
+        run: |
+          set -euo pipefail
+          for archive in release-assets/*.tar; do
+            name="$(basename "$archive" .tar)"
+            mkdir -p "unpacked/$name"
+            tar -xf "$archive" -C "unpacked/$name"
+            (cd "unpacked/$name" && zip -qr "$GITHUB_WORKSPACE/release-assets/$name.zip" .)
+            rm "$archive"
+          done
 
       - name: Publish all platforms together
         shell: bash

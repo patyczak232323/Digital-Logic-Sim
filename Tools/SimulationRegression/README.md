@@ -26,4 +26,4 @@ The suite also reports two structural performance checks:
 - one changed input in a bank of 10,000 independent gates evaluates only the affected gate,
 - 2,048 simultaneous drivers of one net cause one target resolution rather than 2,048 repeated full fan-in scans.
 
-The GitHub Actions workflow also checks that the save/description format and existing GUI implementation are not modified by the simulation fix.
+This suite checks a Python model of the solver rules. The shipped C# engine itself is exercised by the Unity EditMode tests in `Assets/Tests/EditMode`, which build the same kinds of circuits (latches, nested chips, oscillators) and run them through `RewiredEngine`.

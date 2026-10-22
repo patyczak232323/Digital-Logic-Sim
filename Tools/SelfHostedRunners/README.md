@@ -34,8 +34,26 @@ Re-running `install` is safe: registered runners are kept and only missing ones 
 runs-on: [self-hosted, trusted]
 ```
 
-Use them only for workflows triggered by `push`, tags or `workflow_dispatch`. Keep
-`pull_request` workflows on GitHub-hosted runners.
+Use them for workflows triggered by `push`, tags or `workflow_dispatch`, and for
+`pull_request` workflows only when pull requests from forks are skipped (see
+`unity-tests.yml`): a fork's code would otherwise run on this host.
+
+Current users (all need `RUNNER_DOCKER=1`):
+
+- `release.yml` and `unofficial-build.yml`: the Unity build jobs. Publishing stays on
+  GitHub-hosted runners, which also turn the uploaded `.tar` builds into release zips.
+- `unity-tests.yml`: every run, including pull requests from branches of this repository.
+  Pull requests from forks are skipped.
+
+Unity runs in Docker as root and writes into both the checkout and the action's own
+folder under `_work/_actions`. These jobs therefore hand the runner's whole `_work`
+folder back to `ghrunner` (`chown` through a small `alpine` container) at the start and
+end of every job. They need no sudo and do not touch anything outside `_work`.
+
+If a job was killed before that last step, the next job on that runner fails in
+"Prepare workflow directory" with "Access to the path ... is denied". Fix it once with
+`sudo chown -R ghrunner:ghrunner /mnt/raid/github-runners-work` (or the runner's
+`_work` folder).
 
 ## Managing
 
