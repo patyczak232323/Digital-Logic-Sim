@@ -73,7 +73,9 @@ jobs:
             Library-StandaloneLinux64-
 
       - name: Run EditMode tests
-        uses: game-ci/unity-test-runner@v4
+        # v4.4.0 (the moving v4 tag) switched to the game-ci CLI, which corrupts the
+        # manual-activation license file and cannot start on the self-hosted runners.
+        uses: game-ci/unity-test-runner@fa6ced25861c16ef56187828c43f76d00df43a23 # v4.3.2
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
