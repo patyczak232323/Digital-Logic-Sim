@@ -45,9 +45,15 @@ Current users (all need `RUNNER_DOCKER=1`):
 - `unity-tests.yml`: every run, including pull requests from branches of this repository.
   Pull requests from forks are skipped.
 
-Unity runs in Docker as root, so these jobs hand the workspace back to `ghrunner`
-(`chown` through a small `alpine` container) before checkout and after the job. They
-need no sudo and do not touch anything outside their workspace.
+Unity runs in Docker as root and writes into both the checkout and the action's own
+folder under `_work/_actions`. These jobs therefore hand the runner's whole `_work`
+folder back to `ghrunner` (`chown` through a small `alpine` container) at the start and
+end of every job. They need no sudo and do not touch anything outside `_work`.
+
+If a job was killed before that last step, the next job on that runner fails in
+"Prepare workflow directory" with "Access to the path ... is denied". Fix it once with
+`sudo chown -R ghrunner:ghrunner /mnt/raid/github-runners-work` (or the runner's
+`_work` folder).
 
 ## Managing
 

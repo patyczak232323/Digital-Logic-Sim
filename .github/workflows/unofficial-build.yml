@@ -40,9 +40,8 @@ jobs:
         shell: bash
         run: |
           # Self-hosted workspaces persist between jobs; fix files left by an earlier Unity container.
-          if [ -d "$GITHUB_WORKSPACE" ] && [ -n "$(ls -A "$GITHUB_WORKSPACE")" ]; then
-            docker run --rm -v "$GITHUB_WORKSPACE:/w" alpine:3.20 chown -R "$(id -u):$(id -g)" /w
-          fi
+          work="$(readlink -f "$RUNNER_WORKSPACE/..")"
+          docker run --rm -v "$work:/w" alpine:3.20 chown -R "$(id -u):$(id -g)" /w
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -108,10 +107,10 @@ jobs:
         if: always() && runner.environment == 'self-hosted'
         shell: bash
         run: |
-          # Unity runs in Docker as root; hand its files back to the runner user.
-          if [ -d "$GITHUB_WORKSPACE" ] && [ -n "$(ls -A "$GITHUB_WORKSPACE")" ]; then
-            docker run --rm -v "$GITHUB_WORKSPACE:/w" alpine:3.20 chown -R "$(id -u):$(id -g)" /w
-          fi
+          # Unity runs in Docker as root and also writes into the action's own folder under
+          # _work/_actions, which the runner must delete before the next job can start.
+          work="$(readlink -f "$RUNNER_WORKSPACE/..")"
+          docker run --rm -v "$work:/w" alpine:3.20 chown -R "$(id -u):$(id -g)" /w
 
   android:
     name: Android ARM64
@@ -124,9 +123,8 @@ jobs:
         shell: bash
         run: |
           # Self-hosted workspaces persist between jobs; fix files left by an earlier Unity container.
-          if [ -d "$GITHUB_WORKSPACE" ] && [ -n "$(ls -A "$GITHUB_WORKSPACE")" ]; then
-            docker run --rm -v "$GITHUB_WORKSPACE:/w" alpine:3.20 chown -R "$(id -u):$(id -g)" /w
-          fi
+          work="$(readlink -f "$RUNNER_WORKSPACE/..")"
+          docker run --rm -v "$work:/w" alpine:3.20 chown -R "$(id -u):$(id -g)" /w
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -216,10 +214,10 @@ jobs:
         if: always() && runner.environment == 'self-hosted'
         shell: bash
         run: |
-          # Unity runs in Docker as root; hand its files back to the runner user.
-          if [ -d "$GITHUB_WORKSPACE" ] && [ -n "$(ls -A "$GITHUB_WORKSPACE")" ]; then
-            docker run --rm -v "$GITHUB_WORKSPACE:/w" alpine:3.20 chown -R "$(id -u):$(id -g)" /w
-          fi
+          # Unity runs in Docker as root and also writes into the action's own folder under
+          # _work/_actions, which the runner must delete before the next job can start.
+          work="$(readlink -f "$RUNNER_WORKSPACE/..")"
+          docker run --rm -v "$work:/w" alpine:3.20 chown -R "$(id -u):$(id -g)" /w
 
   release:
     name: Publish one unofficial release
