@@ -12,7 +12,8 @@ permissions:
 
 jobs:
   regression:
-    runs-on: ubuntu-latest
+    # Pull requests from forks stay on GitHub-hosted runners.
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "trusted"]') || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4

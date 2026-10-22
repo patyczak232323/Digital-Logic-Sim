@@ -21,7 +21,7 @@ concurrency:
 jobs:
   desktop:
     name: ${{ matrix.label }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, trusted]
     timeout-minutes: 80
     strategy:
       fail-fast: false
@@ -97,9 +97,14 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Return workspace ownership to the runner user
+        if: always()
+        shell: bash
+        run: docker run --rm -v "$GITHUB_WORKSPACE:/w" alpine:3.20 chown -R "$(id -u):$(id -g)" /w
+
   android:
     name: Android ARM64
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, trusted]
     timeout-minutes: 80
 
     steps:
@@ -121,17 +126,6 @@ jobs:
             fi
           done
           exit "$missing"
-
-      - name: Free disk space
-        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
-        with:
-          tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: false
-          docker-images: true
-          swap-storage: false
 
       - name: Cache Unity Library
         uses: actions/cache@v4
@@ -160,7 +154,7 @@ jobs:
         if: steps.android_build_primary.outcome == 'failure'
         shell: bash
         run: |
-          sudo rm -rf Library/Bee Library/BuildCache build
+          docker run --rm -v "$GITHUB_WORKSPACE:/w" alpine:3.20 rm -rf /w/Library/Bee /w/Library/BuildCache /w/build
           mkdir -p build
 
       - name: Retry Android APK build once
@@ -198,9 +192,14 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Return workspace ownership to the runner user
+        if: always()
+        shell: bash
+        run: docker run --rm -v "$GITHUB_WORKSPACE:/w" alpine:3.20 chown -R "$(id -u):$(id -g)" /w
+
   release:
     name: Publish one unofficial release
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, trusted]
     needs: [desktop, android]
 
     steps:

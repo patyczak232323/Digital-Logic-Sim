@@ -147,6 +147,8 @@ cmd_install() {
     install -d -m 0755 "$BASE_DIR"
     create_user
     download_runner
+    log "Installing tools used by this repository's workflows..."
+    apt-get install -y git zip unzip python3 gh >/dev/null
 
     local need_token=0 n
     for ((n = 1; n <= RUNNER_COUNT; n++)); do

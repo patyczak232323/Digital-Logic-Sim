@@ -15,7 +15,7 @@ concurrency:
 jobs:
   build:
     name: Build ${{ matrix.label }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, trusted]
     strategy:
       fail-fast: false
       matrix:
@@ -90,10 +90,14 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Return workspace ownership to the runner user
+        if: always()
+        shell: bash
+        run: docker run --rm -v "$GITHUB_WORKSPACE:/w" alpine:3.20 chown -R "$(id -u):$(id -g)" /w
 
   build_android:
     name: Build Android ARM64 APK
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, trusted]
     timeout-minutes: 60
 
     steps:
@@ -115,17 +119,6 @@ jobs:
             fi
           done
           exit "$missing"
-
-      - name: Free disk space
-        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
-        with:
-          tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: false
-          docker-images: true
-          swap-storage: false
 
       - name: Cache Unity Library
         uses: actions/cache@v4
@@ -168,9 +161,14 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Return workspace ownership to the runner user
+        if: always()
+        shell: bash
+        run: docker run --rm -v "$GITHUB_WORKSPACE:/w" alpine:3.20 chown -R "$(id -u):$(id -g)" /w
+
   release:
     name: Publish GitHub Release
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, trusted]
     needs: [build, build_android]
 
     steps:
