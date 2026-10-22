@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sets up N ephemeral, isolated GitHub Actions runners on an Ubuntu host.
+# Sets up N ephemeral, isolated GitHub Actions runners on an Ubuntu or Debian host.
 #
 # Every runner is a systemd service (gh-runner@<n>) that starts a fresh Docker
 # container, takes exactly one job, then the container is deleted and a new
@@ -33,6 +33,7 @@ IMAGE=gh-runner:local
 NETWORK=gh-runners
 SUBNET=172.31.250.0/24
 DOCKER=/usr/bin/docker
+DISTRO=ubuntu
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 log() { printf '\033[1;32m==>\033[0m %s\n' "$*"; }
@@ -51,11 +52,11 @@ install_docker() {
     apt-get update
     apt-get install -y ca-certificates curl
     install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    curl -fsSL "https://download.docker.com/linux/${DISTRO}/gpg" -o /etc/apt/keyrings/docker.asc
     chmod a+r /etc/apt/keyrings/docker.asc
     # shellcheck disable=SC1091
     . /etc/os-release
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${VERSION_CODENAME} stable" \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/${DISTRO} ${VERSION_CODENAME} stable" \
         > /etc/apt/sources.list.d/docker.list
     apt-get update
     apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin
@@ -251,7 +252,14 @@ start_runners() {
 cmd_install() {
     require_root
     [[ "$RUNNER_COUNT" =~ ^[1-9][0-9]*$ ]] || die "RUNNER_COUNT must be a positive number."
-    grep -qi ubuntu /etc/os-release || die "This script supports Ubuntu only."
+    # shellcheck disable=SC1091
+    DISTRO="$(. /etc/os-release && echo "$ID")"
+    [[ "$DISTRO" == ubuntu || "$DISTRO" == debian ]] || die "This script supports Ubuntu and Debian only."
+    local kernel
+    kernel="$(uname -r)"
+    if ! printf '5.12\n%s\n' "${kernel%%-*}" | sort -VC; then
+        log "Warning: kernel $kernel is older than 5.12; Sysbox may not work. Consider a backports kernel."
+    fi
     install_docker
     DOCKER="$(command -v docker)"
     [[ "$DOCKER" != /snap/* ]] || die "Snap Docker is not supported by Sysbox. Remove it (snap remove docker) and rerun."
