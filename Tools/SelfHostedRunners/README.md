@@ -1,6 +1,6 @@
 # Self-hosted GitHub Actions runners
 
-Sets up ephemeral, isolated runners on an Ubuntu server (6 by default).
+Sets up ephemeral, isolated runners on an Ubuntu or Debian server (6 by default).
 
 - Each runner is a systemd service (`gh-runner@N`) that starts a fresh container,
   runs one job and is then deleted. Nothing a job leaves behind survives.
