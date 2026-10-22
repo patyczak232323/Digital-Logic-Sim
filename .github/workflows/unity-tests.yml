@@ -46,6 +46,14 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # Keep Unity's Library folder between jobs on this runner instead of
+          # restoring it from the GitHub cache; the next step removes everything else.
+          clean: false
+
+      - name: Remove untracked files except Unity Library
+        shell: bash
+        run: git clean -ffdx -e /Library
 
       - name: Verify Unity CI secrets
         shell: bash
@@ -62,15 +70,6 @@ jobs:
             fi
           done
           exit "$missing"
-
-      - name: Cache Unity Library
-        uses: actions/cache@v4
-        with:
-          path: Library
-          key: Library-Tests-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
-          restore-keys: |
-            Library-Tests-
-            Library-StandaloneLinux64-
 
       - name: Run EditMode tests
         # v4.4.0 (the moving v4 tag) switched to the game-ci CLI, which corrupts the

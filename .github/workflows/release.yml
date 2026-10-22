@@ -38,6 +38,14 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # Keep Unity's Library folder between jobs on this runner instead of
+          # restoring it from the GitHub cache; the next step removes everything else.
+          clean: false
+
+      - name: Remove untracked files except Unity Library
+        shell: bash
+        run: git clean -ffdx -e /Library
 
       - name: Verify Unity CI secrets
         shell: bash
@@ -55,16 +63,8 @@ jobs:
           done
           exit "$missing"
 
-      - name: Cache Unity Library
-        uses: actions/cache@v4
-        with:
-          path: Library
-          key: Library-${{ matrix.targetPlatform }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
-          restore-keys: |
-            Library-${{ matrix.targetPlatform }}-
-
       - name: Build with Unity
-        uses: game-ci/unity-builder@v4
+        uses: game-ci/unity-builder@4423ee75828dff56037d1d1cfdac6b68e3a6ba00 # v4.8.2
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
@@ -121,6 +121,14 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # Keep Unity's Library folder between jobs on this runner instead of
+          # restoring it from the GitHub cache; the next step removes everything else.
+          clean: false
+
+      - name: Remove untracked files except Unity Library
+        shell: bash
+        run: git clean -ffdx -e /Library
 
       - name: Verify Unity CI secrets
         shell: bash
@@ -138,16 +146,8 @@ jobs:
           done
           exit "$missing"
 
-      - name: Cache Unity Library
-        uses: actions/cache@v4
-        with:
-          path: Library
-          key: Library-Android-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
-          restore-keys: |
-            Library-Android-
-
       - name: Build Android APK with Unity
-        uses: game-ci/unity-builder@v4
+        uses: game-ci/unity-builder@4423ee75828dff56037d1d1cfdac6b68e3a6ba00 # v4.8.2
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
