@@ -37,6 +37,16 @@ runs-on: [self-hosted, trusted]
 Use them only for workflows triggered by `push`, tags or `workflow_dispatch`. Keep
 `pull_request` workflows on GitHub-hosted runners.
 
+Current users (all need `RUNNER_DOCKER=1`):
+
+- `release.yml` and `unofficial-build.yml`: the Unity build jobs. Publishing stays on
+  GitHub-hosted runners, which also turn the uploaded `.tar` builds into release zips.
+- `unity-tests.yml`: pushes to `main` and manual runs. Pull requests use `ubuntu-latest`.
+
+Unity runs in Docker as root, so these jobs hand the workspace back to `ghrunner`
+(`chown` through a small `alpine` container) before checkout and after the job. They
+need no sudo and do not touch anything outside their workspace.
+
 ## Managing
 
 ```bash
