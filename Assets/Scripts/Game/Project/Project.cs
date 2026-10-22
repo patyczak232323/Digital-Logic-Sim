@@ -67,6 +67,12 @@ namespace DLS.Game
 		}
 
 		volatile bool simThreadActive;
+
+		// The simulation engine keeps its state in static fields, so a previous project's
+		// thread must have finished before a new project's thread starts using it.
+		static Project simThreadOwner;
+		static Thread runningSimThread;
+		const int PreviousSimThreadJoinTimeoutMs = 5000;
 		public volatile bool advanceSingleSimStep;
 
 		readonly object replayControlLock = new();
@@ -169,6 +175,8 @@ namespace DLS.Game
 				return;
 			}
 
+			StopPreviousSimulationThread();
+
 			simThreadActive = true;
 			Thread simThread = new(SimThread)
 			{
@@ -176,7 +184,24 @@ namespace DLS.Game
 				Name = "DLS_SimThread",
 				IsBackground = true
 			};
+			simThreadOwner = this;
+			runningSimThread = simThread;
 			simThread.Start();
+		}
+
+		static void StopPreviousSimulationThread()
+		{
+			Thread previousThread = runningSimThread;
+			if (previousThread == null) return;
+
+			if (simThreadOwner != null) simThreadOwner.simThreadActive = false;
+			if (previousThread.IsAlive && !previousThread.Join(PreviousSimThreadJoinTimeoutMs))
+			{
+				Debug.LogWarning("Previous simulation thread did not stop in time.");
+			}
+
+			simThreadOwner = null;
+			runningSimThread = null;
 		}
 
 		public void EnterViewMode(SubChipInstance subchip)

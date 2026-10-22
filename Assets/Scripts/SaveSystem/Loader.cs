@@ -37,7 +37,7 @@ namespace DLS.SaveSystem
 
 		public static bool ProjectExists(string projectName)
 		{
-			string path = SavePaths.GetProjectDescriptionPath(projectName);
+			if (!TryGetPath(() => SavePaths.GetProjectDescriptionPath(projectName), out string path)) return false;
 			return File.Exists(path) || File.Exists(path + ".bak");
 		}
 
@@ -90,7 +90,7 @@ namespace DLS.SaveSystem
 
 		public static ChipDescription LoadProjectChipDescription(string projectName, string chipName)
 		{
-			string path = Path.Combine(SavePaths.GetChipsPath(projectName), chipName + ".json");
+			string path = SavePaths.GetProjectChipPath(projectName, chipName);
 			return NormalizeChipDescription(LoadWithBackup(path, Serializer.DeserializeChipDescription), path);
 		}
 
@@ -102,8 +102,24 @@ namespace DLS.SaveSystem
 
 		public static bool GlobalChipExists(string chipName)
 		{
-			string path = SavePaths.GetGlobalChipPath(chipName);
+			if (!TryGetPath(() => SavePaths.GetGlobalChipPath(chipName), out string path)) return false;
 			return File.Exists(path) || File.Exists(path + ".bak");
+		}
+
+		// Existence checks also run on names the user is still typing; a name that
+		// cannot form a valid save path simply does not exist yet.
+		static bool TryGetPath(Func<string> getPath, out string path)
+		{
+			try
+			{
+				path = getPath();
+				return true;
+			}
+			catch (InvalidDataException)
+			{
+				path = null;
+				return false;
+			}
 		}
 
 		public static ChipDescription[] LoadAllGlobalChipDescriptions()
@@ -152,7 +168,7 @@ namespace DLS.SaveSystem
 
 			for (int i = 0; i < loadedChips.Length; i++)
 			{
-				string chipPath = Path.Combine(chipDirectoryPath, projectDescription.AllCustomChipNames[i] + ".json");
+				string chipPath = SavePaths.GetProjectChipPath(projectDescription.ProjectName, projectDescription.AllCustomChipNames[i]);
 				ChipDescription chipDesc = NormalizeChipDescription(
 					LoadWithBackup(chipPath, Serializer.DeserializeChipDescription),
 					chipPath);
@@ -201,6 +217,23 @@ namespace DLS.SaveSystem
 				catch (Exception e)
 				{
 					primaryError = e;
+				}
+			}
+
+			// Saver keeps the previous primary here while it swaps in a new file. If that
+			// swap was interrupted, this copy is newer than the regular backup.
+			string stagedBackupPath = path + ".bak.next";
+			if (!File.Exists(path) && File.Exists(stagedBackupPath))
+			{
+				try
+				{
+					T recovered = deserialize(File.ReadAllText(stagedBackupPath));
+					Debug.LogWarning("Recovered save data from interrupted save: " + stagedBackupPath);
+					return recovered;
+				}
+				catch (Exception)
+				{
+					// Fall back to the regular backup below.
 				}
 			}
 

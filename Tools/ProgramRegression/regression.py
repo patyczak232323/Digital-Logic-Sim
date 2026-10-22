@@ -117,6 +117,40 @@ def test_global_chip_storage_model() -> None:
     } == {"alu"}
 
 
+def test_interrupted_save_model() -> None:
+    # Saver swaps the primary in three steps. If the final move fails after the old
+    # primary was removed, a complete copy must be put back, never deleted.
+    with tempfile.TemporaryDirectory() as directory:
+        primary = Path(directory) / "chip.json"
+        temporary = Path(str(primary) + ".tmp")
+        staged = Path(str(primary) + ".bak.next")
+        primary.write_text("v1", encoding="utf-8")
+
+        temporary.write_text("v2", encoding="utf-8")
+        staged.write_text(primary.read_text(encoding="utf-8"), encoding="utf-8")
+        primary.unlink()
+        move_failed = True  # simulated lock on the final File.Move
+        if move_failed and not primary.exists():
+            temporary.replace(primary)
+        assert primary.read_text(encoding="utf-8") == "v2"
+
+
+def contained(directory: str, name: str) -> bool:
+    import os.path
+    if not name.strip() or any(c in name for c in "/\\\0"):
+        return False
+    root = os.path.abspath(directory).rstrip(os.sep) + os.sep
+    full = os.path.abspath(os.path.join(directory, name))
+    return full.startswith(root) and len(full) > len(root)
+
+
+def test_contained_save_paths() -> None:
+    for name in ("CPU", "counter 16", "ALU.json", "..x"):
+        assert contained("/data/Projects", name), name
+    for name in ("", "..", ".", "../x", "..\\..\\x", "a/b"):
+        assert not contained("/data/Projects", name), name
+
+
 def test_csharp_integration_guards() -> None:
     saver = source("Assets/Scripts/SaveSystem/Saver.cs")
     loader = source("Assets/Scripts/SaveSystem/Loader.cs")
@@ -143,6 +177,17 @@ def test_csharp_integration_guards() -> None:
     assert "if (File.Exists(path)) File.Delete(path);" in saver
     assert "File.Move(temporaryPath, path);" in saver
     assert "File.Move(stagedBackupPath, backupPath);" in saver
+    assert "TryMove(temporaryComplete ? temporaryPath : stagedBackupPath, path);" in saver
+    assert 'string stagedBackupPath = path + ".bak.next";' in loader
+    assert "public static string CombineContained(string directory, string name)" in save_paths
+    assert "CombineContained(GlobalChipsPath, chipName + \".json\")" in save_paths
+    assert "SavePaths.GetProjectChipPath(" in loader
+    assert "SavePaths.GetProjectChipPath(projectName, chipName)" in saver
+    assert 'const string RewiredDataFolderName = "Rewired";' in save_paths
+    assert "SavePaths.MigrateLegacyDataIfNeeded();" in source("Assets/Scripts/Game/Main/Main.cs")
+    assert "StopPreviousSimulationThread();" in project
+    assert "updateSaveTime: false" in global_chips
+    assert not (ROOT / ".github/workflows/publish-android-unofficial.yml").exists()
     assert "LoadWithBackup" in loader and 'path + ".bak"' in loader
     assert "throw new InvalidDataException" in serializer
     assert "string.IsNullOrWhiteSpace(name)" in save_utils
@@ -194,6 +239,8 @@ TESTS = (
     test_backup_recovery_model,
     test_topology_invalidation_race_model,
     test_global_chip_storage_model,
+    test_interrupted_save_model,
+    test_contained_save_paths,
     test_csharp_integration_guards,
 )
 

@@ -92,3 +92,7 @@ Desktop.ini
 /coverage/
 /.coverage/
 /.vscode/
+
+# Python bytecode from Tools/*/regression.py
+__pycache__/
+*.pyc
