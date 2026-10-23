@@ -20,6 +20,7 @@ namespace DLS.Graphics
 	{
 		public const float TopBarHeight = 5.4f;
 		public const float DockHeight = 7.0f;
+		public const float QuickBarHeight = 5.0f;
 
 		const string PrefPanDefault = "rewired.mobile.panDefault";
 		const string PrefTargetFps = "rewired.mobile.targetFps";
@@ -27,6 +28,7 @@ namespace DLS.Graphics
 
 		static readonly string[] DockLabels = { "PAN", "ADD CHIP", "SAVE", "LIBRARY", "TOOLS" };
 		static bool panMode;
+		static readonly System.Collections.Generic.List<string> quickChips = new();
 
 		// "-mobile-ui" on the command line shows the touch interface in a desktop build, to
 		// preview and screenshot it without a phone. Touch gestures stay Android-only.
@@ -92,7 +94,7 @@ namespace DLS.Graphics
 			Rect safe = Screen.safeArea;
 			float pixelsPerUIUnit = Screen.width / UI.Width;
 			float topBottom = safe.yMax - TopBarHeight * pixelsPerUIUnit;
-			float dockTop = safe.yMin + DockHeight * pixelsPerUIUnit;
+			float dockTop = safe.yMin + (DockHeight + (QuickBarVisible(Project.ActiveProject) ? QuickBarHeight : 0)) * pixelsPerUIUnit;
 			return screenPosition.y >= topBottom || screenPosition.y <= dockTop;
 		}
 
@@ -185,6 +187,108 @@ namespace DLS.Graphics
 			if (UIDrawer.ActiveMenu == UIDrawer.MenuType.BottomBarMenuPopup)
 			{
 				DrawMoreSheet(project, safe);
+			}
+			else if (QuickBarVisible(project))
+			{
+				DrawQuickBar(project, safe);
+				DrawCanvasHint(project, safe);
+			}
+		}
+
+		// The quick bar is hidden under the tools sheet, so its buttons can't be pressed through it.
+		static bool QuickBarVisible(Project project) =>
+			project != null && project.CanEditViewedChip && UIDrawer.ActiveMenu == UIDrawer.MenuType.None;
+
+		// One tap places the starred chips, with collections (IN/OUT by default) opened up, so
+		// input and output pins are always one tap away.
+		static void DrawQuickBar(Project project, Rect safe)
+		{
+			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
+			CollectQuickChips(project);
+
+			Vector2 bottomLeft = new(safe.xMin, safe.yMin + DockHeight);
+			UI.DrawPanel(bottomLeft, new Vector2(safe.width, QuickBarHeight), ColHelper.Darken(theme.StarredBarCol, 0.04f), Anchor.BottomLeft);
+
+			const float pad = 0.55f;
+			const float gap = 0.35f;
+			const float minWidth = 8.6f;
+			float available = safe.width - pad * 2f;
+			int fit = Mathf.Max(1, Mathf.FloorToInt((available + gap) / (minWidth + gap)));
+			bool overflow = quickChips.Count > fit;
+			int shown = overflow ? fit - 1 : quickChips.Count;
+			int slots = overflow ? fit : Mathf.Max(quickChips.Count, 1);
+			float buttonW = Mathf.Min(14f, (available - gap * (slots - 1)) / slots);
+			float buttonH = QuickBarHeight - pad * 2f;
+			float x = safe.xMin + pad;
+			float y = bottomLeft.y + pad;
+
+			for (int i = 0; i < shown; i++)
+			{
+				if (UI.Button(quickChips[i], theme.ChipButton, new Vector2(x, y), new Vector2(buttonW, buttonH), true, false, false, Anchor.BottomLeft))
+				{
+					project.controller.StartPlacing(quickChips[i]);
+				}
+				x += buttonW + gap;
+			}
+
+			if (overflow && UI.Button("MORE...", theme.MenuButtonTheme, new Vector2(x, y), new Vector2(buttonW, buttonH), true, false, false, Anchor.BottomLeft))
+			{
+				UIDrawer.SetActiveMenu(UIDrawer.MenuType.Search);
+			}
+		}
+
+		static void CollectQuickChips(Project project)
+		{
+			quickChips.Clear();
+			foreach (StarredItem item in project.description.StarredList)
+			{
+				if (!item.IsCollection)
+				{
+					AddQuickChip(project, item.Name);
+					continue;
+				}
+
+				foreach (ChipCollection collection in project.description.ChipCollections)
+				{
+					if (!ChipDescription.NameMatch(collection.Name, item.Name)) continue;
+					foreach (string chip in collection.Chips) AddQuickChip(project, chip);
+				}
+			}
+		}
+
+		static void AddQuickChip(Project project, string name)
+		{
+			if (quickChips.Contains(name) || !project.chipLibrary.HasChip(name) || !project.ViewedChip.CanAddSubchip(name)) return;
+			quickChips.Add(name);
+		}
+
+		// Says what to do next when it isn't obvious: on an empty chip, and while a chip waits
+		// to be placed (it follows the next tap).
+		static void DrawCanvasHint(Project project, Rect safe)
+		{
+			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
+			float y = safe.yMin + DockHeight + QuickBarHeight + 2.4f;
+
+			if (project.controller.IsPlacingElements)
+			{
+				const float cancelW = 11f;
+				string text = "TAP WHERE THE CHIP SHOULD GO";
+				Vector2 size = new(Draw.CalculateTextBoundsSize(text, theme.FontSizeRegular * 0.8f, theme.FontBold).x + cancelW + 3f, 3.6f);
+				Vector2 centre = new(safe.center.x, y);
+				UI.DrawPanel(centre, size, RewiredUI.SurfaceRaised, Anchor.Centre);
+				Bounds2D banner = UI.PrevBounds;
+				UI.DrawText(text, theme.FontBold, theme.FontSizeRegular * 0.8f, banner.CentreLeft + Vector2.right * 1f, Anchor.TextCentreLeft, Color.white);
+				if (UI.Button("CANCEL", theme.MenuButtonTheme, banner.CentreRight + Vector2.left * 0.3f, new Vector2(cancelW, 3f), true, false, false, Anchor.CentreRight))
+				{
+					project.controller.CancelEverything();
+				}
+				return;
+			}
+
+			if (project.ViewedChip.Elements.Count == 0)
+			{
+				const string text = "Empty chip: tap IN-1 and OUT-1 below to add pins, then NAND. Drag from pin to pin to wire them.";
+				UI.DrawText(text, theme.FontRegular, theme.FontSizeRegular * 0.72f, new Vector2(safe.center.x, y), Anchor.Centre, RewiredUI.SecondaryText);
 			}
 		}
 
@@ -325,7 +429,7 @@ namespace DLS.Graphics
 		{
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
 			float sheetW = Mathf.Min(72f, safe.width - 2f);
-			float sheetH = Mathf.Min(36f, safe.height - TopBarHeight - DockHeight - 1.5f);
+			float sheetH = Mathf.Min(24.6f, safe.height - TopBarHeight - DockHeight - 1.5f);
 			Vector2 bottomRight = new(safe.xMax - 0.6f, safe.yMin + DockHeight + 0.5f);
 
 			UI.StartNewLayer();
@@ -361,8 +465,6 @@ namespace DLS.Graphics
 			bool diagnostics = Tool("DIAGNOSTICS", true);
 			bool mainMenu = Tool("MAIN MENU", true, theme.MenuPopupButtonTheme);
 
-			float y = top - Mathf.CeilToInt(index / (float)columns) * (h + gap);
-			DrawQuickChips(project, sheet, ref y, h, gap, sheet.Bottom + 0.8f);
 
 			if (newChip) CreateNewChip(project);
 			else if (truthTable) TruthTableMenu.Open(current);
@@ -382,43 +484,6 @@ namespace DLS.Graphics
 				index++;
 				Vector2 pos = new(sheet.Left + 1f + col * (w + gap), top - row * (h + gap));
 				return UI.Button(label, buttonTheme ?? theme.MainMenuButtonTheme, pos, new Vector2(w, h), enabled, false, false, Anchor.TopLeft);
-			}
-		}
-
-		static void DrawQuickChips(Project project, Bounds2D sheet, ref float y, float h, float gap, float minY)
-		{
-			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
-			int count = 0;
-			float x = sheet.Left + 1f;
-			float width = sheet.Width - 2f;
-			float buttonGap = 0.35f;
-			float buttonW = (width - buttonGap * 2f) / 3f;
-
-			foreach (StarredItem item in project.description.StarredList)
-			{
-				if (item.IsCollection) continue;
-				if (!project.ViewedChip.CanAddSubchip(item.Name)) continue;
-				if (count == 0)
-				{
-					if (y - 1.65f - h < minY) return; // no room for the section
-					y -= 0.3f;
-					UI.DrawText("QUICK CHIPS", theme.FontBold, theme.FontSizeRegular * 0.72f, new Vector2(x, y), Anchor.TextCentreLeft, RewiredUI.SecondaryText);
-					y -= 1.35f;
-				}
-
-				int col = count % 3;
-				if (col == 0 && count > 0) y -= h + gap;
-				if (y - h < minY) return; // no room for another row
-				Vector2 pos = new(x + col * (buttonW + buttonGap), y);
-				if (UI.Button(item.Name.ToUpperInvariant(), theme.ChipButton, pos, new Vector2(buttonW, h), true, false, false, Anchor.TopLeft, true, 0.5f))
-				{
-					project.controller.StartPlacing(project.chipLibrary.GetChipDescription(item.Name));
-					UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
-					return;
-				}
-
-				count++;
-				if (count >= 6) break;
 			}
 		}
 

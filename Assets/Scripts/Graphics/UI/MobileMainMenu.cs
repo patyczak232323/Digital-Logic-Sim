@@ -85,6 +85,11 @@ namespace DLS.Graphics
 			float titleX = screen == ScreenKind.Home ? bar.Left + 1.2f : bar.Left + 13.3f;
 			UI.DrawText("REWIRED", FontType.Born2bSporty, 4.7f,
 				new Vector2(titleX, bar.Centre.y + 0.15f), Anchor.TextCentreLeft, Color.white);
+			if (screen == ScreenKind.Home)
+			{
+				UI.DrawText("DIGITAL LOGIC SIMULATOR", theme.FontBold, theme.FontSizeRegular * 0.8f,
+					new Vector2(UI.PrevBounds.Right + 2f, bar.Centre.y), Anchor.TextCentreLeft, RewiredUI.SecondaryText);
+			}
 			UI.DrawText($"ANDROID  •  v{Main.RewiredVersion}", theme.FontRegular, theme.FontSizeRegular * 0.68f,
 				bar.CentreRight + Vector2.left * 1.1f, Anchor.TextCentreRight, RewiredUI.SecondaryText);
 		}
@@ -99,9 +104,7 @@ namespace DLS.Graphics
 			float gap = 0.7f;
 			float y = contentTop;
 
-			UI.DrawText("DIGITAL LOGIC SIMULATOR", theme.FontBold, theme.FontSizeRegular * 0.9f,
-				new Vector2(safe.center.x, y + 2.2f), Anchor.Centre, RewiredUI.SecondaryText);
-			y -= 2.2f;
+			y -= 0.6f;
 
 			if (UI.Button("NEW PROJECT", theme.MainMenuButtonTheme, new Vector2(x, y), new Vector2(width, h),
 				    true, false, false, Anchor.TopLeft))
@@ -133,7 +136,7 @@ namespace DLS.Graphics
 				    true, false, false, Anchor.TopLeft))
 				Application.Quit();
 
-			UI.DrawText("Touch-first interface • no Android system keyboard required",
+			UI.DrawText("Tip: hold a finger on a chip or wire for options; two fingers move and zoom the view.",
 				theme.FontRegular, theme.FontSizeRegular * 0.68f,
 				new Vector2(safe.center.x, safe.yMin + 2.2f), Anchor.Centre, new Color(1, 1, 1, 0.45f));
 		}
