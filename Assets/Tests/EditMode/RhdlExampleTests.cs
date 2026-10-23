@@ -208,6 +208,69 @@ namespace DLS.Tests
 			Assert.AreEqual(0u, c.Get("Z"), "Z");
 		}
 
+		// Every accumulator instruction from Examples/RHDL/CPU4/README.md, starting from A = 5.
+		[TestCase(0x0, 0x0u, 5u, TestName = "Cpu4_NOP")]
+		[TestCase(0x2, 0x2u, 7u, TestName = "Cpu4_ADDI")]
+		[TestCase(0x3, 0x2u, 3u, TestName = "Cpu4_SUBI")]
+		[TestCase(0x4, 0x6u, 4u, TestName = "Cpu4_ANDI")]
+		[TestCase(0x5, 0x2u, 7u, TestName = "Cpu4_ORI")]
+		[TestCase(0x6, 0x1u, 4u, TestName = "Cpu4_XORI")]
+		[TestCase(0xA, 0x0u, 10u, TestName = "Cpu4_NOT")]
+		[TestCase(0xB, 0x0u, 6u, TestName = "Cpu4_INC")]
+		[TestCase(0xC, 0x0u, 4u, TestName = "Cpu4_DEC")]
+		[TestCase(0xD, 0x0u, 5u, TestName = "Cpu4_Reserved")]
+		public void Cpu4AccumulatorInstruction(int opcode, uint operand, uint expected)
+		{
+			Build("Basics/04_DFF.rhdl");
+			Build("Basics/05_REG4.rhdl");
+			ChipDescription cpu = Build("CPU4/00_CPU4.rhdl");
+
+			// LDI 5; <instruction>; OUT; HLT
+			uint[] rom = new uint[256];
+			rom[0] = 0x0015;
+			rom[1] = (uint)(opcode << 4) | operand;
+			rom[2] = 0x00E0;
+			rom[3] = 0x00F0;
+			string romName = ChipTypeHelper.GetName(ChipType.Rom_256x16);
+			cpu.SubChips[System.Array.FindIndex(cpu.SubChips, s => ChipDescription.NameMatch(s.Name, romName))].InternalData = rom;
+
+			TestCircuit c = new(cpu, library);
+			c.Set("RESET", 1);
+			c.Tick();
+			c.Set("RESET", 0);
+			for (int i = 0; i < 8; i++) c.Tick();
+
+			Assert.AreEqual(expected, c.Get("ACC"), "ACC");
+			Assert.AreEqual(expected, c.Get("OUT_PORT"), "OUT_PORT");
+		}
+
+		// "not X" used to invert the cached bits of X in place, so every later use of X in the
+		// same circuit saw ~X (CPU4's INC and DEC computed ~A + 1 and ~A - 1).
+		[Test]
+		public void NotDoesNotChangeLaterUsesOfItsOperand()
+		{
+			RhdlCompileResult result = RhdlCompiler.Compile(@"
+circuit NotThenUse
+    input A: 4
+    output N: 4
+    output Y: 4
+
+    N = not A
+    Y = A + 0x1
+end", library);
+			Assert.IsTrue(result.Success);
+			library.NotifyChipSaved(result.Description, false);
+
+			TestCircuit c = new(result.Description, library);
+			for (uint a = 0; a < 16; a++)
+			{
+				c.Set("A", a);
+				c.Step();
+				Assert.AreEqual(~a & 15, c.Get("N"), $"N for A={a}");
+				Assert.AreEqual((a + 1) & 15, c.Get("Y"), $"Y for A={a}");
+			}
+		}
+
 		[Test]
 		public void InvalidSourceReportsDiagnosticsWithLine()
 		{

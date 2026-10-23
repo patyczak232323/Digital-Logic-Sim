@@ -1,0 +1,46 @@
+name: Engine tests and benchmarks (.NET)
+
+on:
+  push:
+    branches: [ main, 'fix/**', 'perf/**', 'exp/**' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # The Verilog export tests simulate the exported designs with Icarus Verilog.
+      - name: Install Icarus Verilog
+        run: sudo apt-get update -q && sudo apt-get install -y -q iverilog
+
+      - name: Build
+        run: dotnet build Tools/EngineHarness -nologo
+
+      # Benchmarks run in their own process: building CPU4 queues large background LUT
+      # builds that would otherwise delay the LUT tests.
+      - name: EditMode tests without Unity
+        run: dotnet test Tools/EngineHarness --no-build -nologo --filter "Category!=Benchmark" --logger "console;verbosity=normal"
+
+      - name: Engine benchmarks
+        run: dotnet test Tools/EngineHarness --no-build -nologo --filter "Category=Benchmark" --logger "console;verbosity=normal"
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: engine-benchmarks
+          path: Tools/EngineHarness/benchmark-results.json
+          if-no-files-found: ignore
+          retention-days: 30

@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Builds Rewired's engine code (Description, Simulation, RHDL, export, save system)
+    without Unity, against the small stubs in Stubs/, and runs the EditMode tests plus
+    the engine benchmarks with plain NUnit. See README.md.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NoWarn>CS0162;CS0168;CS0219;CS0414;CS0649;CS0169;CS8632;CS0067</NoWarn>
+    <Src>$(MSBuildThisFileDirectory)../../Assets/Scripts</Src>
+    <Tests>$(MSBuildThisFileDirectory)../../Assets/Tests/EditMode</Tests>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="NUnit" Version="3.14.0" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.9.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Stubs/*.cs" />
+    <Compile Include="Benchmarks/*.cs" />
+    <Compile Include="$(Src)/Description/**/*.cs" Exclude="$(Src)/Description/Serialization/Newtonsoft/**" />
+    <Compile Include="$(Src)/Simulation/*.cs" />
+    <Compile Include="$(Src)/RHDL/**/*.cs" />
+    <Compile Include="$(Src)/Export/VerilogExporter.cs" />
+    <Compile Include="$(Src)/Game/Project/ChipLibrary.cs" />
+    <Compile Include="$(Src)/Game/Project/BuiltinChipCreator.cs" />
+    <Compile Include="$(Src)/SaveSystem/SavePaths.cs;$(Src)/SaveSystem/SaveUtils.cs;$(Src)/SaveSystem/Saver.cs;$(Src)/SaveSystem/Loader.cs" />
+    <!-- Tests that need real editor elements (DevChipInstance, themes) run only in Unity. -->
+    <Compile Include="$(Tests)/*.cs" Exclude="$(Tests)/SchematicSvgTests.cs" />
+  </ItemGroup>
+</Project>
