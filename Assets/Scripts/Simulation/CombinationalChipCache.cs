@@ -474,7 +474,7 @@ namespace DLS.Simulation
 			}
 		}
 
-		static CacheBuildSnapshot CreateBuildSnapshot(ChipDescription root, ChipLibrary library)
+		internal static CacheBuildSnapshot CreateBuildSnapshot(ChipDescription root, ChipLibrary library)
 		{
 			if (root == null || library == null) return null;
 
@@ -844,7 +844,7 @@ namespace DLS.Simulation
 				ChipType.BusTerminus_8Bit;
 		}
 
-		static byte[] GetLogicFingerprint(ChipDescription description, ChipLibrary library)
+		internal static byte[] GetLogicFingerprint(ChipDescription description, ChipLibrary library)
 		{
 			int revision = Volatile.Read(ref descriptionRevision);
 			if (fingerprints.TryGetValue(description, out FingerprintHolder existing) && existing.Revision == revision)
