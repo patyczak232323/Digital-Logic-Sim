@@ -311,16 +311,25 @@ namespace DLS.Graphics
 			menuWidth = Mathf.Max(menuWidth, menuWidthHeader);
 
 			Draw.ID panelID = UI.ReservePanel();
-			Vector2 buttonSize = new(menuWidth, 2);
-
+			// Rows a finger can hit on a phone; the menu is kept inside the safe area so no
+			// entry ends up under a notch or off screen.
+			bool mobile = MobileUI.IsActive;
+			Vector2 buttonSize = new(menuWidth, mobile ? 4f : 2);
+			Rect area = mobile ? MobileUI.SafeRectUI : new Rect(0, 0, UI.Width, UI.Height);
 
 			Vector2 pos = mouseOpenMenuPos;
-			if (pos.x + menuWidth > UI.Width)
+			if (pos.x + menuWidth > area.xMax)
 			{
-				pos.x = UI.Width - menuWidth;
+				pos.x = area.xMax - menuWidth;
 			}
+			pos.x = Mathf.Max(pos.x, area.xMin);
 
 			bool expandDown = pos.y >= UI.Height * 0.35f;
+			if (mobile)
+			{
+				float menuHeight = (menuEntries.Length + 1) * buttonSize.y + 1f;
+				pos.y = expandDown ? Mathf.Clamp(pos.y, area.yMin + menuHeight, area.yMax) : Mathf.Clamp(pos.y, area.yMin, area.yMax - menuHeight);
+			}
 			float dirY = expandDown ? -1 : 1;
 			Anchor anchor = expandDown ? Anchor.TopLeft : Anchor.BottomLeft;
 

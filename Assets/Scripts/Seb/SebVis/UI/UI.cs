@@ -43,6 +43,15 @@ namespace Seb.Vis.UI
 		//
 		static int mouseOverUIFrameIndex;
 
+		// Touch scrolling: when enabled, dragging a scroll view's content scrolls it, and buttons
+		// inside the content press when the finger lifts without having dragged (instead of on
+		// touch down, which would make every swipe press whatever it started on).
+		public static bool TouchScrolling;
+		static int pointerTrackFrame = -1;
+		static Vector2 pointerDownPos;
+		static bool pointerDragged;
+		static bool insideScrollContent;
+
 		static UIScope currUIScope => uiScopes.CurrentScope;
 		static Vector2 canvasBottomLeft => currUIScope.canvasBottomLeft;
 		public static float Height => Width * currUIScope.aspect;
@@ -103,6 +112,7 @@ namespace Seb.Vis.UI
 		// Begin drawing UI with custom size and position on the screen
 		public static UIScope CreateUIScope(Vector2 bottomLeft, Vector2 size, bool drawLetterboxes)
 		{
+			TrackPointer();
 			UIScope scope = uiScopes.CreateScope();
 			scope.canvasBottomLeft = bottomLeft;
 			scope.canvasSize = size;
@@ -202,6 +212,30 @@ namespace Seb.Vis.UI
 			return DrawScrollView(scrollID, pos, size, anchor, theme, drawScrollContent);
 		}
 
+		static void TrackPointer()
+		{
+			if (pointerTrackFrame == Time.frameCount) return;
+			pointerTrackFrame = Time.frameCount;
+
+			if (InputHelper.IsMouseDownThisFrame(MouseButton.Left))
+			{
+				pointerDownPos = InputHelper.MousePos;
+				pointerDragged = false;
+			}
+			else if (InputHelper.IsMouseHeld(MouseButton.Left))
+			{
+				float threshold = Mathf.Max(12f, Screen.height * 0.02f);
+				if ((InputHelper.MousePos - pointerDownPos).sqrMagnitude > threshold * threshold) pointerDragged = true;
+			}
+		}
+
+		static bool IsTouchTap(Vector2 centre, Vector2 hitSize)
+		{
+			if (!InputHelper.IsMouseUpThisFrame(MouseButton.Left) || pointerDragged) return false;
+			Vector2 offset = pointerDownPos - centre;
+			return Mathf.Abs(offset.x) <= hitSize.x / 2 && Mathf.Abs(offset.y) <= hitSize.y / 2;
+		}
+
 		static void DrawScrollContent(Vector2 topLeft, float width, bool isLayoutOnly)
 		{
 			for (int i = 0; i < scollContext_activeScrollDrawCount; i++)
@@ -234,7 +268,10 @@ namespace Seb.Vis.UI
 
 					float maxScrollOffsetY = Mathf.Max(0, contentBounds.Height - scrollArea.Height);
 					scrollState.scrollY = Mathf.Max(0, Mathf.Min(maxScrollOffsetY, scrollState.scrollY));
+					bool wasInsideScrollContent = insideScrollContent;
+					insideScrollContent = true;
 					DrawContent(true, buttonTopLeft + Vector2.up * scrollState.scrollY, drawContentFunc, scrollArea);
+					insideScrollContent = wasInsideScrollContent;
 				}
 
 				// Draw scroll bar
@@ -320,6 +357,8 @@ namespace Seb.Vis.UI
 				}
 				else if (contentOverflow > 1)
 				{
+					if (TouchScrolling) TouchScrollContent(state, scrollViewArea, contentHeight);
+
 					const float scrollSensitivity = 1.8f;
 					Bounds2D wheelScrollableBounds = Bounds2D.Grow(scrollViewArea, scrollbarArea);
 					(Vector2 centre, Vector2 size) scrollableBounds_ss = UIToScreenSpace(wheelScrollableBounds.Centre, wheelScrollableBounds.Size);
@@ -335,6 +374,31 @@ namespace Seb.Vis.UI
 
 			OnFinishedDrawingUIElement(scrollbarArea.Centre, scrollbarArea.Size);
 			return state;
+		}
+
+		// Scrolls while a finger that went down on the content drags it.
+		static void TouchScrollContent(ScrollBarState state, Bounds2D scrollViewArea, float contentHeight)
+		{
+			if (InputHelper.IsMouseDownThisFrame(MouseButton.Left))
+			{
+				(Vector2 centre, Vector2 size) area_ss = UIToScreenSpace(scrollViewArea.Centre, scrollViewArea.Size);
+				state.isTouchScrolling = InputHelper.MouseInBounds_ScreenSpace(area_ss.centre, area_ss.size) && Draw.IsPointInsideActiveMask(InputHelper.MousePos);
+				state.touchStartScrollY = state.scrollY;
+			}
+
+			if (!state.isTouchScrolling) return;
+			if (!InputHelper.IsMouseHeld(MouseButton.Left))
+			{
+				state.isTouchScrolling = false;
+				return;
+			}
+
+			if (pointerDragged)
+			{
+				// Finger up moves the content up, the same as scrolling down.
+				float delta = (InputHelper.MousePos.y - pointerDownPos.y) / scale;
+				state.scrollY = Mathf.Clamp(state.touchStartScrollY + delta, 0, Mathf.Max(0, contentHeight - scrollViewArea.Height));
+			}
 		}
 
 		public static void DrawText(string text, FontType font, float fontSize, Vector2 pos, Anchor anchor, Color col)
@@ -778,7 +842,9 @@ namespace Seb.Vis.UI
 
 				if (mouseOver && enabled)
 				{
-					buttonPressedThisFrame = InputHelper.IsMouseDownThisFrame(MouseButton.Left);
+					buttonPressedThisFrame = TouchScrolling && insideScrollContent
+						? IsTouchTap(ss.centre, expandTouchTarget ? MobileInputBridge.ExpandTouchHitSize(ss.size) : ss.size)
+						: InputHelper.IsMouseDownThisFrame(MouseButton.Left);
 				}
 
 				// --- Draw ---

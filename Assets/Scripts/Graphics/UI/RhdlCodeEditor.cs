@@ -375,7 +375,8 @@ namespace DLS.Graphics
 			if (inside && InputHelper.IsMouseDownThisFrame(MouseButton.Left))
 			{
 				focused = true;
-				mouseSelecting = true;
+				// On a touch screen a drag scrolls the code instead of selecting it.
+				mouseSelecting = !UI.TouchScrolling;
 
 				float mouseX = UI.ScreenToUISpace(InputHelper.MousePos).x;
 				if (mouseX < textX)

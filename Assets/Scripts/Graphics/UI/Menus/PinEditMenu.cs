@@ -14,13 +14,6 @@ namespace DLS.Graphics
 		static readonly UIHandle ID_NameField = new("PinEditMenu_NameField");
 		static readonly UIHandle ID_ValueDisplayMode = new("PinEditMenu_ValueDisplayMode");
 
-		static readonly string[] CancelConfirmButtonNames =
-		{
-			"CANCEL", "CONFIRM"
-		};
-
-		static readonly bool[] ButtonGroupInteractStates = { true, true };
-
 		static readonly string[] PinDecimalDisplayOptions =
 		{
 			"Off",
@@ -52,7 +45,7 @@ namespace DLS.Graphics
 				Vector2 unpaddedSize = Draw.CalculateTextBoundsSize(MaxLengthPinName, inputTheme.fontSize, inputTheme.font);
 				const float padX = 2.25f;
 				Vector2 inputFieldSize = unpaddedSize + new Vector2(padX, 2.25f);
-				Vector2 pos = UI.Centre + Vector2.up * 4;
+				Vector2 pos = MenuHelper.PopupCentre(4);
 				Vector2 headerTopLeft = new(pos.x - inputFieldSize.x / 2f, pos.y + inputFieldSize.y / 2f + 3f);
 				RewiredUI.DrawSectionHeader("PIN SETTINGS", headerTopLeft, inputFieldSize.x, true);
 
@@ -72,7 +65,8 @@ namespace DLS.Graphics
 
 				// Draw cancel/confirm buttons
 				Vector2 buttonsTopLeft = UI.PrevBounds.BottomLeft + Vector2.down * spacing;
-				int buttonIndex = UI.HorizontalButtonGroup(CancelConfirmButtonNames, ButtonGroupInteractStates, theme.ButtonTheme, buttonsTopLeft, inputFieldBounds.Width, DrawSettings.DefaultButtonSpacing, 0, Anchor.TopLeft);
+				MenuHelper.CancelConfirmResult result = MenuHelper.DrawCancelConfirmButtons(buttonsTopLeft, inputFieldBounds.Width, false, false);
+				int buttonIndex = result == MenuHelper.CancelConfirmResult.Cancel ? 0 : result == MenuHelper.CancelConfirmResult.Confirm ? 1 : -1;
 
 				MenuHelper.DrawReservedMenuPanel(panelID, UI.GetCurrentBoundsScope());
 
