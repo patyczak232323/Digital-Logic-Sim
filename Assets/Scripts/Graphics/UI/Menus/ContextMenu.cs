@@ -36,6 +36,7 @@ namespace DLS.Graphics
 		static readonly MenuEntry openRhdlSourceEntry = new(Format("OPEN SOURCE"), OpenRhdlSource, CanOpenRhdlSource);
 		static readonly MenuEntry labelChipEntry = new(Format("LABEL"), OpenChipLabelPopup, CanLabelChip);
 		static readonly MenuEntry truthTableEntry = new(Format("TRUTH TABLE"), OpenTruthTable, IsCustomChip);
+		static readonly MenuEntry exportEntry = new(Format("EXPORT"), OpenExport, IsCustomChip);
 		static readonly MenuEntry toggleProbeEntry = new(Format("TOGGLE PROBE"), ToggleProbe, CanProbePin);
 		static readonly MenuEntry mirrorHorizontalEntry = new(Format("MIRROR H"), MirrorHorizontal, CanMirrorChip);
 		static readonly MenuEntry mirrorVerticalEntry = new(Format("MIRROR V"), MirrorVertical, CanMirrorChip);
@@ -46,6 +47,7 @@ namespace DLS.Graphics
 			openChipEntry,
 			openRhdlSourceEntry,
 			truthTableEntry,
+			exportEntry,
 			labelChipEntry,
 			mirrorHorizontalEntry,
 			mirrorVerticalEntry,
@@ -126,6 +128,7 @@ namespace DLS.Graphics
 			openChipEntry,
 			openRhdlSourceEntry,
 			truthTableEntry,
+			exportEntry,
 			new(Format("UN-STAR"), UnstarBottomBarEntry, () => true)
 		};
 
@@ -133,7 +136,8 @@ namespace DLS.Graphics
 		{
 			openChipEntry,
 			openRhdlSourceEntry,
-			truthTableEntry
+			truthTableEntry,
+			exportEntry
 		};
 
 		static readonly MenuEntry[] entries_bottomBarCollection =
@@ -540,6 +544,7 @@ namespace DLS.Graphics
 		static bool CanOpenChip() => IsCustomChip() && CanEditCurrentChip();
 
 		static void OpenTruthTable() => TruthTableMenu.Open(interactionContextName);
+		static void OpenExport() => ExportMenu.Open(interactionContextName);
 
 		static bool CanOpenRhdlSource()
 		{

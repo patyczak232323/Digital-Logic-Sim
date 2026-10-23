@@ -82,6 +82,7 @@ namespace DLS.SaveSystem
 		public static string GetProjectDescriptionPath(string projectName) => Path.Combine(GetProjectPath(projectName), ProjectFileName);
 		public static string GetProjectChipPath(string projectName, string chipName) => CombineContained(GetChipsPath(projectName), chipName + ".json");
 		public static string GetGlobalChipPath(string chipName) => CombineContained(GlobalChipsPath, chipName + ".json");
+		public static string GetExportsPath(string projectName) => Path.Combine(GetProjectPath(projectName), "Exports");
 		public static string GetChipTestsPath(string projectName, string chipName) => CombineContained(Path.Combine(GetProjectPath(projectName), "Chip Tests"), chipName + ".json");
 
 		// Project and chip names come from JSON files that users share. Never let such a
