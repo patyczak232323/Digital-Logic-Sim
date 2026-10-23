@@ -16,12 +16,15 @@ namespace DLS.Tests
 		public readonly SimChip Root;
 		readonly DevPinInstance[] inputs;
 
-		public TestCircuit(ChipDescription description, ChipLibrary library)
+		// prepare runs on the freshly built chip tree before the engine initializes it,
+		// e.g. to force one execution path with EnginePaths.Force.
+		public TestCircuit(ChipDescription description, ChipLibrary library, Action<SimChip> prepare = null)
 		{
 			Description = description;
 			RewiredEngine.Reset();
 			RewiredEngine.StepsPerClockTransition = 0;
 			Root = RewiredEngine.BuildChip(description, library);
+			prepare?.Invoke(Root);
 			inputs = description.InputPins.Select(p => new DevPinInstance(p, true)).ToArray();
 			RewiredEngine.EnsureInitialized(Root, inputs, null);
 		}
