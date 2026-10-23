@@ -110,7 +110,7 @@ namespace DLS.Graphics
 			ButtonGroupInteractableStates[0] = interactableA;
 			ButtonGroupInteractableStates[1] = interactableB;
 
-			int buttonIndex = UI.HorizontalButtonGroup(ButtonGroupNames.AsSpan(0, 2), ButtonGroupInteractableStates.AsSpan(0, 2), Theme.ButtonTheme, topLeft, new Vector2(width, PopupButtonHeight), DefaultButtonSpacing, 0, Anchor.TopLeft, ignoreInputs: ignoreInputs);
+			int buttonIndex = UI.HorizontalButtonGroup(ButtonGroupNames.AsSpan(0, 2), ButtonGroupInteractableStates.AsSpan(0, 2), Theme.ButtonTheme, topLeft, new Vector2(width, ButtonHeight), DefaultButtonSpacing, 0, Anchor.TopLeft, ignoreInputs: ignoreInputs);
 			return buttonIndex;
 		}
 
@@ -125,7 +125,7 @@ namespace DLS.Graphics
 			ButtonGroupInteractableStates[1] = interactableB;
 			ButtonGroupInteractableStates[2] = interactableC;
 
-			int buttonIndex = UI.HorizontalButtonGroup(ButtonGroupNames.AsSpan(0, 3), ButtonGroupInteractableStates.AsSpan(0, 3), Theme.ButtonTheme, topLeft, new Vector2(width, PopupButtonHeight), DefaultButtonSpacing, 0, Anchor.TopLeft, ignoreInputs: ignoreInputs);
+			int buttonIndex = UI.HorizontalButtonGroup(ButtonGroupNames.AsSpan(0, 3), ButtonGroupInteractableStates.AsSpan(0, 3), Theme.ButtonTheme, topLeft, new Vector2(width, ButtonHeight), DefaultButtonSpacing, 0, Anchor.TopLeft, ignoreInputs: ignoreInputs);
 			return buttonIndex;
 		}
 

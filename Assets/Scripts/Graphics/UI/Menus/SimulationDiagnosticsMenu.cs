@@ -471,7 +471,7 @@ namespace DLS.Graphics
 					secondary);
 
 				UI.DrawText(
-					"Right-click any pin and choose TOGGLE PROBE.",
+					MobileUI.IsActive ? "Long-press any pin and choose TOGGLE PROBE." : "Right-click any pin and choose TOGGLE PROBE.",
 					theme.FontRegular,
 					theme.FontSizeRegular * 0.64f,
 					empty.Centre + Vector2.down * 1.05f,
