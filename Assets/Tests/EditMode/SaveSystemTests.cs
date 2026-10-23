@@ -1,9 +1,12 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using DLS.Description;
 using DLS.SaveSystem;
 using NUnit.Framework;
+using UnityEngine;
+using UnityEngine.TestTools;
 using static DLS.Tests.ChipBuilder;
 
 namespace DLS.Tests
@@ -70,6 +73,8 @@ namespace DLS.Tests
 			Saver.SaveChip(Chip("Inv", extraInputs: 1), projectName);
 			File.WriteAllText(ChipPath("Inv"), "{ not json");
 
+			// Serializer logs the parse error before Loader falls back to the backup.
+			LogAssert.Expect(LogType.Error, new Regex("."));
 			Assert.AreEqual(1, Loader.LoadProjectChipDescription(projectName, "Inv").InputPins.Length, "should load the backup");
 		}
 

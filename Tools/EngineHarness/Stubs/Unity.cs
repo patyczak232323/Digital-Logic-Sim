@@ -132,3 +132,15 @@ namespace DLS.SaveSystem
 {
 	public static class UpgradeHelper { public static void ApplyVersionChanges(DLS.Description.ChipDescription[] a, DLS.Description.ChipDescription[] b) { } }
 }
+namespace UnityEngine
+{
+	public enum LogType { Error, Assert, Warning, Log, Exception }
+}
+namespace UnityEngine.TestTools
+{
+	// Unity fails a test that logs an unexpected error; plain NUnit does not, so this is a no-op.
+	public static class LogAssert
+	{
+		public static void Expect(UnityEngine.LogType type, System.Text.RegularExpressions.Regex message) { }
+	}
+}
