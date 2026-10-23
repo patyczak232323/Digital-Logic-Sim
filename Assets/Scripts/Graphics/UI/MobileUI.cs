@@ -28,7 +28,16 @@ namespace DLS.Graphics
 		static readonly string[] DockLabels = { "PAN", "ADD CHIP", "SAVE", "LIBRARY", "TOOLS" };
 		static bool panMode;
 
-		public static bool IsActive => MobileInputBridge.RuntimeEnabled || Application.isMobilePlatform;
+		// "-mobile-ui" on the command line shows the touch interface in a desktop build, to
+		// preview and screenshot it without a phone. Touch gestures stay Android-only.
+		public static bool PreviewOnDesktop { get; private set; }
+
+		public static bool IsActive => MobileInputBridge.RuntimeEnabled || Application.isMobilePlatform || PreviewOnDesktop;
+
+		public static void ReadCommandLine()
+		{
+			PreviewOnDesktop = Array.Exists(Environment.GetCommandLineArgs(), a => string.Equals(a, "-mobile-ui", StringComparison.OrdinalIgnoreCase));
+		}
 		public static bool PanMode => panMode;
 		public static bool PanByDefault => PlayerPrefs.GetInt(PrefPanDefault, 0) != 0;
 		public static int TargetFrameRate => Mathf.Clamp(PlayerPrefs.GetInt(PrefTargetFps, 60), 30, 120);

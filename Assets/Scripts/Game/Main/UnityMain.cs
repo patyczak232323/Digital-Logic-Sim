@@ -66,6 +66,7 @@ namespace DLS.Game
 		void Awake()
 		{
 			ConfigureFramePacing();
+			MobileUI.ReadCommandLine();
 			instance = this;
 			audioUnity = FindFirstObjectByType<AudioUnity>();
 			ResetStatics();

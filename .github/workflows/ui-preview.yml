@@ -1,0 +1,95 @@
+name: UI preview build
+
+# Builds only the Linux player from any branch and attaches it to the internal
+# "ui-preview" pre-release, so the interface can be run and screenshotted (for example
+# with "-mobile-ui" under Xvfb) without waiting for every platform.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ui-preview
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux preview
+    runs-on: [self-hosted, trusted]
+    timeout-minutes: 40
+
+    steps:
+      - name: Restore workspace ownership
+        shell: bash
+        run: |
+          work="$(readlink -f "$RUNNER_WORKSPACE/..")"
+          docker run --rm -v "$work:/w" alpine:3.20 chown -R "$(id -u):$(id -g)" /w
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          clean: false
+
+      - name: Remove untracked files except Unity Library
+        shell: bash
+        run: git clean -ffdx -e /Library
+
+      - name: Build with Unity
+        uses: game-ci/unity-builder@4423ee75828dff56037d1d1cfdac6b68e3a6ba00 # v4.8.2
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: auto
+          targetPlatform: StandaloneLinux64
+          buildName: DLSRewired
+          buildsPath: build
+
+      - name: Package build
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C build/StandaloneLinux64 -czf "$GITHUB_WORKSPACE/DLSRewired-Linux-preview.tar.gz" .
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-preview-linux
+          path: DLSRewired-Linux-preview.tar.gz
+          retention-days: 3
+
+      - name: Restore workspace ownership
+        if: always()
+        shell: bash
+        run: |
+          work="$(readlink -f "$RUNNER_WORKSPACE/..")"
+          docker run --rm -v "$work:/w" alpine:3.20 chown -R "$(id -u):$(id -g)" /w
+
+  publish:
+    name: Publish to the ui-preview pre-release
+    runs-on: ubuntu-latest
+    needs: linux
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ui-preview-linux
+
+      - name: Publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ui-preview
+        run: |
+          set -euo pipefail
+          notes="Internal preview of branch ${GITHUB_REF_NAME} at ${GITHUB_SHA::7}, for UI testing only. Use the android-unofficial or a versioned release instead."
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG" -f sha="$GITHUB_SHA" -F force=true
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease --notes "$notes"
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "UI preview (internal)" --notes "$notes"
+          fi
+          gh release upload "$TAG" DLSRewired-Linux-preview.tar.gz --repo "$GITHUB_REPOSITORY" --clobber
