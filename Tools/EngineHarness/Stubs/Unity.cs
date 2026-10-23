@@ -75,6 +75,7 @@ namespace UnityEngine
 		public static bool isMobilePlatform => false;
 		public static RuntimePlatform platform => RuntimePlatform.LinuxEditor;
 	}
+	public static class Time { public static float unscaledTime => (float)Environment.TickCount64 / 1000f; public static float unscaledDeltaTime => 0.016f; public static int frameCount => 0; }
 	public enum FullScreenMode { ExclusiveFullScreen, FullScreenWindow, MaximizedWindow, Windowed }
 	public enum KeyCode
 	{

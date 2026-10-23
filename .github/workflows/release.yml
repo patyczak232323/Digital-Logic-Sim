@@ -26,6 +26,9 @@ jobs:
           - targetPlatform: StandaloneLinux64
             label: Linux x86_64
             packageName: DLSRewired-Linux-x86_64
+          - targetPlatform: WebGL
+            label: WebGL (browser)
+            packageName: DLSRewired-WebGL
 
     steps:
       - name: Restore workspace ownership
@@ -247,6 +250,7 @@ jobs:
           assets=(
             release-assets/DLSRewired-Windows-x64.zip
             release-assets/DLSRewired-Linux-x86_64.zip
+            release-assets/DLSRewired-WebGL.zip
           )
           if [ -f release-assets/DLSRewired-Android-arm64.apk ]; then
             assets+=(release-assets/DLSRewired-Android-arm64.apk)

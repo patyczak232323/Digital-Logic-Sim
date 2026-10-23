@@ -33,6 +33,9 @@ jobs:
           - targetPlatform: StandaloneLinux64
             label: Linux x86_64
             packageName: DLSRewired-Linux-x86_64
+          - targetPlatform: WebGL
+            label: WebGL (browser)
+            packageName: DLSRewired-WebGL
 
     steps:
       - name: Restore workspace ownership
@@ -223,6 +226,8 @@ jobs:
     name: Publish one unofficial release
     runs-on: ubuntu-latest
     needs: [desktop, android]
+    # A manual run on another branch only checks that every platform builds.
+    if: github.ref == 'refs/heads/main'
 
     steps:
       - name: Download all builds
@@ -250,7 +255,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: android-unofficial
           TITLE: Rewired — Unofficial
-          NOTES: Unofficial development build of Rewired for Windows x64, Linux x86_64, and Android ARM64. All three files come from the same commit and workflow run.
+          NOTES: Unofficial development build of Rewired for Windows x64, Linux x86_64, WebGL (browser) and Android ARM64. All files come from the same commit and workflow run.
         run: |
           set -euo pipefail
 
@@ -277,6 +282,7 @@ jobs:
           gh release upload "$TAG" \
             release-assets/DLSRewired-Windows-x64.zip \
             release-assets/DLSRewired-Linux-x86_64.zip \
+            release-assets/DLSRewired-WebGL.zip \
             release-assets/DLSRewired-Android-arm64.apk \
             --repo "$GITHUB_REPOSITORY" \
             --clobber

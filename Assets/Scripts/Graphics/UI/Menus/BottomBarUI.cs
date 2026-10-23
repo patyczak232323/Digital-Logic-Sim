@@ -27,6 +27,7 @@ namespace DLS.Graphics
 			"RHDL STUDIO",
 			"SIM DIAGNOSTICS",
 			"EXPORT",
+			"CHALLENGES",
 			"QUIT"
 		};
 
@@ -38,7 +39,8 @@ namespace DLS.Graphics
 		const int RhdlButtonIndex = 5;
 		const int DiagnosticsButtonIndex = 6;
 		const int ExportButtonIndex = 7;
-		const int QuitButtonIndex = 8;
+		const int ChallengesButtonIndex = 8;
+		const int QuitButtonIndex = 9;
 
 		// ---- State ----
 		static float scrollX;
@@ -105,7 +107,7 @@ namespace DLS.Graphics
 			{
 				for (int i = menuButtonNames.Length - 1; i >= 0; i--)
 				{
-					bool buttonEnabled = MenuButtonsAndShortcutsEnabled || i is QuitButtonIndex or OptionsButtonIndex or DiagnosticsButtonIndex or RhdlButtonIndex or ExportButtonIndex;
+					bool buttonEnabled = MenuButtonsAndShortcutsEnabled || i is QuitButtonIndex or OptionsButtonIndex or DiagnosticsButtonIndex or RhdlButtonIndex or ExportButtonIndex or ChallengesButtonIndex;
 					bool pressed = UI.Button(
 						menuButtonNames[i],
 						theme,
@@ -165,6 +167,7 @@ namespace DLS.Graphics
 				else if (i == RhdlButtonIndex) OpenRhdlStudio();
 				else if (i == DiagnosticsButtonIndex) OpenDiagnosticsMenu();
 				else if (i == ExportButtonIndex) ExportMenu.Open(Project.ActiveProject.ActiveDevChipName);
+				else if (i == ChallengesButtonIndex) ChallengesMenu.Open();
 				else if (i == QuitButtonIndex) ExitToMainMenu();
 			}
 		}

@@ -97,6 +97,8 @@ namespace DLS.Game
 
 			if (songTestMode) SongTest();
 			else Main.Update();
+
+			SaveSystem.WebStorage.Update();
 		}
 
 		void SongTest()

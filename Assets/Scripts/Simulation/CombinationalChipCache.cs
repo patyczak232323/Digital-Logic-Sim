@@ -541,11 +541,19 @@ namespace DLS.Simulation
 			};
 		}
 
+		// LUTs are built on a background thread, which WebGL does not have.
+#if UNITY_WEBGL && !UNITY_EDITOR
+		public static readonly bool BackgroundBuildsSupported = false;
+#else
+		public static readonly bool BackgroundBuildsSupported = true;
+#endif
+
 		internal static void Attach(SimChip simChip, ChipDescription description, ChipLibrary library)
 		{
 			if (simChip == null) return;
 
 			simChip.MemoCache = null;
+			if (!BackgroundBuildsSupported) return;
 
 			if (description == null ||
 			    description.ChipType != ChipType.Custom ||
@@ -613,7 +621,7 @@ namespace DLS.Simulation
 
 		static void EnsurePersistentCacheForDescription(ChipDescription description, ChipLibrary library, string projectName)
 		{
-			if (description == null || description.ChipType != ChipType.Custom) return;
+			if (!BackgroundBuildsSupported || description == null || description.ChipType != ChipType.Custom) return;
 
 			if (description.CacheMode == ChipCacheMode.Normal)
 			{

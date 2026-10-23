@@ -29,8 +29,9 @@
     <Compile Include="$(Src)/RHDL/**/*.cs" />
     <Compile Include="$(Src)/Export/VerilogExporter.cs" />
     <Compile Include="$(Src)/Game/Project/ChipLibrary.cs" />
+    <Compile Include="$(Src)/Game/Challenges/*.cs" />
     <Compile Include="$(Src)/Game/Project/BuiltinChipCreator.cs" />
-    <Compile Include="$(Src)/SaveSystem/SavePaths.cs;$(Src)/SaveSystem/SaveUtils.cs;$(Src)/SaveSystem/Saver.cs;$(Src)/SaveSystem/Loader.cs" />
+    <Compile Include="$(Src)/SaveSystem/SavePaths.cs;$(Src)/SaveSystem/SaveUtils.cs;$(Src)/SaveSystem/Saver.cs;$(Src)/SaveSystem/Loader.cs;$(Src)/SaveSystem/WebStorage.cs" />
     <!-- Tests that need real editor elements (DevChipInstance, themes) run only in Unity. -->
     <Compile Include="$(Tests)/*.cs" Exclude="$(Tests)/SchematicSvgTests.cs" />
   </ItemGroup>
