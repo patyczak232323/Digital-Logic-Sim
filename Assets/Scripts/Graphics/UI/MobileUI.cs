@@ -145,6 +145,7 @@ namespace DLS.Graphics
 				case UIDrawer.MenuType.Search: SearchPopup.DrawMenu(); break;
 				case UIDrawer.MenuType.ChipLabelPopup: ChipLabelMenu.DrawMenu(); break;
 				case UIDrawer.MenuType.PulseEdit: PulseEditMenu.DrawMenu(); break;
+				case UIDrawer.MenuType.TruthTable: TruthTableMenu.DrawMenu(); break;
 			}
 
 			DrawModalBackButton(menu);

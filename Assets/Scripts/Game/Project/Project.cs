@@ -301,6 +301,7 @@ namespace DLS.Game
 				string nameOld = previousDescription.Name;
 				Saver.RenameChip(nameOld, saveChipDescription, description.ProjectName, wasGlobal, saveGlobally);
 				CombinationalChipCacheManager.DeletePersistentCache(nameOld, description.ProjectName);
+				if (renaming) TryUpdateChipTests(() => Saver.RenameChipTests(nameOld, saveChipDescription.Name, description.ProjectName));
 				chipLibrary.NotifyChipRenamed(saveChipDescription, nameOld, saveGlobally);
 				if (renaming)
 				{
@@ -472,6 +473,7 @@ namespace DLS.Game
 			if (deletingGlobalChip) Saver.DeleteGlobalChip(chipToDeleteName);
 			else Saver.DeleteChip(chipToDeleteName, description.ProjectName);
 			CombinationalChipCacheManager.DeletePersistentCache(chipToDeleteName, description.ProjectName);
+			TryUpdateChipTests(() => Saver.DeleteChipTests(chipToDeleteName, description.ProjectName));
 			chipLibrary.RemoveChip(chipToDeleteName);
 			CombinationalChipCacheManager.NotifyProjectDescriptionsChanged();
 			SetStarred(chipToDeleteName, false, false, false); // ensure removed from starred list
@@ -874,6 +876,20 @@ namespace DLS.Game
 			RewiredEngine.SetInspectionChip(ViewedSimChip);
 			RewiredEngine.RunStep(rootSimChip, inputPins, audioState.simAudio);
 			ViewedChip.UpdateStateFromSim(ViewedSimChip, !CanEditViewedChip);
+		}
+
+		// Recorded chip tests are a convenience; failing to move or delete them must never
+		// break a rename or delete of the chip itself.
+		static void TryUpdateChipTests(Action update)
+		{
+			try
+			{
+				update();
+			}
+			catch (Exception e)
+			{
+				Debug.LogWarning("Could not update recorded chip tests: " + e.Message);
+			}
 		}
 
 		public void UpdateAndSaveProjectDescription()

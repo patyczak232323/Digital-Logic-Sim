@@ -100,6 +100,31 @@ namespace DLS.SaveSystem
 		}
 
 
+		// Recorded truth-table tests live next to the project, keyed by chip name, so they
+		// never change the chip file format. Global chips keep tests per project.
+		public static void SaveChipTests(ChipTestSuite suite, string projectName)
+		{
+			WriteToFile(Serializer.SerializeChipTestSuite(suite), SavePaths.GetChipTestsPath(projectName, suite.ChipName));
+		}
+
+		public static void DeleteChipTests(string chipName, string projectName)
+		{
+			string path = SavePaths.GetChipTestsPath(projectName, chipName);
+			if (File.Exists(path)) File.Delete(path);
+			if (File.Exists(path + ".bak")) File.Delete(path + ".bak");
+		}
+
+		public static void RenameChipTests(string oldName, string newName, string projectName)
+		{
+			ChipTestSuite suite = Loader.LoadChipTests(projectName, oldName);
+			if (suite == null) return;
+
+			suite.ChipName = newName;
+			SaveChipTests(suite, projectName);
+			if (!string.Equals(oldName, newName, StringComparison.OrdinalIgnoreCase)) DeleteChipTests(oldName, projectName);
+		}
+
+
 		public static ChipDescription CloneChipDescription(ChipDescription desc)
 		{
 			if (desc == null) return null;
