@@ -273,7 +273,7 @@ namespace DLS.Graphics
 			{
 				const float cancelW = 11f;
 				string text = "TAP WHERE THE CHIP SHOULD GO";
-				Vector2 size = new(Draw.CalculateTextBoundsSize(text, theme.FontSizeRegular * 0.8f, theme.FontBold).x + cancelW + 3f, 3.6f);
+				Vector2 size = new(Seb.Vis.Draw.CalculateTextBoundsSize(text, theme.FontSizeRegular * 0.8f, theme.FontBold).x + cancelW + 3f, 3.6f);
 				Vector2 centre = new(safe.center.x, y);
 				UI.DrawPanel(centre, size, RewiredUI.SurfaceRaised, Anchor.Centre);
 				Bounds2D banner = UI.PrevBounds;
