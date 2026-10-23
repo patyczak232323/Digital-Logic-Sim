@@ -68,6 +68,7 @@ end";
 		static readonly string[] AluOutputs = { "Y", "EQ", "LT" };
 		static readonly string[] Reg4Inputs = { "D", "WE", "CLK", "RESET" };
 		static readonly string[] Reg4Outputs = { "Q" };
+		const int Reg4ResetSteps = 4;
 
 		static string ExamplesRoot => Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Examples", "RHDL"));
 
@@ -130,7 +131,9 @@ end";
 			Assert.Greater(feedback.FeedbackJitHits, 0, "feedback JIT never evaluated the register");
 			Assert.AreEqual(0, feedback.FeedbackJitFallbacks, "feedback JIT fell back to the gate simulator");
 			Assert.IsTrue(reference.AllConverged && feedback.AllConverged, "a step did not settle");
-			AssertSameOutputs(reference, feedback, Reg4Inputs, Reg4Outputs, stimulus);
+			// Power-on deliberately resolves latch races at random, so the register only has a
+			// defined value once the initial reset has been clocked in.
+			AssertSameOutputs(reference, feedback, Reg4Inputs, Reg4Outputs, stimulus, Reg4ResetSteps);
 		}
 
 		[Test]
@@ -243,9 +246,9 @@ end";
 			return trace;
 		}
 
-		static void AssertSameOutputs(Trace expected, Trace actual, string[] inputs, string[] outputs, uint[][] stimulus)
+		static void AssertSameOutputs(Trace expected, Trace actual, string[] inputs, string[] outputs, uint[][] stimulus, int firstStep = 0)
 		{
-			for (int step = 0; step < stimulus.Length; step++)
+			for (int step = firstStep; step < stimulus.Length; step++)
 			{
 				for (int o = 0; o < outputs.Length; o++)
 				{
@@ -322,14 +325,15 @@ end";
 			return vectors.ToArray();
 		}
 
-		// Random data and control with a clock that toggles every step.
+		// Two clock cycles with RESET held high, then random data and control with a clock
+		// that toggles every step.
 		static uint[][] Reg4Stimulus(int steps)
 		{
 			System.Random random = new(5678);
 			uint[][] vectors = new uint[steps][];
 			for (int i = 0; i < steps; i++)
 			{
-				uint reset = random.Next(10) == 0 ? 1u : 0u;
+				uint reset = i < Reg4ResetSteps || random.Next(10) == 0 ? 1u : 0u;
 				vectors[i] = new[] { (uint)random.Next(16), (uint)random.Next(2), (uint)(i & 1), reset };
 			}
 
