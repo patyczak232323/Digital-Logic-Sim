@@ -16,6 +16,8 @@ namespace Seb.Vis.UI
 		public float scrollY;
 		public bool isTouchScrolling;
 		public float touchStartScrollY;
+		public int lastDrawnFrame = -10;
+		public int visibleSinceFrame;
 	}
 
 	public struct SliderState

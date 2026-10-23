@@ -49,8 +49,10 @@ namespace Seb.Vis.UI
 		public static bool TouchScrolling;
 		static int pointerTrackFrame = -1;
 		static Vector2 pointerDownPos;
+		static int pointerDownFrame = -1;
 		static bool pointerDragged;
 		static bool insideScrollContent;
+		static int scrollContentVisibleSinceFrame;
 
 		static UIScope currUIScope => uiScopes.CurrentScope;
 		static Vector2 canvasBottomLeft => currUIScope.canvasBottomLeft;
@@ -220,6 +222,7 @@ namespace Seb.Vis.UI
 			if (InputHelper.IsMouseDownThisFrame(MouseButton.Left))
 			{
 				pointerDownPos = InputHelper.MousePos;
+				pointerDownFrame = Time.frameCount;
 				pointerDragged = false;
 			}
 			else if (InputHelper.IsMouseHeld(MouseButton.Left))
@@ -231,7 +234,9 @@ namespace Seb.Vis.UI
 
 		static bool IsTouchTap(Vector2 centre, Vector2 hitSize)
 		{
-			if (!InputHelper.IsMouseUpThisFrame(MouseButton.Left) || pointerDragged) return false;
+			// A finger that went down before this list appeared (the tap that opened its menu)
+			// must not press a row when it lifts.
+			if (!InputHelper.IsMouseUpThisFrame(MouseButton.Left) || pointerDragged || pointerDownFrame < scrollContentVisibleSinceFrame) return false;
 			Vector2 offset = pointerDownPos - centre;
 			return Mathf.Abs(offset.x) <= hitSize.x / 2 && Mathf.Abs(offset.y) <= hitSize.y / 2;
 		}
@@ -268,10 +273,16 @@ namespace Seb.Vis.UI
 
 					float maxScrollOffsetY = Mathf.Max(0, contentBounds.Height - scrollArea.Height);
 					scrollState.scrollY = Mathf.Max(0, Mathf.Min(maxScrollOffsetY, scrollState.scrollY));
+					if (scrollState.lastDrawnFrame != Time.frameCount - 1 && scrollState.lastDrawnFrame != Time.frameCount) scrollState.visibleSinceFrame = Time.frameCount;
+					scrollState.lastDrawnFrame = Time.frameCount;
+
 					bool wasInsideScrollContent = insideScrollContent;
+					int prevVisibleSince = scrollContentVisibleSinceFrame;
 					insideScrollContent = true;
+					scrollContentVisibleSinceFrame = scrollState.visibleSinceFrame;
 					DrawContent(true, buttonTopLeft + Vector2.up * scrollState.scrollY, drawContentFunc, scrollArea);
 					insideScrollContent = wasInsideScrollContent;
+					scrollContentVisibleSinceFrame = prevVisibleSince;
 				}
 
 				// Draw scroll bar

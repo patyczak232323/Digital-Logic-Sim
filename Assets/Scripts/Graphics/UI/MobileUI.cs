@@ -287,7 +287,7 @@ namespace DLS.Graphics
 
 			if (project.ViewedChip.Elements.Count == 0)
 			{
-				const string text = "Empty chip: tap IN-1 and OUT-1 below to add pins, then NAND. Drag from pin to pin to wire them.";
+				const string text = "Empty chip: tap IN-1 and OUT-1 below to add pins, then NAND. Tap a pin, then another pin, to wire them.";
 				UI.DrawText(text, theme.FontRegular, theme.FontSizeRegular * 0.72f, new Vector2(safe.center.x, y), Anchor.Centre, RewiredUI.SecondaryText);
 			}
 		}
