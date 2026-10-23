@@ -168,12 +168,11 @@ namespace DLS.Graphics
 			Rect safe = MobileUI.SafeRectUI;
 			float pad = 1.2f;
 			float width = safe.width - pad * 2f;
-			Vector2 topLeft = new(safe.xMin + pad, safe.yMax - 7.2f);
-
+			// The title sits beside the BACK button, which MobileUI draws over this menu.
 			UI.DrawText("SAVE CHIP", theme.FontBold, theme.FontSizeRegular * 1.1f,
-				topLeft + new Vector2(12.5f, -1f), Anchor.TextCentreLeft, Color.white);
+				new Vector2(safe.xMin + 13.3f, safe.yMax - 3f), Anchor.TextCentreLeft, Color.white);
 
-			topLeft.y -= 3.2f;
+			Vector2 topLeft = new(safe.xMin + pad, safe.yMax - 6.2f);
 			InputFieldTheme inputTheme = theme.ChipNameInputField;
 			InputFieldState inputFieldState = UI.InputField(
 				ID_ChipNameField,

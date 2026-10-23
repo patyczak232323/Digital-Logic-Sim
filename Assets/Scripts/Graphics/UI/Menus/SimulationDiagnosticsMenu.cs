@@ -25,6 +25,9 @@ namespace DLS.Graphics
 		static readonly string[] OffOn = { "OFF", "ON" };
 		static readonly UIHandle ID_Profiler = new("SIM_DIAG_Profiler");
 		static readonly UIHandle ID_Waveform = new("SIM_DIAG_Waveform");
+		static readonly UIHandle ID_MobileScroll = new("SIM_DIAG_MobileScroll");
+		static readonly UI.ScrollViewDrawContentFunc drawMobileContent = DrawMobileContent;
+		static bool mobileClosePressed;
 
 		public static void OnMenuOpened()
 		{
@@ -36,49 +39,71 @@ namespace DLS.Graphics
 		{
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
 			MenuHelper.DrawBackgroundOverlay();
-			Draw.ID panelID = UI.ReservePanel();
 
-			Vector2 topLeft = UI.Centre + new Vector2(-menuWidth / 2f, 27f);
+			bool close;
+			if (MobileUI.IsActive)
+			{
+				// Taller than a phone screen, so it scrolls below the top bar.
+				Rect safe = MobileUI.SafeRectUI;
+				float width = Mathf.Min(menuWidth + 3f, safe.width - 1f);
+				Vector2 topLeft = new(safe.center.x - width / 2f, safe.yMax - 6.2f);
+				mobileClosePressed = false;
+				UI.DrawScrollView(ID_MobileScroll, topLeft, new Vector2(width, topLeft.y - safe.yMin - 0.5f), Anchor.TopLeft, theme.ScrollTheme, drawMobileContent);
+				close = mobileClosePressed;
+			}
+			else
+			{
+				Draw.ID panelID = UI.ReservePanel();
+				using (UI.BeginBoundsScope(true))
+				{
+					close = DrawContents(theme, UI.Centre + new Vector2(-menuWidth / 2f, 27f));
+					MenuHelper.DrawReservedMenuPanel(panelID, UI.GetCurrentBoundsScope());
+				}
+			}
+
+			if (close || KeyboardShortcuts.CancelShortcutTriggered)
+			{
+				UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
+			}
+		}
+
+		static void DrawMobileContent(Vector2 topLeft, float width, bool isLayoutOnly)
+		{
+			mobileClosePressed |= DrawContents(DrawSettings.ActiveUITheme, topLeft);
+		}
+
+		// Returns true when CLOSE is pressed.
+		static bool DrawContents(DrawSettings.UIThemeDLS theme, Vector2 topLeft)
+		{
 			Color bodyCol = ColHelper.Darken(theme.MenuPanelCol, 0.06f);
 			Color raisedCol = ColHelper.Darken(theme.MenuPanelCol, 0.025f);
 			Color dim = new(1, 1, 1, 0.58f);
 			Color secondary = new(1, 1, 1, 0.74f);
 			Color accent = theme.MainMenuButtonTheme.buttonCols.hover;
 
-			using (UI.BeginBoundsScope(true))
-			{
-				DrawTopHeader(theme, topLeft, accent, dim);
+			DrawTopHeader(theme, topLeft, accent, dim);
 
-				Vector2 contentTop = topLeft + Vector2.down * (headerHeight + 0.75f);
-				Vector2 leftPos = contentTop;
-				Vector2 rightPos = contentTop + Vector2.right * (leftColumnWidth + columnGap);
+			Vector2 contentTop = topLeft + Vector2.down * (headerHeight + 0.75f);
+			Vector2 leftPos = contentTop;
+			Vector2 rightPos = contentTop + Vector2.right * (leftColumnWidth + columnGap);
 
-				DrawEngineStatus(theme, ref leftPos, bodyCol, secondary, dim, accent);
-				DrawPerformance(theme, ref leftPos, bodyCol, secondary, dim, accent);
-				DrawHotChips(theme, ref leftPos, bodyCol, secondary, dim, accent);
-				DrawReplay(theme, ref leftPos, bodyCol, secondary, dim, accent);
+			DrawEngineStatus(theme, ref leftPos, bodyCol, secondary, dim, accent);
+			DrawPerformance(theme, ref leftPos, bodyCol, secondary, dim, accent);
+			DrawHotChips(theme, ref leftPos, bodyCol, secondary, dim, accent);
+			DrawReplay(theme, ref leftPos, bodyCol, secondary, dim, accent);
 
-				DrawLogicAnalyzer(theme, ref rightPos, bodyCol, raisedCol, secondary, dim, accent);
+			DrawLogicAnalyzer(theme, ref rightPos, bodyCol, raisedCol, secondary, dim, accent);
 
-				float bottom = Mathf.Min(leftPos.y, rightPos.y) - 0.5f;
-				bool close = UI.Button(
-					"CLOSE",
-					theme.ButtonTheme,
-					new Vector2(topLeft.x, bottom),
-					new Vector2(menuWidth, DrawSettings.ButtonHeight),
-					true,
-					false,
-					true,
-					Anchor.TopLeft);
-
-				if (close || KeyboardShortcuts.CancelShortcutTriggered)
-				{
-					UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
-				}
-
-				Bounds2D bounds = UI.GetCurrentBoundsScope();
-				MenuHelper.DrawReservedMenuPanel(panelID, bounds);
-			}
+			float bottom = Mathf.Min(leftPos.y, rightPos.y) - 0.5f;
+			return UI.Button(
+				"CLOSE",
+				theme.ButtonTheme,
+				new Vector2(topLeft.x, bottom),
+				new Vector2(menuWidth, MenuHelper.PopupButtonHeight),
+				true,
+				false,
+				true,
+				Anchor.TopLeft);
 		}
 
 		static void DrawTopHeader(
@@ -446,7 +471,7 @@ namespace DLS.Graphics
 					secondary);
 
 				UI.DrawText(
-					"Right-click any pin and choose TOGGLE PROBE.",
+					MobileUI.IsActive ? "Long-press any pin and choose TOGGLE PROBE." : "Right-click any pin and choose TOGGLE PROBE.",
 					theme.FontRegular,
 					theme.FontSizeRegular * 0.64f,
 					empty.Centre + Vector2.down * 1.05f,

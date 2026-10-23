@@ -17,7 +17,7 @@ namespace DLS.Graphics
 
 			string text = "The current chip has unsaved changes.\nAre you sure you want to continue?";
 			Color textCol = new(1, 0.4f, 0.45f);
-			Vector2 textPos = UI.Centre + Vector2.up * 5;
+			Vector2 textPos = MenuHelper.PopupCentre(5);
 
 			using (UI.BeginBoundsScope(true))
 			{

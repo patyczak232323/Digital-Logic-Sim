@@ -12,12 +12,13 @@ namespace DLS.Graphics
 	{
 		static readonly (string gesture, string effect)[] Lines =
 		{
+			("PLACE", "tap a chip in the bar above the dock, then tap where it should go"),
 			("TAP", "an input pin to switch it on or off"),
 			("WIRE", "start on a pin, finish on another pin"),
 			("LONG-PRESS", "a chip, pin or wire for its menu: delete, truth table, export, breakpoint"),
 			("TWO FINGERS", "move and zoom the view (PAN: ON does it with one finger)"),
 			("SWIPE", "in from the left edge, or press TOOLS, for more tools"),
-			("ADD CHIP", "find a chip to place; SAVE saves the chip you are building"),
+			("ADD CHIP", "search every chip; SAVE saves the chip you are building"),
 			("TOP BAR", "UNDO / REDO, RUN / PAUSE and STEP one tick at a time")
 		};
 

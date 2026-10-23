@@ -78,6 +78,8 @@ namespace DLS.Game
 			MobileUI.ApplyRuntimePreferences();
 		}
 
+		public static bool IsRunning => instance != null;
+
 		public static void ScheduleVirtualKey(KeyCode key)
 		{
 			instance?.inputSource?.ScheduleKey(key);
@@ -343,7 +345,7 @@ namespace DLS.Game
 			if (!longPressTriggered && Time.unscaledTime - longPressStartTime >= LongPressSeconds)
 			{
 				longPressTriggered = true;
-				inputSource.CancelPrimaryPointerThisFrame();
+				inputSource.BlockPrimaryPointerUntilRelease();
 				inputSource.TriggerRightClickThisFrame(touch.position);
 			}
 		}
@@ -519,6 +521,7 @@ namespace DLS.Game
 		int virtualTextFrame = -1;
 		string virtualText = string.Empty;
 		int cancelPrimaryFrame = -1;
+		bool primaryBlockedUntilRelease;
 		int rightClickFrame = -1;
 		int suppressEscapeFrame = -1;
 		Vector2 rightClickPosition;
@@ -562,6 +565,12 @@ namespace DLS.Game
 		public void PrepareFrame()
 		{
 			if (Input.touchCount > 0) lastPointerPosition = Input.GetTouch(0).position;
+
+			// After a pinch or a long press the finger still down is not a new click: it
+			// must not drag, select or drop anything until every finger has lifted.
+			if (Input.touchCount == 0) primaryBlockedUntilRelease = false;
+			else if (Input.touchCount >= 2) primaryBlockedUntilRelease = true;
+
 			if (virtualTextFrame < Time.frameCount)
 			{
 				virtualText = string.Empty;
@@ -576,6 +585,12 @@ namespace DLS.Game
 		public void CancelPrimaryPointerThisFrame()
 		{
 			cancelPrimaryFrame = Time.frameCount;
+		}
+
+		public void BlockPrimaryPointerUntilRelease()
+		{
+			cancelPrimaryFrame = Time.frameCount;
+			primaryBlockedUntilRelease = true;
 		}
 
 		public void RestorePrimaryPointerThisFrame()
@@ -646,7 +661,7 @@ namespace DLS.Game
 		{
 			if (button == MouseButton.Right) return rightClickFrame == Time.frameCount || hardware.IsMouseDownThisFrame(button);
 			if (button != MouseButton.Left) return hardware.IsMouseDownThisFrame(button);
-			if (cancelPrimaryFrame == Time.frameCount || Input.touchCount != 1) return false;
+			if (cancelPrimaryFrame == Time.frameCount || primaryBlockedUntilRelease || Input.touchCount != 1) return false;
 
 			Touch touch = Input.GetTouch(0);
 			if (MobileInputBridge.IsPointOverKeyboard(touch.position)) return false;
@@ -658,7 +673,7 @@ namespace DLS.Game
 			if (button == MouseButton.Right) return false;
 			if (button != MouseButton.Left) return hardware.IsMouseUpThisFrame(button);
 			if (cancelPrimaryFrame == Time.frameCount) return true;
-			if (Input.touchCount != 1) return false;
+			if (primaryBlockedUntilRelease || Input.touchCount != 1) return false;
 
 			Touch touch = Input.GetTouch(0);
 			if (MobileInputBridge.IsPointOverKeyboard(touch.position)) return false;
@@ -669,7 +684,7 @@ namespace DLS.Game
 		{
 			if (button == MouseButton.Right) return false;
 			if (button != MouseButton.Left) return hardware.IsMouseHeld(button);
-			if (cancelPrimaryFrame == Time.frameCount || Input.touchCount != 1) return false;
+			if (cancelPrimaryFrame == Time.frameCount || primaryBlockedUntilRelease || Input.touchCount != 1) return false;
 
 			Touch touch = Input.GetTouch(0);
 			if (MobileInputBridge.IsPointOverKeyboard(touch.position)) return false;

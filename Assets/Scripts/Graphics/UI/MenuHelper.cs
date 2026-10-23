@@ -26,6 +26,18 @@ namespace DLS.Graphics
 
 		public static UIThemeDLS Theme => ActiveUITheme;
 
+		// Buttons a finger can hit on a phone.
+		public static float PopupButtonHeight => MobileUI.IsActive ? 4.4f : ButtonHeight;
+
+		// Where a small popup centres itself. On a phone it sits near the top of the screen,
+		// so the on-screen keyboard never covers its text field or buttons.
+		public static Vector2 PopupCentre(float offsetUp)
+		{
+			if (!MobileUI.IsActive) return UI.Centre + Vector2.up * offsetUp;
+			Rect safe = MobileUI.SafeRectUI;
+			return new Vector2(safe.center.x, Mathf.Min(UI.Centre.y + offsetUp, safe.yMax - 13f));
+		}
+
 		public static Vector2 DrawLabelSectionOfLabelInputPair(Vector2 topLeft, Vector2 size, string label, Color labelCol, bool drawBackground)
 		{
 			const float pad = 1;
@@ -125,7 +137,9 @@ namespace DLS.Graphics
 
 			CancelConfirmInteractableState[CancelIndex] = canCancel;
 			CancelConfirmInteractableState[ConfirmIndex] = canConfirm;
-			int buttonIndex = UI.HorizontalButtonGroup(CancelConfirmButtonNames, CancelConfirmInteractableState, Theme.ButtonTheme, topLeft, width, DefaultButtonSpacing, 0, Anchor.TopLeft);
+			int buttonIndex = MobileUI.IsActive
+				? UI.HorizontalButtonGroup(CancelConfirmButtonNames, CancelConfirmInteractableState, Theme.ButtonTheme, topLeft, new Vector2(width, PopupButtonHeight), DefaultButtonSpacing, 0, Anchor.TopLeft)
+				: UI.HorizontalButtonGroup(CancelConfirmButtonNames, CancelConfirmInteractableState, Theme.ButtonTheme, topLeft, width, DefaultButtonSpacing, 0, Anchor.TopLeft);
 
 			if (useKeyboardShortcuts)
 			{

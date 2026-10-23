@@ -221,7 +221,7 @@ namespace DLS.Graphics
 			interactableStates_starredList[0] = index < project.description.StarredList.Count - 1; // can move down
 			interactableStates_starredList[1] = index > 0; // can move up
 
-			bool entryPressed = UI.Button(starredItem.Name, theme, topLeft, new Vector2(width, 2), true, false, false, Anchor.TopLeft, true, 1, isScrolling);
+			bool entryPressed = UI.Button(starredItem.Name, theme, topLeft, new Vector2(width, RowHeight), true, false, false, Anchor.TopLeft, true, 1, isScrolling);
 			if (entryPressed)
 			{
 				selectedStarredItemIndex = index;
@@ -229,6 +229,9 @@ namespace DLS.Graphics
 				selectedChipInCollectionIndex = -1;
 			}
 		}
+
+		// List rows tall enough for a finger on a phone.
+		static float RowHeight => MobileUI.IsActive ? 3.4f : 2;
 
 		static void DrawCollectionsPanel(Vector2 topLeft, Vector2 size)
 		{
@@ -250,7 +253,7 @@ namespace DLS.Graphics
 			bool collectionHighlighted = collectionIndex == selectedCollectionIndex;
 			ButtonTheme activeCollectionTheme = GetButtonTheme(true, collectionHighlighted);
 
-			bool collectionPressed = UI.Button(label, activeCollectionTheme, topLeft, new Vector2(width, 2), true, false, false, Anchor.TopLeft, true, 1, isScrolling);
+			bool collectionPressed = UI.Button(label, activeCollectionTheme, topLeft, new Vector2(width, RowHeight), true, false, false, Anchor.TopLeft, true, 1, isScrolling);
 			if (collectionPressed)
 			{
 				selectedCollectionIndex = collectionIndex;
@@ -270,7 +273,7 @@ namespace DLS.Graphics
 					string chipName = collection.Chips[chipIndex];
 					ButtonTheme activeChipTheme = collectionIndex == selectedCollectionIndex && chipIndex == selectedChipInCollectionIndex ? ActiveUITheme.ChipLibraryChipToggleOn : ActiveUITheme.ChipLibraryChipToggleOff;
 					Vector2 chipLabelPos = new(topLeft.x + nestedInset, UI.PrevBounds.Bottom - UILayoutHelper.DefaultSpacing);
-					bool chipPressed = UI.Button(chipName, activeChipTheme, chipLabelPos, new Vector2(width - nestedInset, 2), true, false, false, Anchor.TopLeft, true, 1, isScrolling);
+					bool chipPressed = UI.Button(chipName, activeChipTheme, chipLabelPos, new Vector2(width - nestedInset, RowHeight), true, false, false, Anchor.TopLeft, true, 1, isScrolling);
 					if (chipPressed)
 					{
 						bool alreadySelected = selectedChipInCollectionIndex == chipIndex && collectionHighlighted;
