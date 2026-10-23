@@ -535,6 +535,8 @@ namespace DLS.Game
 		void RegenerateParentChipNamesHash()
 		{
 			AllParentChipNames.Clear();
+			// Exports and tests can load a chip outside an open project.
+			if (Project.ActiveProject == null) return;
 			GetAllParentChipNames(LastSavedDescription.Name, Project.ActiveProject.chipLibrary, AllParentChipNames);
 		}
 
