@@ -118,6 +118,14 @@ namespace DLS.SaveSystem
 			return NormalizeChipDescription(LoadWithBackup(path, Serializer.DeserializeChipDescription), path);
 		}
 
+		// Returns null when the chip has no recorded tests.
+		public static ChipTestSuite LoadChipTests(string projectName, string chipName)
+		{
+			if (!TryGetPath(() => SavePaths.GetChipTestsPath(projectName, chipName), out string path)) return null;
+			if (!File.Exists(path) && !File.Exists(path + ".bak") && !File.Exists(path + ".bak.next")) return null;
+			return LoadWithBackup(path, Serializer.DeserializeChipTestSuite);
+		}
+
 		public static bool GlobalChipExists(string chipName)
 		{
 			if (!TryGetPath(() => SavePaths.GetGlobalChipPath(chipName), out string path)) return false;

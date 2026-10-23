@@ -212,7 +212,7 @@ namespace DLS.Simulation
 			ChipTestRunResult Unsupported(string reason) =>
 				new(false, reason, vectors?.Count ?? 0, 0, Array.Empty<ChipTestFailure>());
 		}
-		static SimChip BuildIsolatedChip(ChipDescription root, ChipLibrary library)
+		internal static SimChip BuildIsolatedChip(ChipDescription root, ChipLibrary library)
 		{
 			HashSet<string> active = new(ChipDescription.NameComparer);
 			return BuildRecursive(root, -1, null);
