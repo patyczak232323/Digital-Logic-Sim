@@ -105,6 +105,22 @@ See `Examples/RHDL/CPU4/README.md` for the ISA and a test ROM program.
 
 For difficult circuits, use the simulation diagnostics and profiling tools described in [SIMULATION_DIAGNOSTICS.md](SIMULATION_DIAGNOSTICS.md).
 
+- **Truth table**: right-click (long-press on Android) a custom chip and pick *TRUTH TABLE* to see every input combination. *RECORD TEST* saves the table; the test re-runs whenever the window opens, so a later change that breaks the chip shows up in red.
+- **Breakpoints**: right-click a pin and pick *BREAKPOINT* to pause the simulation when it changes, rises, falls or reaches a value. *SPACE* (or *STEP* on Android) then advances one tick at a time.
+- **Export**: *EXPORT* in a chip's menu or the bottom-bar menu writes structural Verilog (also copied to the clipboard), an SVG schematic or a PNG screenshot to the project's `Exports` folder.
+
+## 8. Learn with challenges
+
+*CHALLENGES* (bottom-bar menu, or *TOOLS* on Android) walks from a NOT gate built from NAND to a 4-bit adder. Each step names the chip to build and its pins; *CHECK* compares your saved chip's truth table with the goal and tells you the first input combination that is still wrong.
+
+## Android controls
+
+- Tap an input pin to toggle it; start a wire on one pin and finish it on another.
+- Long-press a chip, pin or wire for its menu.
+- Two fingers move and zoom the view; *PAN: ON* does it with one finger.
+- Swipe in from the left edge, or press *TOOLS*, for the tools sheet.
+- The top bar has *UNDO*, *REDO*, *RUN*/*PAUSE* and *STEP*. *TOOLS → HELP* shows the gesture guide again.
+
 ## Compatibility note
 
 Rewired is based on Digital Logic Sim but uses a different simulation model. Existing projects may load successfully while timing-sensitive or race-dependent behaviour can differ.

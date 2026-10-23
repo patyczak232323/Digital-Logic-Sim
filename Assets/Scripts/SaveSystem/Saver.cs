@@ -27,6 +27,7 @@ namespace DLS.SaveSystem
 
 		public static void RenameProject(string nameOld, string nameNew)
 		{
+			WebStorage.MarkDirty();
 			ProjectDescription desc = Loader.LoadProjectDescription(nameOld);
 			desc.ProjectName = nameNew;
 
@@ -38,6 +39,7 @@ namespace DLS.SaveSystem
 
 		public static void DuplicateProject(string nameOriginal, string nameDuplicate)
 		{
+			WebStorage.MarkDirty();
 			SaveUtils.CopyDirectory(SavePaths.GetProjectPath(nameOriginal), SavePaths.GetProjectPath(nameDuplicate), true);
 			ProjectDescription descNew = Loader.LoadProjectDescription(nameDuplicate);
 			descNew.ProjectName = nameDuplicate;
@@ -109,6 +111,7 @@ namespace DLS.SaveSystem
 
 		public static void DeleteChipTests(string chipName, string projectName)
 		{
+			WebStorage.MarkDirty();
 			string path = SavePaths.GetChipTestsPath(projectName, chipName);
 			if (File.Exists(path)) File.Delete(path);
 			if (File.Exists(path + ".bak")) File.Delete(path + ".bak");
@@ -138,6 +141,7 @@ namespace DLS.SaveSystem
 		// Delete chip save file, with option to keep backup in a DeletedChips folder.
 		public static void DeleteChip(string chipName, string projectName, bool backupInDeletedFolder = true)
 		{
+			WebStorage.MarkDirty();
 			string filePath = GetChipFilePath(chipName, projectName);
 			if (!File.Exists(filePath)) return;
 			if (backupInDeletedFolder)
@@ -158,6 +162,7 @@ namespace DLS.SaveSystem
 
 		public static void DeleteGlobalChip(string chipName, bool backupInDeletedFolder = true)
 		{
+			WebStorage.MarkDirty();
 			string filePath = SavePaths.GetGlobalChipPath(chipName);
 			string backupPath = filePath + ".bak";
 			bool primaryExists = File.Exists(filePath);
@@ -179,6 +184,7 @@ namespace DLS.SaveSystem
 
 		public static void DeleteProject(string projectName, bool backupInDeletedFolder = true)
 		{
+			WebStorage.MarkDirty();
 			string projectPath = SavePaths.GetProjectPath(projectName);
 
 			if (backupInDeletedFolder)
@@ -203,6 +209,7 @@ namespace DLS.SaveSystem
 
 		static void WriteToFile(string data, string path)
 		{
+			WebStorage.MarkDirty();
 			string directory = Path.GetDirectoryName(path);
 			Directory.CreateDirectory(directory);
 

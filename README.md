@@ -42,8 +42,12 @@ The repository includes a compact example progression ending with a **4-bit CPU*
 - waveform capture and deterministic replay
 - non-convergence diagnostics
 - **RHDL v0.6** hardware description language
-- Windows x64, Linux x86_64 and Android ARM64 (experimental) release builds
-- touch interface for Android tablets and phones
+- truth table for any combinational chip, recordable as a regression test
+- breakpoints: pause when a pin changes, rises, falls or reaches a value
+- export to structural Verilog, SVG schematics and PNG screenshots
+- guided challenges from a NAND gate to a 4-bit adder
+- Windows x64, Linux x86_64, WebGL (browser) and Android ARM64 (experimental) release builds
+- touch interface for Android tablets and phones, with undo/redo, run/pause/step and a gesture guide
 
 ## Download
 
@@ -55,6 +59,7 @@ Release packages:
 
 - Windows x64: `DLSRewired-Windows-x64.zip`
 - Linux x86_64: `DLSRewired-Linux-x86_64.zip`
+- WebGL (browser): `DLSRewired-WebGL.zip`. Unzip it and serve the folder from any static web host. In the browser, projects are kept in the browser's own storage. The native JIT and LUT accelerators are not available there, so large circuits run slower.
 - Android ARM64 (experimental): `DLSRewired-Android-arm64.apk`
 
 On Linux, after extracting the archive, the executable may need permission:
@@ -202,6 +207,7 @@ cd Digital-Logic-Sim
 Tests:
 
 - **Unity EditMode tests** in `Assets/Tests/EditMode` run the real C# engine and compile and simulate every example in `Examples/RHDL`. Run them from *Window → General → Test Runner* in the Unity editor; CI runs them in `unity-tests.yml`.
+- **Engine harness** (`Tools/EngineHarness`) runs the same EditMode tests with plain .NET in under two minutes, simulates exported Verilog with Icarus Verilog, and benchmarks the engine. See its README. Run it with `dotnet test Tools/EngineHarness`.
 - **Python regression suites** in `Tools/` check solver rules and source-level invariants without Unity:
 
 ```bash
@@ -210,7 +216,7 @@ python3 Tools/ComputerRegression/regression.py
 python3 Tools/ProgramRegression/regression.py
 ```
 
-Release builds for Windows, Linux and Android are produced automatically by GitHub Actions when a version tag such as `v0.4.0` is pushed. The release text comes from `Docs/RELEASE_<version>.md` when that file exists. Every change to `main` also refreshes the `android-unofficial` pre-release with development builds for all three platforms.
+Release builds for Windows, Linux, WebGL and Android are produced automatically by GitHub Actions when a version tag such as `v0.4.0` is pushed. The release text comes from `Docs/RELEASE_<version>.md` when that file exists. Every change to `main` also refreshes the `android-unofficial` pre-release with development builds for all platforms.
 
 ## Project status
 

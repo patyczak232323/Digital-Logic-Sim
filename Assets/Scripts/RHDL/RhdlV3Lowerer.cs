@@ -1491,8 +1491,11 @@ namespace DLS.RHDL
 				if (value.Width == 1) return new[] { value };
 				if (!IsSupportedWidth(value.Width)) return null;
 
+				// Callers may replace entries (e.g. "not" inverts each bit), so always hand out a
+				// copy; returning the cached array let one expression rewire a signal for every
+				// later use of it.
 				string cacheKey = value.Width + ":" + value.Endpoint;
-				if (splitCache.TryGetValue(cacheKey, out SignalValue[] cached)) return cached;
+				if (splitCache.TryGetValue(cacheKey, out SignalValue[] cached)) return (SignalValue[])cached.Clone();
 
 				string type = value.Width == 4 ? "4-1BIT" : "8-1BIT";
 				InstanceDecl split = AddGeneratedInstance(type, UniqueGeneratedName("split"), line);
@@ -1504,7 +1507,7 @@ namespace DLS.RHDL
 					bits[i] = new SignalValue(split.Name + ".OUT_" + (char)('A' + i), 1);
 
 				splitCache[cacheKey] = bits;
-				return bits;
+				return (SignalValue[])bits.Clone();
 			}
 
 			SignalValue MergeBits(SignalValue[] bits, int line)

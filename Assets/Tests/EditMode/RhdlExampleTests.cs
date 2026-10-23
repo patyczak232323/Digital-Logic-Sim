@@ -208,6 +208,78 @@ namespace DLS.Tests
 			Assert.AreEqual(0u, c.Get("Z"), "Z");
 		}
 
+		// Every accumulator instruction from Examples/RHDL/CPU4/README.md, one per clock tick,
+		// checking ACC after each. One program keeps this to a single CPU build.
+		[Test]
+		public void Cpu4ExecutesEveryAccumulatorInstruction()
+		{
+			Build("Basics/04_DFF.rhdl");
+			Build("Basics/05_REG4.rhdl");
+			ChipDescription cpu = Build("CPU4/00_CPU4.rhdl");
+
+			(string name, uint word, uint acc)[] program =
+			{
+				("LDI 5", 0x15, 5),
+				("ADDI 2", 0x22, 7),
+				("SUBI 1", 0x31, 6),
+				("ANDI 3", 0x43, 2),
+				("ORI 8", 0x58, 10),
+				("XORI 3", 0x63, 9),
+				("NOT", 0xA0, 6),
+				("INC", 0xB0, 7),
+				("DEC", 0xC0, 6),
+				("NOP", 0x00, 6),
+				("reserved D", 0xD0, 6),
+				("OUT", 0xE0, 6)
+			};
+
+			uint[] rom = new uint[256];
+			for (int i = 0; i < program.Length; i++) rom[i] = program[i].word;
+			rom[program.Length] = 0x00F0; // HLT
+			string romName = ChipTypeHelper.GetName(ChipType.Rom_256x16);
+			cpu.SubChips[System.Array.FindIndex(cpu.SubChips, s => ChipDescription.NameMatch(s.Name, romName))].InternalData = rom;
+
+			TestCircuit c = new(cpu, library);
+			c.Set("RESET", 1);
+			c.Tick();
+			c.Set("RESET", 0);
+
+			foreach ((string name, uint _, uint acc) in program)
+			{
+				c.Tick();
+				Assert.AreEqual(acc, c.Get("ACC"), $"ACC after {name}");
+			}
+
+			Assert.AreEqual(6u, c.Get("OUT_PORT"), "OUT_PORT");
+		}
+
+		// "not X" used to invert the cached bits of X in place, so every later use of X in the
+		// same circuit saw ~X (CPU4's INC and DEC computed ~A + 1 and ~A - 1).
+		[Test]
+		public void NotDoesNotChangeLaterUsesOfItsOperand()
+		{
+			RhdlCompileResult result = RhdlCompiler.Compile(@"
+circuit NotThenUse
+    input A: 4
+    output N: 4
+    output Y: 4
+
+    N = not A
+    Y = A + 0x1
+end", library);
+			Assert.IsTrue(result.Success);
+			library.NotifyChipSaved(result.Description, false);
+
+			TestCircuit c = new(result.Description, library);
+			for (uint a = 0; a < 16; a++)
+			{
+				c.Set("A", a);
+				c.Step();
+				Assert.AreEqual(~a & 15, c.Get("N"), $"N for A={a}");
+				Assert.AreEqual((a + 1) & 15, c.Get("Y"), $"Y for A={a}");
+			}
+		}
+
 		[Test]
 		public void InvalidSourceReportsDiagnosticsWithLine()
 		{

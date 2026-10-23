@@ -49,11 +49,20 @@ namespace DLS.Tests
 			return PinState.GetBitStates(pin.State);
 		}
 
+		// Running totals of the per-step diagnostics, for benchmarks.
+		public int TotalSteps { get; private set; }
+		public long TotalGateEvaluations { get; private set; }
+		public long TotalSignalPropagations { get; private set; }
+
 		public void Step(int count = 1)
 		{
 			for (int i = 0; i < count; i++)
 			{
 				RewiredEngine.RunStep(Root, inputs, null);
+				RewiredEngine.DiagnosticsSnapshot d = RewiredEngine.Diagnostics;
+				TotalSteps++;
+				TotalGateEvaluations += d.GateEvaluations;
+				TotalSignalPropagations += d.SignalPropagations;
 			}
 		}
 

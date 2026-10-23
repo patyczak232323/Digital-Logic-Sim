@@ -38,6 +38,7 @@ namespace DLS.Graphics
 		static readonly MenuEntry truthTableEntry = new(Format("TRUTH TABLE"), OpenTruthTable, IsCustomChip);
 		static readonly MenuEntry exportEntry = new(Format("EXPORT"), OpenExport, IsCustomChip);
 		static readonly MenuEntry toggleProbeEntry = new(Format("TOGGLE PROBE"), ToggleProbe, CanProbePin);
+		static readonly MenuEntry breakpointEntry = new(Format("BREAKPOINT"), OpenBreakpoint, () => interactionContext is PinInstance);
 		static readonly MenuEntry mirrorHorizontalEntry = new(Format("MIRROR H"), MirrorHorizontal, CanMirrorChip);
 		static readonly MenuEntry mirrorVerticalEntry = new(Format("MIRROR V"), MirrorVertical, CanMirrorChip);
 
@@ -100,13 +101,14 @@ namespace DLS.Graphics
 
 
 		static readonly MenuEntry[] entries_subChipOutput =
-			new[] { toggleProbeEntry, dividerMenuEntry }.Concat(pinColEntries).ToArray();
+			new[] { toggleProbeEntry, breakpointEntry, dividerMenuEntry }.Concat(pinColEntries).ToArray();
 
 		static readonly MenuEntry[] entries_inputDevPin = new[]
 		{
 			new(Format("EDIT"), OpenPinEditMenu, CanEditCurrentChip),
 			new(Format("DELETE"), Delete, CanDelete),
 			toggleProbeEntry,
+			breakpointEntry,
 			dividerMenuEntry
 		}.Concat(pinColEntries).ToArray();
 
@@ -114,7 +116,8 @@ namespace DLS.Graphics
 		{
 			entries_inputDevPin[0],
 			entries_inputDevPin[1],
-			toggleProbeEntry
+			toggleProbeEntry,
+			breakpointEntry
 		};
 
 		static readonly MenuEntry[] entries_wire =
@@ -545,6 +548,7 @@ namespace DLS.Graphics
 
 		static void OpenTruthTable() => TruthTableMenu.Open(interactionContextName);
 		static void OpenExport() => ExportMenu.Open(interactionContextName);
+		static void OpenBreakpoint() => BreakpointMenu.Open(interactionContext as PinInstance);
 
 		static bool CanOpenRhdlSource()
 		{

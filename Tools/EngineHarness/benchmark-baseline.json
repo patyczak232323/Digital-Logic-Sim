@@ -1,0 +1,15 @@
+{
+  "_comment": "Work per step measured on the fixed benchmark workloads. A run fails when a value grows more than 25% over these. Lower a value when an optimisation reduces it; raise it only with a reason in the commit message.",
+  "MaxGateEvaluationsPerStep": {
+    "ALU8 random inputs (Reference)": 683.2,
+    "ALU8 random inputs (NativeJit)": 1.0,
+    "CPU4 counter (Reference)": 700.8,
+    "CPU4 counter (FeedbackJit)": 356.4
+  },
+  "MaxSignalPropagationsPerStep": {
+    "ALU8 random inputs (Reference)": 930.8,
+    "ALU8 random inputs (NativeJit)": 4.6,
+    "CPU4 counter (Reference)": 921.8,
+    "CPU4 counter (FeedbackJit)": 463.7
+  }
+}

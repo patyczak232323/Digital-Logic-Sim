@@ -18,6 +18,9 @@ namespace DLS.Game
 			this.devChip = devChip;
 		}
 
+		public bool CanUndo => undoIndex >= 0;
+		public bool CanRedo => undoIndex < undoHistory.Count - 1;
+
 		public void Clear()
 		{
 			undoHistory.Clear();

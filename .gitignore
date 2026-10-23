@@ -96,3 +96,10 @@ Desktop.ini
 # Python bytecode from Tools/*/regression.py
 __pycache__/
 *.pyc
+
+# Engine harness (dotnet) build output
+/Tools/EngineHarness/bin/
+/Tools/EngineHarness/obj/
+/Tools/EngineHarness/TestResults/
+/Tools/EngineHarness/benchmark-results.json
+!/Tools/EngineHarness/EngineHarness.csproj

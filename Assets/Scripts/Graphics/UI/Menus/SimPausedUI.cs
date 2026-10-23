@@ -18,7 +18,11 @@ namespace DLS.Graphics
 			UI.DrawLine(UI.TopLeft + Vector2.down * InfoBarHeight, UI.TopRight + Vector2.down * InfoBarHeight, 0.06f, RewiredUI.Accent);
 			Bounds2D panelBounds = UI.PrevBounds;
 
-			UI.DrawText("SIMULATION PAUSED  <color=#9aa7dfff>(SPACE = STEP)", MenuHelper.Theme.FontBold, MenuHelper.Theme.FontSizeRegular * 0.82f, panelBounds.Centre, Anchor.TextCentre, Color.white);
+			string breakpoint = Project.ActiveProject.lastBreakpointHit;
+			string text = breakpoint == null
+				? "SIMULATION PAUSED  <color=#9aa7dfff>(SPACE = STEP)"
+				: $"BREAKPOINT: {breakpoint.ToUpperInvariant()}  <color=#9aa7dfff>(SPACE = STEP)";
+			UI.DrawText(text, MenuHelper.Theme.FontBold, MenuHelper.Theme.FontSizeRegular * 0.82f, panelBounds.Centre, Anchor.TextCentre, breakpoint == null ? Color.white : Color.yellow);
 
 			if (stepCountPrev != Project.ActiveProject.simPausedSingleStepCounter || string.IsNullOrEmpty(stepString))
 			{

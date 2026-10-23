@@ -56,6 +56,16 @@ namespace DLS.Game
 		// ---- Simulation settings and state ----
 		static readonly bool debug_logSimTime = false;
 		static readonly bool debug_runSimMainThread = false;
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+		// Browsers cannot run managed threads, so the simulation runs inside each frame.
+		static readonly bool runSimOnMainThread = true;
+#else
+		static readonly bool runSimOnMainThread = debug_runSimMainThread;
+#endif
+		// Main-thread simulation stops a frame's steps after this long to keep the UI responsive.
+		const double MainThreadSimBudgetMs = 10;
+		double mainThreadTickDebt;
 		public const float SimulationPerformanceTimeWindowSec = 1.5f;
 
 		enum ReplayControlCommand
@@ -74,6 +84,8 @@ namespace DLS.Game
 		static Thread runningSimThread;
 		const int PreviousSimThreadJoinTimeoutMs = 5000;
 		public volatile bool advanceSingleSimStep;
+		// Set by the simulation thread when a breakpoint pauses the sim; cleared on resume.
+		public volatile string lastBreakpointHit;
 
 		readonly object replayControlLock = new();
 		ReplayControlCommand pendingReplayCommand;
@@ -156,9 +168,9 @@ namespace DLS.Game
 			inputPins = editModeChip.GetInputPins();
 			mainThreadFrameCount++;
 
-			if (debug_runSimMainThread)
+			if (runSimOnMainThread)
 			{
-				Debug_RunMainThreadSimStep();
+				RunMainThreadSimulationFrame();
 			}
 		}
 
@@ -169,7 +181,7 @@ namespace DLS.Game
 			// received the real pins from the first main-thread Update().
 			inputPins = editModeChip?.GetInputPins() ?? Array.Empty<DevPinInstance>();
 
-			if (debug_runSimMainThread)
+			if (runSimOnMainThread)
 			{
 				Debug.Log("Simulation will run on main thread");
 				return;
@@ -236,6 +248,8 @@ namespace DLS.Game
 
 		void HandleProjectInput()
 		{
+			if (!simPaused) lastBreakpointHit = null;
+
 			if (UIDrawer.ActiveMenu is UIDrawer.MenuType.None)
 			{
 				// Step to next simulation frame when paused
@@ -823,6 +837,13 @@ namespace DLS.Game
 				RewiredEngine.SetInspectionChip(ViewedSimChip);
 				RewiredEngine.RunStep(simChip, inputPins, audioState.simAudio);
 
+				Breakpoint breakpointHit = SimulationBreakpoints.Check(simChip);
+				if (breakpointHit != null)
+				{
+					lastBreakpointHit = breakpointHit.Describe();
+					description.Prefs_SimPaused = true;
+				}
+
 				// ---- Wait some amount of time (if needed) to try to hit the target ticks per second ----
 				//
 				// Do not busy-spin for normal simulation rates. At 1000 ticks/s the old
@@ -869,12 +890,61 @@ namespace DLS.Game
 			}
 		}
 
-		void Debug_RunMainThreadSimStep()
+		// The simulation thread's loop, run inside one frame: honours pause, single steps and
+		// breakpoints, and runs as many steps as the target rate asks for within a time budget.
+		void RunMainThreadSimulationFrame()
 		{
-			RewiredEngine.StepsPerClockTransition = stepsPerClockTransition;
 			RewiredEngine.ApplyPendingModifications();
-			RewiredEngine.SetInspectionChip(ViewedSimChip);
-			RewiredEngine.RunStep(rootSimChip, inputPins, audioState.simAudio);
+			RewiredEngine.StepsPerClockTransition = stepsPerClockTransition;
+			SimChip root = rootSimChip;
+			if (root == null) return;
+
+			RewiredEngine.EnsureInitialized(root, inputPins, audioState.simAudio);
+			ProcessReplayControlCommand(root);
+
+			int steps;
+			if (simPaused)
+			{
+				mainThreadTickDebt = 0;
+				steps = advanceSingleSimStep ? 1 : 0;
+				if (advanceSingleSimStep) simPausedSingleStepCounter++;
+				advanceSingleSimStep = false;
+			}
+			else
+			{
+				simPausedSingleStepCounter = 0;
+				mainThreadTickDebt = Math.Min(mainThreadTickDebt + targetTicksPerSecond * Time.unscaledDeltaTime, targetTicksPerSecond);
+				steps = (int)mainThreadTickDebt;
+				mainThreadTickDebt -= steps;
+			}
+
+			if (steps == 0) RewiredEngine.UpdatePaused();
+
+			Stopwatch budget = Stopwatch.StartNew();
+			int ran = 0;
+			while (ran < steps)
+			{
+				RewiredEngine.SetInspectionChip(ViewedSimChip);
+				RewiredEngine.RunStep(root, inputPins, audioState.simAudio);
+				ran++;
+
+				Breakpoint hit = SimulationBreakpoints.Check(root);
+				if (hit != null)
+				{
+					lastBreakpointHit = hit.Describe();
+					description.Prefs_SimPaused = true;
+					break;
+				}
+
+				// Drop the backlog rather than letting a slow circuit freeze the page.
+				if (budget.Elapsed.TotalMilliseconds > MainThreadSimBudgetMs)
+				{
+					mainThreadTickDebt = 0;
+					break;
+				}
+			}
+
+			if (!simPaused && Time.unscaledDeltaTime > 0) simAvgTicksPerSec = ran / Time.unscaledDeltaTime;
 			ViewedChip.UpdateStateFromSim(ViewedSimChip, !CanEditViewedChip);
 		}
 
