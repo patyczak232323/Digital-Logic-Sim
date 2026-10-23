@@ -314,8 +314,17 @@ namespace DLS.Graphics
 			// Rows a finger can hit on a phone; the menu is kept inside the safe area so no
 			// entry ends up under a notch or off screen.
 			bool mobile = MobileUI.IsActive;
-			Vector2 buttonSize = new(menuWidth, mobile ? 4f : 2);
-			Rect area = mobile ? MobileUI.SafeRectUI : new Rect(0, 0, UI.Width, UI.Height);
+			Rect area = new(0, 0, UI.Width, UI.Height);
+			Vector2 buttonSize = new(menuWidth, 2);
+			if (mobile)
+			{
+				// Between the top bar and the bars above the bottom edge; rows shrink only when
+				// a long menu would not fit otherwise.
+				Rect safe = MobileUI.SafeRectUI;
+				float bottom = safe.yMin + MobileUI.DockHeight + MobileUI.QuickBarHeight;
+				area = Rect.MinMaxRect(safe.xMin, bottom, safe.xMax, Mathf.Max(bottom + 10f, safe.yMax - MobileUI.TopBarHeight));
+				buttonSize.y = Mathf.Clamp((area.height - 1f) / (menuEntries.Length + 1), 2.6f, 4f);
+			}
 
 			Vector2 pos = mouseOpenMenuPos;
 			if (pos.x + menuWidth > area.xMax)

@@ -145,10 +145,15 @@ namespace DLS.Graphics
 			float actionWidth = (width - nameWidth - gap * 3f) / 3f;
 
 			string displayName = project.chipLibrary.IsGlobalChip(chipName) ? chipName + "  [GLOBAL]" : chipName;
-			UI.Button(displayName, theme.ChipLibraryChipToggleOn, topLeft,
-				new Vector2(nameWidth, rowHeight), true, false, false, Anchor.TopLeft, true, 0.8f, true);
-
 			bool canPlace = project.ViewedChip.CanAddSubchip(chipName);
+			// Tapping the name places the chip, the same as USE.
+			if (UI.Button(displayName, theme.ChipButton, topLeft,
+				    new Vector2(nameWidth, rowHeight), canPlace, false, false, Anchor.TopLeft, true, 0.8f))
+			{
+				UseChip(chipName);
+				return;
+			}
+
 			bool canOpen = !project.chipLibrary.IsBuiltinChip(chipName);
 			bool starred = project.description.IsStarred(chipName, false);
 			float x = topLeft.x + nameWidth + gap;

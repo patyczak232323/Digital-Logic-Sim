@@ -13,6 +13,8 @@ namespace DLS.Game
 	public static class CameraController
 	{
 		public const float StartupOrthoSize = 5;
+		// Closer on a phone so chips and pins are big enough to hit with a finger.
+		public const float MobileStartupOrthoSize = 3;
 
 		static readonly float zoomSpeed = 1f;
 		static readonly bool zoomToMouse = true;
@@ -273,6 +275,19 @@ namespace DLS.Game
 			// Set cam orthoSize to fit contents of chip on screen
 			view.OrthoSize = Mathf.Max(bounds.Height, bounds.Width * 9 / 16f) * 0.5f;
 			view.OrthoSize += view.OrthoSize * 0.1f; // Padding
+
+			if (MobileUI.IsActive)
+			{
+				// The top bar, quick bar and dock cover about a third of a phone screen.
+				const float covered = MobileUI.TopBarHeight + MobileUI.QuickBarHeight + MobileUI.DockHeight;
+				float uiHeight = UI.Width * Screen.height / Mathf.Max(1f, Screen.width);
+				view.OrthoSize *= uiHeight / Mathf.Max(1f, uiHeight - covered);
+				view.OrthoSize = Mathf.Clamp(view.OrthoSize, zoomRange.x, zoomRange.y);
+				float shiftUI = (MobileUI.QuickBarHeight + MobileUI.DockHeight - MobileUI.TopBarHeight) / 2f;
+				view.Pos = bounds.Centre + Vector2.down * (shiftUI / uiHeight * view.OrthoSize * 2);
+				return view;
+			}
+
 			view.OrthoSize = Mathf.Clamp(view.OrthoSize, zoomRange.x, zoomRange.y);
 
 			// Move cam down slightly from bounds centre to account for bottom region of screen blocked by chip bar
@@ -289,7 +304,7 @@ namespace DLS.Game
 
 		public class ViewState
 		{
-			public float OrthoSize = StartupOrthoSize;
+			public float OrthoSize = MobileUI.IsActive ? MobileStartupOrthoSize : StartupOrthoSize;
 			public Vector2 Pos = Vector2.zero;
 		}
 	}
