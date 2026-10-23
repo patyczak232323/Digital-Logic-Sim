@@ -208,29 +208,34 @@ namespace DLS.Tests
 			Assert.AreEqual(0u, c.Get("Z"), "Z");
 		}
 
-		// Every accumulator instruction from Examples/RHDL/CPU4/README.md, starting from A = 5.
-		[TestCase(0x0, 0x0u, 5u, TestName = "Cpu4_NOP")]
-		[TestCase(0x2, 0x2u, 7u, TestName = "Cpu4_ADDI")]
-		[TestCase(0x3, 0x2u, 3u, TestName = "Cpu4_SUBI")]
-		[TestCase(0x4, 0x6u, 4u, TestName = "Cpu4_ANDI")]
-		[TestCase(0x5, 0x2u, 7u, TestName = "Cpu4_ORI")]
-		[TestCase(0x6, 0x1u, 4u, TestName = "Cpu4_XORI")]
-		[TestCase(0xA, 0x0u, 10u, TestName = "Cpu4_NOT")]
-		[TestCase(0xB, 0x0u, 6u, TestName = "Cpu4_INC")]
-		[TestCase(0xC, 0x0u, 4u, TestName = "Cpu4_DEC")]
-		[TestCase(0xD, 0x0u, 5u, TestName = "Cpu4_Reserved")]
-		public void Cpu4AccumulatorInstruction(int opcode, uint operand, uint expected)
+		// Every accumulator instruction from Examples/RHDL/CPU4/README.md, one per clock tick,
+		// checking ACC after each. One program keeps this to a single CPU build.
+		[Test]
+		public void Cpu4ExecutesEveryAccumulatorInstruction()
 		{
 			Build("Basics/04_DFF.rhdl");
 			Build("Basics/05_REG4.rhdl");
 			ChipDescription cpu = Build("CPU4/00_CPU4.rhdl");
 
-			// LDI 5; <instruction>; OUT; HLT
+			(string name, uint word, uint acc)[] program =
+			{
+				("LDI 5", 0x15, 5),
+				("ADDI 2", 0x22, 7),
+				("SUBI 1", 0x31, 6),
+				("ANDI 3", 0x43, 2),
+				("ORI 8", 0x58, 10),
+				("XORI 3", 0x63, 9),
+				("NOT", 0xA0, 6),
+				("INC", 0xB0, 7),
+				("DEC", 0xC0, 6),
+				("NOP", 0x00, 6),
+				("reserved D", 0xD0, 6),
+				("OUT", 0xE0, 6)
+			};
+
 			uint[] rom = new uint[256];
-			rom[0] = 0x0015;
-			rom[1] = (uint)(opcode << 4) | operand;
-			rom[2] = 0x00E0;
-			rom[3] = 0x00F0;
+			for (int i = 0; i < program.Length; i++) rom[i] = program[i].word;
+			rom[program.Length] = 0x00F0; // HLT
 			string romName = ChipTypeHelper.GetName(ChipType.Rom_256x16);
 			cpu.SubChips[System.Array.FindIndex(cpu.SubChips, s => ChipDescription.NameMatch(s.Name, romName))].InternalData = rom;
 
@@ -238,10 +243,14 @@ namespace DLS.Tests
 			c.Set("RESET", 1);
 			c.Tick();
 			c.Set("RESET", 0);
-			for (int i = 0; i < 8; i++) c.Tick();
 
-			Assert.AreEqual(expected, c.Get("ACC"), "ACC");
-			Assert.AreEqual(expected, c.Get("OUT_PORT"), "OUT_PORT");
+			foreach ((string name, uint _, uint acc) in program)
+			{
+				c.Tick();
+				Assert.AreEqual(acc, c.Get("ACC"), $"ACC after {name}");
+			}
+
+			Assert.AreEqual(6u, c.Get("OUT_PORT"), "OUT_PORT");
 		}
 
 		// "not X" used to invert the cached bits of X in place, so every later use of X in the
