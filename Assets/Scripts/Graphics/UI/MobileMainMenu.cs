@@ -122,7 +122,7 @@ namespace DLS.Graphics
 			}
 			y -= h + gap;
 
-			if (UI.Button("MOBILE SETTINGS", theme.MainMenuButtonTheme, new Vector2(x, y), new Vector2(width, h),
+			if (UI.Button("SETTINGS", theme.MainMenuButtonTheme, new Vector2(x, y), new Vector2(width, h),
 				    true, false, false, Anchor.TopLeft))
 				screen = ScreenKind.Settings;
 			y -= h + gap;
@@ -397,7 +397,7 @@ namespace DLS.Graphics
 			float y = safe.yMax - 10f;
 			float h = 5.2f;
 
-			UI.DrawText("MOBILE SETTINGS", theme.FontBold, theme.FontSizeRegular * 1.15f,
+			UI.DrawText("SETTINGS", theme.FontBold, theme.FontSizeRegular * 1.15f,
 				new Vector2(x, y + 2f), Anchor.TextCentreLeft, Color.white);
 
 			y -= 1.5f;
@@ -448,10 +448,9 @@ namespace DLS.Graphics
 		static void DrawAbout(Rect safe)
 		{
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
-			float y = safe.yMax - 12f;
+			// The header already shows the logo.
+			float y = safe.yMax - 11f;
 
-			UI.DrawText("REWIRED", FontType.Born2bSporty, 8f,
-				new Vector2(safe.center.x, y + 4f), Anchor.Centre, Color.white);
 			UI.DrawText("Independent digital logic simulator", theme.FontRegular, theme.FontSizeRegular,
 				new Vector2(safe.center.x, y), Anchor.Centre, Color.white);
 			y -= 4f;
@@ -459,7 +458,7 @@ namespace DLS.Graphics
 				theme.FontRegular, theme.FontSizeRegular * 0.78f,
 				new Vector2(safe.center.x, y), Anchor.Centre, RewiredUI.SecondaryText);
 			y -= 4f;
-			UI.DrawText("Android UI is a dedicated touch-first layout; desktop UI remains unchanged.",
+			UI.DrawText("Build logic chips from NAND gates up, then use them inside bigger chips.",
 				theme.FontRegular, theme.FontSizeRegular * 0.78f,
 				new Vector2(safe.center.x, y), Anchor.Centre, RewiredUI.SecondaryText);
 			y -= 3f;
