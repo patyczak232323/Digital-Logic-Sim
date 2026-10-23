@@ -78,6 +78,8 @@ namespace DLS.Game
 			MobileUI.ApplyRuntimePreferences();
 		}
 
+		public static bool IsRunning => instance != null;
+
 		public static void ScheduleVirtualKey(KeyCode key)
 		{
 			instance?.inputSource?.ScheduleKey(key);

@@ -45,6 +45,12 @@ namespace DLS.Graphics
 			"Always"
 		};
 
+		// The same settings in phone words: a touch screen has no hover, Tab, Ctrl or Shift,
+		// so those modes mean "on touch" or simply off there.
+		static readonly string[] PinDisplayOptionsMobile = { "Always", "On Touch", "Off" };
+		static readonly string[] SnappingOptionsMobile = { "Off", "If Grid Shown", "Always" };
+		static readonly string[] StraightWireOptionsMobile = { "Off", "If Grid Shown", "Always" };
+
 		static readonly string[] SimulationStatusOptions =
 		{
 			"Active",
@@ -213,11 +219,11 @@ namespace DLS.Graphics
 
 			DrawMobileHeader("DISPLAY & EDITING", ref left, colWidth);
 
-			int mainPinNamesMode = DrawMobileWheel("I/O pin names", PinDisplayOptions, ID_MainPinNames, ref left);
-			int chipPinNamesMode = DrawMobileWheel("Chip pin names", PinDisplayOptions, ID_ChipPinNames, ref left);
+			int mainPinNamesMode = DrawMobileWheel("I/O pin names", PinDisplayOptionsMobile, ID_MainPinNames, ref left);
+			int chipPinNamesMode = DrawMobileWheel("Chip pin names", PinDisplayOptionsMobile, ID_ChipPinNames, ref left);
 			int gridDisplayMode = DrawMobileWheel("Grid", GridDisplayOptions, ID_GridDisplay, ref left);
-			int snappingMode = DrawMobileWheel("Snap to grid", SnappingOptions, ID_Snapping, ref left);
-			int straightWireMode = DrawMobileWheel("Straight wires", StraightWireOptions, ID_StraightWires, ref left);
+			int snappingMode = DrawMobileWheel("Snap to grid", SnappingOptionsMobile, ID_Snapping, ref left);
+			int straightWireMode = DrawMobileWheel("Straight wires", StraightWireOptionsMobile, ID_StraightWires, ref left);
 
 			DrawMobileHeader("SIMULATION", ref right, colWidth);
 

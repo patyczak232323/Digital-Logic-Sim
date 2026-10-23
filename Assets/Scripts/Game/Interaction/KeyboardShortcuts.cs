@@ -31,7 +31,12 @@ namespace DLS.Game
 
 		// ---- Single key / simulation shortcuts ----
 		// Cancel/confirm/delete remain fixed safety/UI controls.
-		public static bool CancelShortcutTriggered => InputHelper.IsKeyDownThisFrame(KeyCode.Escape);
+		public static bool CancelShortcutTriggered => InputHelper.IsKeyDownThisFrame(KeyCode.Escape) || virtualCancelFrame == Time.frameCount;
+		static int virtualCancelFrame = -1;
+
+		// Acts as Escape next frame, for an on-screen BACK button where no virtual keyboard
+		// input exists (the desktop preview of the touch interface).
+		public static void ScheduleCancel() => virtualCancelFrame = Time.frameCount + 1;
 		public static bool ConfirmShortcutTriggered => InputHelper.IsKeyDownThisFrame(KeyCode.Return) || InputHelper.IsKeyDownThisFrame(KeyCode.KeypadEnter);
 		public static bool DeleteShortcutTriggered => InputHelper.IsKeyDownThisFrame(KeyCode.Backspace) || InputHelper.IsKeyDownThisFrame(KeyCode.Delete);
 		public static bool SimNextStepShortcutTriggered => Triggered(ShortcutAction.SimulationNextStep);

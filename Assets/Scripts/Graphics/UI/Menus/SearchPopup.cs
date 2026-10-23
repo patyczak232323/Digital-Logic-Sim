@@ -97,14 +97,13 @@ namespace DLS.Graphics
 			Rect safe = MobileUI.KeyboardAwareSafeRectUI;
 
 			float pad = 1.2f;
-			float top = safe.yMax - 6.8f;
 			float width = safe.width - pad * 2f;
-			Vector2 topLeft = new(safe.xMin + pad, top);
 
+			// The title sits beside the BACK button, which MobileUI draws over this menu.
 			UI.DrawText("ADD CHIP", theme.FontBold, theme.FontSizeRegular * 1.05f,
-				topLeft + new Vector2(12.5f, -1.2f), Anchor.TextCentreLeft, Color.white);
+				new Vector2(safe.xMin + 13.3f, safe.yMax - 3f), Anchor.TextCentreLeft, Color.white);
 
-			topLeft.y -= 3.1f;
+			Vector2 topLeft = new(safe.xMin + pad, safe.yMax - 6.2f);
 			InputFieldTheme inputTheme = theme.ChipNameInputField;
 			UI.InputField(ID_SearchInput, inputTheme, topLeft, new Vector2(width, 5.6f),
 				"SEARCH CHIPS", Anchor.TopLeft, 1.2f, searchStringValidator, true);

@@ -499,7 +499,8 @@ namespace DLS.Graphics
 			if (UI.Button("BACK", theme.MainMenuButtonTheme, pos, new Vector2(11.5f, 4.8f), true, false, false, Anchor.TopLeft))
 			{
 				MobileInputBridge.DismissKeyboard();
-				MobileRuntime.ScheduleVirtualKey(KeyCode.Escape);
+				if (MobileRuntime.IsRunning) MobileRuntime.ScheduleVirtualKey(KeyCode.Escape);
+				else KeyboardShortcuts.ScheduleCancel();
 			}
 		}
 
