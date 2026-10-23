@@ -54,13 +54,13 @@ circuit Latch
     input S_N, R_N
     output Q, QN
 
-    signal q, qn
+    signal top_out, bottom_out
 
-    component top : NAND(IN_A=S_N, IN_B=qn, OUT=q)
-    component bottom : NAND(IN_A=R_N, IN_B=q, OUT=qn)
+    component top : NAND(IN_A=S_N, IN_B=bottom_out, OUT=top_out)
+    component bottom : NAND(IN_A=R_N, IN_B=top_out, OUT=bottom_out)
 
-    Q = q
-    QN = qn
+    Q = top_out
+    QN = bottom_out
 end";
 
 		ChipLibrary library;
