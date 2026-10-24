@@ -82,7 +82,8 @@ namespace DLS.Graphics
 
 			// --- Draw side panel with buttons ----
 			Vector2 sidePanelSize = new(UI.Width * 0.2f, UI.Height * 0.8f);
-			Vector2 sidePanelTopLeft = scrollViewBounds.TopRight + Vector2.right * (UI.Width * 0.05f);
+			// Its padded panel lines up with the top of the list instead of covering the header.
+			Vector2 sidePanelTopLeft = scrollViewBounds.TopRight + Vector2.right * (UI.Width * 0.05f) + Vector2.down * DrawSettings.PanelUIPadding;
 			Draw.ID sidePanelID = UI.ReservePanel();
 
 			using (UI.BeginBoundsScope(true))

@@ -110,8 +110,12 @@ namespace DLS.Graphics
 
 			if (table != null && table.Supported)
 			{
-				LayoutColumns(area.Width - DrawSettings.ActiveUITheme.ScrollTheme.scrollBarWidth - 1f);
-				DrawHeaderRow(new Vector2(area.Left, top), area.Width);
+				// The header lines up with the rows, which sit inside the scroll view's padding
+				// and to the left of its scrollbar.
+				ScrollViewTheme scrollTheme = theme.ScrollTheme;
+				float rowWidth = area.Width - scrollTheme.padding * 2f - scrollTheme.scrollBarWidth;
+				LayoutColumns(rowWidth - 1f);
+				DrawHeaderRow(new Vector2(area.Left + scrollTheme.padding, top), rowWidth);
 				top = UI.PrevBounds.Bottom - 0.2f;
 
 				Vector2 size = new(area.Width, Mathf.Max(RowHeight, top - bottom));

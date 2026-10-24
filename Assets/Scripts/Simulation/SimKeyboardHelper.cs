@@ -22,6 +22,10 @@ namespace DLS.Simulation
 		static bool HasAnyInput;
 		static bool ReplayOverrideActive;
 
+		// The key of a KEY chip held down with a finger, or '\0'. Set from the main thread
+		// before RefreshInputState, so touch screens without a keyboard can press key chips.
+		public static char TouchHeldKey;
+
 		// Call from Main Thread
 		public static void RefreshInputState()
 		{
@@ -29,6 +33,12 @@ namespace DLS.Simulation
 			{
 				KeyLookup.Clear();
 				HasAnyInput = false;
+
+				if (TouchHeldKey != '\0')
+				{
+					KeyLookup.Add(char.ToUpper(TouchHeldKey));
+					HasAnyInput = true;
+				}
 
 				if (!InputHelper.AnyKeyOrMouseHeldThisFrame) return; // early exit if no key held
 				if (InputHelper.CtrlIsHeld || InputHelper.ShiftIsHeld || InputHelper.AltIsHeld) return; // don't trigger key chips if modifier is held
