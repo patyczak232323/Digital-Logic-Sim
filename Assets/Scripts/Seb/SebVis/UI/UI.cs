@@ -873,10 +873,10 @@ namespace Seb.Vis.UI
 				}
 
 				// --- Draw ---
-				Color buttonCol = theme.buttonCols.GetCol(mouseOver, mouseIsDown, enabled);
+				Color buttonCol = theme.buttonCols.GetCol(mouseOver && MobileInputBridge.PointerHovering, mouseIsDown, enabled);
 				Draw.Quad(ss.centre, ss.size, buttonCol);
 
-				Color textCol = theme.textCols.GetCol(mouseOver, mouseIsDown, enabled);
+				Color textCol = theme.textCols.GetCol(mouseOver && MobileInputBridge.PointerHovering, mouseIsDown, enabled);
 				if (!string.IsNullOrEmpty(text))
 				{
 					Anchor textAnchor = leftAlignText ? Anchor.TextCentreLeft : Anchor.TextFirstLineCentre;
@@ -1002,10 +1002,10 @@ namespace Seb.Vis.UI
 				}
 
 				// --- Draw ---
-				Color buttonCol = theme.buttonCols.GetCol(mouseOver, mouseIsDown, enabled);
+				Color buttonCol = theme.buttonCols.GetCol(mouseOver && MobileInputBridge.PointerHovering, mouseIsDown, enabled);
 				Draw.Quad(ss.centre, ss.size, buttonCol);
 
-				Color textCol = theme.textCols.GetCol(mouseOver, mouseIsDown, enabled);
+				Color textCol = theme.textCols.GetCol(mouseOver && MobileInputBridge.PointerHovering, mouseIsDown, enabled);
 				if (!string.IsNullOrEmpty(text))
 				{
 					Draw.Text(theme.font, text, fontSize_ss, ss.centre, Anchor.Centre, textCol);

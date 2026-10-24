@@ -301,6 +301,7 @@ namespace DLS.Graphics
 			Draw.StartLayer(Vector2.zero, 1, true);
 
 			const float textOffsetX = 0.45f;
+			float textOffset = MobileUI.IsActive ? 1.1f : textOffsetX;
 			ButtonTheme theme = DrawSettings.ActiveUITheme.MenuPopupButtonTheme;
 			ButtonTheme headerTheme = DrawSettings.ActiveUITheme.MenuPopupButtonTheme;
 			headerTheme.buttonCols.inactive = ColHelper.MakeCol(0.18f);
@@ -319,20 +320,25 @@ namespace DLS.Graphics
 			bool mobile = MobileUI.IsActive;
 			Rect area = new(0, 0, UI.Width, UI.Height);
 			Vector2 buttonSize = new(menuWidth, 2);
+			Vector2 pos = mouseOpenMenuPos;
 			if (mobile)
 			{
-				// Between the top bar and the bars above the bottom edge; rows shrink only when
-				// a long menu would not fit otherwise.
+				// Between the top bar and the dock; rows shrink only when a long menu would not
+				// fit otherwise.
 				Rect safe = MobileUI.SafeRectUI;
-				float bottom = safe.yMin + MobileUI.DockHeight + MobileUI.QuickBarHeight;
-				area = Rect.MinMaxRect(safe.xMin, bottom, safe.xMax, Mathf.Max(bottom + 10f, safe.yMax - MobileUI.TopBarHeight));
+				float bottom = safe.yMin + MobileUI.DockHeight;
+				area = Rect.MinMaxRect(safe.xMin + 0.5f, bottom + 0.5f, safe.xMax - 0.5f, Mathf.Max(bottom + 10f, safe.yMax - MobileUI.TopBarHeight - 0.5f));
 				buttonSize.y = Mathf.Clamp((area.height - 1f) / (menuEntries.Length + 1), 2.6f, 4f);
+				menuWidth = Mathf.Max(menuWidth + 1.5f, 22f);
+				buttonSize.x = menuWidth;
+				// Open beside the finger rather than under it.
+				pos.x += 2.5f;
 			}
 
-			Vector2 pos = mouseOpenMenuPos;
 			if (pos.x + menuWidth > area.xMax)
 			{
-				pos.x = area.xMax - menuWidth;
+				// No room on the right: on a phone, open to the left of the finger instead.
+				pos.x = mobile ? Mathf.Min(area.xMax, mouseOpenMenuPos.x - 2.5f) - menuWidth : area.xMax - menuWidth;
 			}
 			pos.x = Mathf.Max(pos.x, area.xMin);
 
@@ -362,7 +368,8 @@ namespace DLS.Graphics
 					}
 					else
 					{
-						if (UI.Button(entry.Text, theme, pos, buttonSize, entry.IsEnabled(), false, false, anchor, true, textOffsetX))
+						string text = mobile ? entry.Text.ToUpperInvariant() : entry.Text;
+						if (UI.Button(text, theme, pos, buttonSize, entry.IsEnabled(), false, false, anchor, true, textOffset))
 						{
 							entry.OnPress();
 						}
@@ -375,14 +382,33 @@ namespace DLS.Graphics
 
 				Bounds2D bounds = UI.GetCurrentBoundsScope();
 				Vector2 menuSize = new(menuWidth, bounds.Height);
-				UI.ModifyPanel(panelID, bounds.Centre, menuSize + Vector2.one * 0.5f, ColHelper.MakeCol(0.91f));
+				if (mobile)
+				{
+					// A card in the app's own style instead of the desktop's white outline.
+					UI.ModifyPanel(panelID, bounds.Centre, menuSize + Vector2.one * 0.3f, RewiredUI.SurfaceRaised);
+					RewiredUI.DrawFrame(Bounds2D.CreateFromCentreAndSize(bounds.Centre, menuSize + Vector2.one * 0.3f));
+				}
+				else
+				{
+					UI.ModifyPanel(panelID, bounds.Centre, menuSize + Vector2.one * 0.5f, ColHelper.MakeCol(0.91f));
+				}
 			}
 
 			wasMouseOverMenu = UI.MouseInsideBounds(UI.PrevBounds);
 
 			void DrawHeader()
 			{
-				UI.Button(contextMenuHeader, headerTheme, pos, buttonSize, false, false, false, anchor, true, textOffsetX);
+				if (mobile)
+				{
+					// The chip, pin or wire the menu belongs to, as a title rather than a disabled row.
+					UI.DrawPanel(pos, buttonSize, RewiredUI.Surface, anchor);
+					UI.DrawText(contextMenuHeader.Trim().ToUpperInvariant(), DrawSettings.ActiveUITheme.FontBold, theme.fontSize * 0.9f,
+						UI.PrevBounds.CentreLeft + Vector2.right * textOffset, Anchor.TextCentreLeft, RewiredUI.Accent);
+				}
+				else
+				{
+					UI.Button(contextMenuHeader, headerTheme, pos, buttonSize, false, false, false, anchor, true, textOffset);
+				}
 				pos.y += buttonSize.y * dirY;
 			}
 		}

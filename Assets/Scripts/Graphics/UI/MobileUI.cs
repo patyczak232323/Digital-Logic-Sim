@@ -19,14 +19,14 @@ namespace DLS.Graphics
 	public static class MobileUI
 	{
 		public const float TopBarHeight = 5.4f;
-		public const float DockHeight = 7.0f;
-		public const float QuickBarHeight = 5.0f;
+		// One bar along the bottom: the quick chips on the left, the actions on the right.
+		public const float DockHeight = 6.6f;
 
 		const string PrefPanDefault = "rewired.mobile.panDefault";
 		const string PrefTargetFps = "rewired.mobile.targetFps";
 		const string PrefHelpShown = "rewired.mobile.helpShown";
 
-		static readonly string[] DockLabels = { "PAN", "ADD CHIP", "SAVE", "LIBRARY", "TOOLS" };
+		static readonly string[] DockLabels = { "ADD CHIP", "SAVE", "LIBRARY", "TOOLS" };
 		static bool panMode;
 		static readonly System.Collections.Generic.List<string> quickChips = new();
 
@@ -94,7 +94,7 @@ namespace DLS.Graphics
 			Rect safe = Screen.safeArea;
 			float pixelsPerUIUnit = Screen.width / UI.Width;
 			float topBottom = safe.yMax - TopBarHeight * pixelsPerUIUnit;
-			float dockTop = safe.yMin + (DockHeight + (QuickBarVisible(Project.ActiveProject) ? QuickBarHeight : 0)) * pixelsPerUIUnit;
+			float dockTop = safe.yMin + DockHeight * pixelsPerUIUnit;
 			return screenPosition.y >= topBottom || screenPosition.y <= dockTop;
 		}
 
@@ -188,44 +188,34 @@ namespace DLS.Graphics
 			{
 				DrawMoreSheet(project, safe);
 			}
-			else if (QuickBarVisible(project))
+			else
 			{
-				DrawQuickBar(project, safe);
 				DrawCanvasHint(project, safe);
 			}
 		}
 
-		// The quick bar is hidden under the tools sheet, so its buttons can't be pressed through it.
-		static bool QuickBarVisible(Project project) =>
-			project != null && project.CanEditViewedChip && UIDrawer.ActiveMenu == UIDrawer.MenuType.None;
-
 		// One tap places the starred chips, with collections (IN/OUT by default) opened up, so
 		// input and output pins are always one tap away.
-		static void DrawQuickBar(Project project, Rect safe)
+		static void DrawQuickChips(Project project, float left, float right, float y, float buttonH)
 		{
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
 			CollectQuickChips(project);
 
-			Vector2 bottomLeft = new(safe.xMin, safe.yMin + DockHeight);
-			UI.DrawPanel(bottomLeft, new Vector2(safe.width, QuickBarHeight), ColHelper.Darken(theme.StarredBarCol, 0.04f), Anchor.BottomLeft);
-
-			const float pad = 0.55f;
 			const float gap = 0.35f;
-			const float minWidth = 8.6f;
-			float available = safe.width - pad * 2f;
+			const float minWidth = 7.4f;
+			float available = right - left;
 			int fit = Mathf.Max(1, Mathf.FloorToInt((available + gap) / (minWidth + gap)));
 			bool overflow = quickChips.Count > fit;
 			int shown = overflow ? fit - 1 : quickChips.Count;
 			int slots = overflow ? fit : Mathf.Max(quickChips.Count, 1);
-			float buttonW = Mathf.Min(14f, (available - gap * (slots - 1)) / slots);
-			float buttonH = QuickBarHeight - pad * 2f;
-			float x = safe.xMin + pad;
-			float y = bottomLeft.y + pad;
+			float buttonW = Mathf.Min(12f, (available - gap * (slots - 1)) / slots);
+			float x = left;
 
 			for (int i = 0; i < shown; i++)
 			{
 				if (UI.Button(quickChips[i], theme.ChipButton, new Vector2(x, y), new Vector2(buttonW, buttonH), true, false, false, Anchor.BottomLeft))
 				{
+					UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
 					project.controller.StartPlacing(quickChips[i]);
 				}
 				x += buttonW + gap;
@@ -267,7 +257,7 @@ namespace DLS.Graphics
 		static void DrawCanvasHint(Project project, Rect safe)
 		{
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
-			float y = safe.yMin + DockHeight + QuickBarHeight + 2.4f;
+			float y = safe.yMin + DockHeight + 2.4f;
 
 			if (project.controller.IsPlacingElements)
 			{
@@ -335,7 +325,7 @@ namespace DLS.Graphics
 			UI.DrawText(label, theme.FontBold, fontSize, new Vector2(textX, bar.Centre.y), Anchor.TextCentreLeft, labelCol);
 		}
 
-		// Draws UNDO, REDO, RUN/PAUSE and STEP from the right edge; returns their left edge.
+		// Draws PAN, UNDO, REDO, RUN/PAUSE and STEP from the right edge; returns their left edge.
 		static float DrawTopBarActions(Project project, Bounds2D bar, float buttonH)
 		{
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
@@ -343,6 +333,7 @@ namespace DLS.Graphics
 			const float gap = 0.4f;
 			float x = bar.Right - 0.5f;
 			bool paused = project.simPaused;
+
 			bool canEdit = project.CanEditViewedChip;
 
 			x -= width;
@@ -371,6 +362,15 @@ namespace DLS.Graphics
 				project.ViewedChip.UndoController.TryUndo();
 			}
 
+			// PAN shows whether one finger moves the view or edits the circuit.
+			x -= width + gap * 3;
+			ButtonTheme panTheme = panMode ? theme.ChipLibraryCollectionToggleOn : theme.MainMenuButtonTheme;
+			if (UI.Button(panMode ? "PAN: ON" : "PAN", panTheme, new Vector2(x, bar.Centre.y), new Vector2(width, buttonH), true, false, false, Anchor.CentreLeft))
+			{
+				panMode = !panMode;
+				ContextMenu.CloseContextMenu();
+			}
+
 			return x;
 		}
 
@@ -383,22 +383,36 @@ namespace DLS.Graphics
 			UI.DrawLine(dock.TopLeft, dock.TopRight, 0.08f, RewiredUI.Accent);
 
 			const float gap = 0.45f;
-			float innerPad = 0.55f;
+			const float innerPad = 0.55f;
+			const float actionW = 9.4f;
 			float buttonH = DockHeight - innerPad * 2f;
-			float buttonW = (safe.width - innerPad * 2f - gap * (DockLabels.Length - 1)) / DockLabels.Length;
-			float x = safe.xMin + innerPad;
+			float y = safe.yMin + innerPad;
+			float actionsLeft = safe.xMax - innerPad - DockLabels.Length * actionW - (DockLabels.Length - 1) * gap;
+			float x = actionsLeft;
 
 			for (int i = 0; i < DockLabels.Length; i++)
 			{
-				ButtonTheme buttonTheme = i == 0 && panMode ? theme.ChipLibraryCollectionToggleOn : theme.MenuButtonTheme;
-				bool enabled = i != 2 || project.CanEditViewedChip;
-				// The PAN button shows whether one finger moves the view or edits the circuit.
-				string dockLabel = i == 0 ? (panMode ? "PAN: ON" : "PAN: OFF") : DockLabels[i];
-				if (UI.Button(dockLabel, buttonTheme, new Vector2(x, safe.yMin + innerPad), new Vector2(buttonW, buttonH), enabled, false, false, Anchor.BottomLeft))
+				bool toolsOpen = i == 3 && UIDrawer.ActiveMenu == UIDrawer.MenuType.BottomBarMenuPopup;
+				ButtonTheme buttonTheme = toolsOpen ? theme.ChipLibraryCollectionToggleOn : theme.MenuButtonTheme;
+				bool enabled = i != 1 || project.CanEditViewedChip;
+				if (UI.Button(DockLabels[i], buttonTheme, new Vector2(x, y), new Vector2(actionW, buttonH), enabled, false, false, Anchor.BottomLeft))
 				{
 					HandleDockButton(project, i);
 				}
-				x += buttonW + gap;
+				x += actionW + gap;
+			}
+
+			float dividerX = actionsLeft - gap * 2f;
+			UI.DrawPanel(new Vector2(dividerX, dock.Centre.y), new Vector2(0.12f, buttonH), RewiredUI.Accent * 0.7f, Anchor.Centre);
+
+			if (project.CanEditViewedChip)
+			{
+				DrawQuickChips(project, safe.xMin + innerPad, dividerX - gap * 2f, y, buttonH);
+			}
+			else
+			{
+				UI.DrawText("VIEWING A SAVED CHIP  -  BACK TO EDIT", theme.FontRegular, theme.FontSizeRegular * 0.72f,
+					new Vector2(safe.xMin + 1.4f, dock.Centre.y), Anchor.TextCentreLeft, RewiredUI.SecondaryText);
 			}
 		}
 
@@ -407,19 +421,15 @@ namespace DLS.Graphics
 			switch (index)
 			{
 				case 0:
-					panMode = !panMode;
-					ContextMenu.CloseContextMenu();
-					break;
-				case 1:
 					UIDrawer.SetActiveMenu(UIDrawer.MenuType.Search);
 					break;
-				case 2:
+				case 1:
 					UIDrawer.SetActiveMenu(UIDrawer.MenuType.ChipSave);
 					break;
-				case 3:
+				case 2:
 					UIDrawer.SetActiveMenu(UIDrawer.MenuType.ChipLibrary);
 					break;
-				case 4:
+				case 3:
 					ToggleDrawer();
 					break;
 			}
@@ -489,8 +499,9 @@ namespace DLS.Graphics
 
 		static void DrawModalBackButton(UIDrawer.MenuType menu)
 		{
-			// UnsavedChanges owns an explicit decision and should not be visually obscured.
-			if (menu == UIDrawer.MenuType.UnsavedChanges) return;
+			// UnsavedChanges owns an explicit decision and should not be visually obscured;
+			// the help card has its own GOT IT button and a title the BACK button would cover.
+			if (menu is UIDrawer.MenuType.UnsavedChanges or UIDrawer.MenuType.MobileHelp) return;
 
 			Rect safe = SafeRectUI;
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
