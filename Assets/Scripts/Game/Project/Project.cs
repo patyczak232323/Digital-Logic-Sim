@@ -151,6 +151,22 @@ namespace DLS.Game
 			SearchPopup.ClearRecentChips();
 		}
 
+		// A phone has no keyboard, so a finger held on a KEY chip presses that chip's key.
+		char FindKeyChipUnderHeldPointer()
+		{
+			if (!InputHelper.IsMouseHeld(MouseButton.Left) || InteractionState.MouseIsOverUI) return '\0';
+
+			foreach (SubChipInstance subChip in ViewedChip.GetSubchips())
+			{
+				if (subChip.ChipType == ChipType.Key && InputHelper.MouseInsideBounds_World(subChip.Position, subChip.Size))
+				{
+					return (char)subChip.InternalData[0];
+				}
+			}
+
+			return '\0';
+		}
+
 		public void Update()
 		{
 			HandleProjectInput();
@@ -162,6 +178,7 @@ namespace DLS.Game
 
 			if (UIDrawer.ActiveMenu == UIDrawer.MenuType.None)
 			{
+				SimKeyboardHelper.TouchHeldKey = MobileUI.IsActive ? FindKeyChipUnderHeldPointer() : '\0';
 				RewiredEngine.UpdateKeyboardInputFromMainThread();
 			}
 

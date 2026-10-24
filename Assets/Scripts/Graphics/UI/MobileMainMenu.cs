@@ -498,13 +498,10 @@ namespace DLS.Graphics
 				if (!string.Equals(projects[i].ProjectName, candidate, StringComparison.OrdinalIgnoreCase))
 					continue;
 
-				bool currentCaseOnlyRename =
-					projectNameMode == ProjectNameMode.Rename &&
-					i == selectedProjectIndex &&
-					!string.Equals(candidate, SelectedProjectName, StringComparison.Ordinal) &&
-					string.Equals(candidate, SelectedProjectName, StringComparison.OrdinalIgnoreCase);
-
-				if (!currentCaseOnlyRename) return true;
+				// The project being renamed never conflicts with itself: a case-only change is
+				// allowed, and the unchanged name is reported as "Enter a different name".
+				bool isProjectBeingRenamed = projectNameMode == ProjectNameMode.Rename && i == selectedProjectIndex;
+				if (!isProjectBeingRenamed) return true;
 			}
 
 			return false;

@@ -440,7 +440,21 @@ namespace Seb.Vis.UI
 				// Focus input
 				bool mouseInBounds = PointerInTouchableBounds(ss.centre, ss.size);
 
-				if (InputHelper.IsMouseDownThisFrame(MouseButton.Left))
+				// In a touch-scrolled list a field focuses when tapped, so a swipe over the list
+				// scrolls it instead of opening the keyboard on whichever row it started on.
+				bool focusOnTap = TouchScrolling && insideScrollContent;
+				if (focusOnTap)
+				{
+					if (InputHelper.IsMouseDownThisFrame(MouseButton.Left) && !mouseInBounds) state.SetFocus(false);
+					state.isMouseDownInBounds = false;
+					if (IsTouchTap(ss.centre, MobileInputBridge.ExpandTouchHitSize(ss.size)) && mouseInBounds)
+					{
+						state.SetFocus(true);
+						state.SetCursorIndex(CharIndexBeforeMouse(textCentreLeft_ss.x), false);
+						OpenMobileKeyboard();
+					}
+				}
+				else if (InputHelper.IsMouseDownThisFrame(MouseButton.Left))
 				{
 					state.SetFocus(mouseInBounds);
 					state.isMouseDownInBounds = mouseInBounds;

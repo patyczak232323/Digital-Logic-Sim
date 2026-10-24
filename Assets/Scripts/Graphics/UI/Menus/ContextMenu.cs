@@ -306,9 +306,12 @@ namespace DLS.Graphics
 			headerTheme.buttonCols.inactive = ColHelper.MakeCol(0.18f);
 			headerTheme.textCols.inactive = Color.white;
 
-			float menuWidth = Draw.CalculateTextBoundsSize(menuEntries[0].Text, theme.fontSize, theme.font).x + 1;
-			float menuWidthHeader = Draw.CalculateTextBoundsSize(contextMenuHeader, theme.fontSize, theme.font).x + 1;
-			menuWidth = Mathf.Max(menuWidth, menuWidthHeader);
+			// Wide enough for the longest entry; padding alone does not cover names past the pad length.
+			float menuWidth = Draw.CalculateTextBoundsSize(contextMenuHeader, theme.fontSize, theme.font).x + 1;
+			foreach (MenuEntry entry in menuEntries)
+			{
+				menuWidth = Mathf.Max(menuWidth, Draw.CalculateTextBoundsSize(entry.Text, theme.fontSize, theme.font).x + 1);
+			}
 
 			Draw.ID panelID = UI.ReservePanel();
 			// Rows a finger can hit on a phone; the menu is kept inside the safe area so no
