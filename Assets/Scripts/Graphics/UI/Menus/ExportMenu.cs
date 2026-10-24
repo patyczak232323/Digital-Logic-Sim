@@ -27,6 +27,7 @@ namespace DLS.Graphics
 		static string pendingScreenshotPath;
 		static int pendingScreenshotFrame;
 		static bool screenshotCaptureStarted;
+		static bool keepStatusOnOpen;
 
 		public static void Open(string name)
 		{
@@ -36,7 +37,13 @@ namespace DLS.Graphics
 
 		public static void OnMenuOpened()
 		{
-			if (pendingScreenshotPath != null) return;
+			// Reopened after a screenshot: keep its result instead of the default hint.
+			if (keepStatusOnOpen)
+			{
+				keepStatusOnOpen = false;
+				return;
+			}
+
 			string where = AndroidExports.CanPublish ? "Files are saved in " + AndroidExports.FolderName + "." : "Files are saved in the project's Exports folder.";
 			SetStatus(where, string.Empty, RewiredUI.SecondaryText);
 		}
@@ -130,6 +137,7 @@ namespace DLS.Graphics
 				if (texture != null) UnityEngine.Object.Destroy(texture);
 				pendingScreenshotPath = null;
 				screenshotCaptureStarted = false;
+				keepStatusOnOpen = true;
 				UIDrawer.SetActiveMenu(UIDrawer.MenuType.Export);
 			}
 		}
