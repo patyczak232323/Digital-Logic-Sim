@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.IO;
 using DLS.Description;
 using DLS.Export;
@@ -14,6 +15,8 @@ namespace DLS.Graphics
 {
 	// Exports a chip as Verilog, as an SVG schematic, or the current view as a PNG.
 	// Files go to the project's "Exports" folder; Verilog is also copied to the clipboard.
+	// On Android a copy goes to Download/Rewired, where other apps can open it, and SHARE
+	// sends it through the system share sheet.
 	public static class ExportMenu
 	{
 		static string chipName;
@@ -23,6 +26,8 @@ namespace DLS.Graphics
 
 		static string pendingScreenshotPath;
 		static int pendingScreenshotFrame;
+		static bool screenshotCaptureStarted;
+		static bool keepStatusOnOpen;
 
 		public static void Open(string name)
 		{
@@ -32,8 +37,15 @@ namespace DLS.Graphics
 
 		public static void OnMenuOpened()
 		{
-			if (pendingScreenshotPath != null) return;
-			SetStatus("Files are saved in the project's Exports folder.", string.Empty, RewiredUI.SecondaryText);
+			// Reopened after a screenshot: keep its result instead of the default hint.
+			if (keepStatusOnOpen)
+			{
+				keepStatusOnOpen = false;
+				return;
+			}
+
+			string where = AndroidExports.CanPublish ? "Files are saved in " + AndroidExports.FolderName + "." : "Files are saved in the project's Exports folder.";
+			SetStatus(where, string.Empty, RewiredUI.SecondaryText);
 		}
 
 		public static void DrawMenu()
@@ -71,12 +83,20 @@ namespace DLS.Graphics
 				RewiredUI.DrawLabel(Shorten(statusLine2, MobileUI.IsActive ? 48 : 64), pos + Vector2.down * 1.9f, false, 0.55f, RewiredUI.DimText);
 				pos += Vector2.down * 3f;
 
+				bool share = false;
+				if (AndroidExports.HasSharableExport)
+				{
+					share = UI.Button("SHARE LAST EXPORT", theme.MainMenuButtonTheme, pos, size, true, false, false, Anchor.TopLeft);
+					pos = UI.PrevBounds.BottomLeft + Vector2.down * gap;
+				}
+
 				bool close = UI.Button("CLOSE", theme.ButtonTheme, pos, size, true, false, false, Anchor.TopLeft);
 				MenuHelper.DrawReservedMenuPanel(panelID, UI.GetCurrentBoundsScope());
 
 				if (verilog) ExportVerilog(project);
 				else if (svg) ExportSvg(project, isViewedChip);
 				else if (png) RequestScreenshot(project);
+				else if (share && !AndroidExports.ShareLast(out string shareError)) SetStatus("Could not open the share sheet.", shareError, Color.red);
 				else if (close || KeyboardShortcuts.CancelShortcutTriggered) UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
 			}
 		}
@@ -87,24 +107,55 @@ namespace DLS.Graphics
 		{
 			if (pendingScreenshotPath == null) return;
 
-			if (Time.frameCount == pendingScreenshotFrame)
+			if (Time.frameCount >= pendingScreenshotFrame && !screenshotCaptureStarted)
 			{
-				try
-				{
-					ScreenCapture.CaptureScreenshot(pendingScreenshotPath, 2);
-				}
-				catch (Exception e)
-				{
-					SetStatus("Could not take the screenshot.", e.Message, Color.red);
-					pendingScreenshotPath = null;
-				}
+				screenshotCaptureStarted = true;
+				UnityMain.instance.StartCoroutine(CaptureScreenshot(pendingScreenshotPath));
 			}
-			else if (Time.frameCount > pendingScreenshotFrame + 2)
+		}
+
+		// ScreenCapture.CaptureScreenshot(path) treats the path as relative to the persistent
+		// data folder on mobile, so the image is captured as a texture and written directly.
+		static IEnumerator CaptureScreenshot(string path)
+		{
+			yield return new WaitForEndOfFrame();
+
+			Texture2D texture = null;
+			try
 			{
-				string path = pendingScreenshotPath;
+				texture = ScreenCapture.CaptureScreenshotAsTexture(MobileUI.IsActive ? 1 : 2);
+				File.WriteAllBytes(path, texture.EncodeToPNG());
+				WebStorage.MarkDirty();
+				ReportExport("Screenshot saved.", path, "image/png");
+			}
+			catch (Exception e)
+			{
+				SetStatus("Could not take the screenshot.", e.Message, Color.red);
+			}
+			finally
+			{
+				if (texture != null) UnityEngine.Object.Destroy(texture);
 				pendingScreenshotPath = null;
-				SetStatus("Screenshot saved.", path, RewiredUI.Accent);
+				screenshotCaptureStarted = false;
+				keepStatusOnOpen = true;
 				UIDrawer.SetActiveMenu(UIDrawer.MenuType.Export);
+			}
+		}
+
+		// Reports where an export went; on Android it is also copied to Download/Rewired.
+		static void ReportExport(string message, string path, string mimeType)
+		{
+			if (AndroidExports.Publish(path, mimeType, out string error))
+			{
+				SetStatus(message + " Find it in " + AndroidExports.FolderName + ".", Path.GetFileName(path), RewiredUI.Accent);
+			}
+			else if (error != null)
+			{
+				SetStatus(message + " Copy to Downloads failed.", error, Color.yellow);
+			}
+			else
+			{
+				SetStatus(message, path, RewiredUI.Accent);
 			}
 		}
 
@@ -116,7 +167,7 @@ namespace DLS.Graphics
 				string verilog = VerilogExporter.Export(description, project.chipLibrary);
 				string path = WriteExport(project, chipName, ".v", verilog);
 				InputHelper.CopyToClipboard(verilog);
-				SetStatus("Verilog saved and copied to the clipboard.", path, RewiredUI.Accent);
+				ReportExport("Verilog saved and copied.", path, "text/plain");
 			}
 			catch (Exception e)
 			{
@@ -134,7 +185,7 @@ namespace DLS.Graphics
 
 				string name = string.IsNullOrWhiteSpace(chipName) ? "Untitled" : chipName;
 				string path = WriteExport(project, name, ".svg", SchematicSvgExporter.Export(chip, name));
-				SetStatus("Schematic saved.", path, RewiredUI.Accent);
+				ReportExport("Schematic saved.", path, "image/svg+xml");
 			}
 			catch (Exception e)
 			{
@@ -149,6 +200,7 @@ namespace DLS.Graphics
 			{
 				pendingScreenshotPath = UniquePath(project, name, ".png");
 				pendingScreenshotFrame = Time.frameCount + 2;
+				screenshotCaptureStarted = false;
 				UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
 			}
 			catch (Exception e)
