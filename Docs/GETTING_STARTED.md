@@ -117,9 +117,10 @@ For difficult circuits, use the simulation diagnostics and profiling tools descr
 
 - Tap an input pin to toggle it; start a wire on one pin and finish it on another.
 - Long-press a chip, pin or wire for its menu.
-- Two fingers move and zoom the view; *PAN: ON* does it with one finger.
+- Tap a chip in the bottom bar, then tap where it should go.
+- Two fingers move and zoom the view; *PAN* in the top bar does it with one finger.
 - Swipe in from the left edge, or press *TOOLS*, for the tools sheet.
-- The top bar has *UNDO*, *REDO*, *RUN*/*PAUSE* and *STEP*. *TOOLS → HELP* shows the gesture guide again.
+- The top bar has *PAN*, *UNDO*, *REDO*, *RUN*/*PAUSE* and *STEP*. *TOOLS → HELP* shows the gesture guide again.
 
 ## Compatibility note
 

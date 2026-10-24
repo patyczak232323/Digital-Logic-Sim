@@ -39,6 +39,9 @@ namespace Seb.Helpers.InputHandling
 		public static bool KeyboardVisible => RuntimeEnabled && systemKeyboardActive && !dismissed;
 		public static bool ConsumesNativeTextInput => KeyboardVisible || Time.frameCount <= suppressNativeTextThroughFrame;
 		public static float TouchHitScale => RuntimeEnabled ? 1.35f : 1f;
+		// A lifted finger leaves the pointer where it was; only show hover while one is down,
+		// so the last button tapped does not stay lit.
+		public static bool PointerHovering => !RuntimeEnabled || Input.touchCount > 0;
 
 		public static int OpenRequestVersion => openRequestVersion;
 		public static int SynchronizeRequestVersion => synchronizeRequestVersion;
