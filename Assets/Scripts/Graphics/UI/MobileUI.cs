@@ -12,7 +12,9 @@ using UnityEngine;
 namespace DLS.Graphics
 {
 	/// <summary>
-	/// Touch-first Android shell. Desktop keeps using the original Rewired UI path.
+	/// Touch-first Android shell. Desktop keeps using the original Rewired UI path, and so
+	/// does Android unless the player picks the touch interface in settings: the classic
+	/// layout then runs with touch input (pinch, two-finger pan, long press).
 	/// This class owns only mobile navigation/chrome; domain-specific editors can still
 	/// render their existing content inside the phone-sized UI scope.
 	/// </summary>
@@ -25,6 +27,7 @@ namespace DLS.Graphics
 		const string PrefPanDefault = "rewired.mobile.panDefault";
 		const string PrefTargetFps = "rewired.mobile.targetFps";
 		const string PrefHelpShown = "rewired.mobile.helpShown";
+		const string PrefTouchLayout = "rewired.mobile.touchLayout";
 
 		static readonly string[] DockLabels = { "PAN", "ADD CHIP", "SAVE", "LIBRARY", "TOOLS" };
 		static bool panMode;
@@ -34,13 +37,20 @@ namespace DLS.Graphics
 		// preview and screenshot it without a phone. Touch gestures stay Android-only.
 		public static bool PreviewOnDesktop { get; private set; }
 
-		public static bool IsActive => MobileInputBridge.RuntimeEnabled || Application.isMobilePlatform || PreviewOnDesktop;
+		static bool? touchLayout;
+
+		public static bool TouchDevice => MobileInputBridge.RuntimeEnabled || Application.isMobilePlatform;
+
+		// The touch shell is opt-in: Android starts in the same layout as the desktop sim.
+		public static bool TouchLayout => touchLayout ??= PlayerPrefs.GetInt(PrefTouchLayout, 0) != 0;
+
+		public static bool IsActive => PreviewOnDesktop || (TouchDevice && TouchLayout);
 
 		public static void ReadCommandLine()
 		{
 			PreviewOnDesktop = Array.Exists(Environment.GetCommandLineArgs(), a => string.Equals(a, "-mobile-ui", StringComparison.OrdinalIgnoreCase));
 		}
-		public static bool PanMode => panMode;
+		public static bool PanMode => panMode && IsActive;
 		public static bool PanByDefault => PlayerPrefs.GetInt(PrefPanDefault, 0) != 0;
 		public static int TargetFrameRate => Mathf.Clamp(PlayerPrefs.GetInt(PrefTargetFps, 60), 30, 120);
 
@@ -96,6 +106,21 @@ namespace DLS.Graphics
 			float topBottom = safe.yMax - TopBarHeight * pixelsPerUIUnit;
 			float dockTop = safe.yMin + (DockHeight + (QuickBarVisible(Project.ActiveProject) ? QuickBarHeight : 0)) * pixelsPerUIUnit;
 			return screenPosition.y >= topBottom || screenPosition.y <= dockTop;
+		}
+
+		public static void SetTouchLayout(bool enabled)
+		{
+			if (enabled == TouchLayout) return;
+			touchLayout = enabled;
+			PlayerPrefs.SetInt(PrefTouchLayout, enabled ? 1 : 0);
+			PlayerPrefs.Save();
+
+			// Both layouts keep their own main menu state; start the new one from its home screen.
+			if (UIDrawer.ActiveMenu == UIDrawer.MenuType.MainMenu)
+			{
+				if (IsActive) OnMainMenuOpened();
+				else MainMenu.OnMenuOpened();
+			}
 		}
 
 		public static void SetPanDefault(bool enabled)

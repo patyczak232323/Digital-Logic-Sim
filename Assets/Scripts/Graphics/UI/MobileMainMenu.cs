@@ -401,6 +401,21 @@ namespace DLS.Graphics
 				new Vector2(x, y + 2f), Anchor.TextCentreLeft, Color.white);
 
 			y -= 1.5f;
+			UI.DrawText("INTERFACE", theme.FontBold, theme.FontSizeRegular * 0.72f,
+				new Vector2(x, y), Anchor.TextCentreLeft, RewiredUI.SecondaryText);
+			y -= 1.6f;
+			float halfWidth = (width - 0.6f) / 2f;
+			if (UI.Button("CLASSIC", theme.MenuButtonTheme,
+				    new Vector2(x, y), new Vector2(halfWidth, h), true, false, false, Anchor.TopLeft))
+			{
+				// The classic main menu takes over from the next frame on.
+				MobileUI.SetTouchLayout(false);
+				return;
+			}
+			UI.Button("TOUCH", theme.ChipLibraryCollectionToggleOn,
+				new Vector2(x + halfWidth + 0.6f, y), new Vector2(halfWidth, h), true, false, false, Anchor.TopLeft);
+
+			y -= h + 2.3f;
 			UI.DrawText("DEFAULT TOUCH MODE", theme.FontBold, theme.FontSizeRegular * 0.72f,
 				new Vector2(x, y), Anchor.TextCentreLeft, RewiredUI.SecondaryText);
 			y -= 1.6f;

@@ -161,7 +161,8 @@ namespace DLS.Game
 
 		void UpdateEdgeSwipe()
 		{
-			if (UIDrawer.ActiveMenu != UIDrawer.MenuType.None ||
+			if (!MobileUI.IsActive ||
+			    UIDrawer.ActiveMenu != UIDrawer.MenuType.None ||
 			    MobileInputBridge.KeyboardVisible ||
 			    Input.touchCount != 1)
 			{

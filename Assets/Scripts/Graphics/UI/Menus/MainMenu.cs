@@ -30,6 +30,9 @@ namespace DLS.Graphics
 		static readonly string[] SettingsWheelFullScreenOptions = { "OFF", "MAXIMIZED", "BORDERLESS", "EXCLUSIVE" };
 		static readonly FullScreenMode[] FullScreenModes = { FullScreenMode.Windowed, FullScreenMode.MaximizedWindow, FullScreenMode.FullScreenWindow, FullScreenMode.ExclusiveFullScreen };
 		static readonly string[] SettingsWheelVSyncOptions = { "DISABLED", "ENABLED" };
+		static readonly string[] SettingsWheelInterfaceOptions = { "CLASSIC", "TOUCH" };
+		static readonly string[] SettingsWheelFrameRateOptions = { "60 FPS", "90 FPS", "120 FPS" };
+		static readonly int[] FrameRates = { 60, 90, 120 };
 
 		static readonly Func<string, bool> projectNameValidator = ProjectNameValidator;
 		static readonly UI.ScrollViewDrawContentFunc loadProjectScrollViewDrawer = DrawAllProjectsInScrollView;
@@ -345,6 +348,12 @@ namespace DLS.Graphics
 
 		static void DrawSettingsScreen()
 		{
+			if (MobileUI.TouchDevice)
+			{
+				DrawTouchDeviceSettingsScreen();
+				return;
+			}
+
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
 
 			// Keep enough separation between setting labels and controls, especially
@@ -406,6 +415,47 @@ namespace DLS.Graphics
 			else if (buttonIndex == 1)
 			{
 				Main.SaveAndApplyAppSettings(EditedAppSettings);
+			}
+		}
+
+		// A phone has no window size or key bindings to set; it chooses the layout instead.
+		static void DrawTouchDeviceSettingsScreen()
+		{
+			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
+
+			float regionWidth = 38;
+			float labelOriginLeft = UI.Centre.x - regionWidth / 2;
+			float elementOriginRight = UI.Centre.x + regionWidth / 2;
+			Vector2 wheelSize = new(16, 2.5f);
+			Vector2 pos = new(labelOriginLeft, UI.Centre.y + 4);
+			using (UI.BeginBoundsScope(true))
+			{
+				Draw.ID backgroundPanelID = UI.ReservePanel();
+				RewiredUI.DrawSectionHeader("SETTINGS", new Vector2(labelOriginLeft, pos.y + 6f), regionWidth, true);
+
+				UI.DrawText("Interface", theme.FontRegular, theme.FontSizeRegular, pos, Anchor.CentreLeft, Color.white);
+				int interfaceIndex = UI.WheelSelector(MobileUI.TouchLayout ? 1 : 0, SettingsWheelInterfaceOptions, new Vector2(elementOriginRight, pos.y), wheelSize, theme.OptionsWheel, Anchor.CentreRight);
+
+				pos += Vector2.down * 4;
+				UI.DrawText("Frame rate", theme.FontRegular, theme.FontSizeRegular, pos, Anchor.CentreLeft, Color.white);
+				int frameRateIndex = Mathf.Max(0, Array.IndexOf(FrameRates, MobileUI.TargetFrameRate));
+				frameRateIndex = UI.WheelSelector(frameRateIndex, SettingsWheelFrameRateOptions, new Vector2(elementOriginRight, pos.y), wheelSize, theme.OptionsWheel, Anchor.CentreRight);
+				if (FrameRates[frameRateIndex] != MobileUI.TargetFrameRate) MobileUI.SetTargetFrameRate(FrameRates[frameRateIndex]);
+
+				UI.ModifyPanel(backgroundPanelID, UI.GetCurrentBoundsScope().Centre, UI.GetCurrentBoundsScope().Size + Vector2.one * 3, RewiredUI.SurfaceRaised);
+
+				// Switching draws the touch main menu from the next frame on.
+				if (interfaceIndex == 1)
+				{
+					MobileUI.SetTouchLayout(true);
+					return;
+				}
+			}
+
+			Vector2 buttonPos = UI.PrevBounds.BottomLeft + Vector2.down * DrawSettings.VerticalButtonSpacing;
+			if (UI.Button(FormatButtonString("Back"), theme.MainMenuButtonTheme, buttonPos, new Vector2(UI.PrevBounds.Width, DrawSettings.ButtonHeight), true, false, false, Anchor.TopLeft))
+			{
+				BackToMain();
 			}
 		}
 

@@ -39,7 +39,7 @@ namespace DLS.Graphics
 			NotifyIfActiveMenuChanged();
 			ExportMenu.Update();
 
-			UI.TouchScrolling = MobileUI.IsActive;
+			UI.TouchScrolling = MobileUI.IsActive || MobileUI.TouchDevice;
 			if (MobileUI.IsActive)
 			{
 				using (UI.CreateUIScope())

@@ -178,7 +178,7 @@ namespace DLS.Game
 
 			if (UIDrawer.ActiveMenu == UIDrawer.MenuType.None)
 			{
-				SimKeyboardHelper.TouchHeldKey = MobileUI.IsActive ? FindKeyChipUnderHeldPointer() : '\0';
+				SimKeyboardHelper.TouchHeldKey = MobileUI.IsActive || MobileUI.TouchDevice ? FindKeyChipUnderHeldPointer() : '\0';
 				RewiredEngine.UpdateKeyboardInputFromMainThread();
 			}
 

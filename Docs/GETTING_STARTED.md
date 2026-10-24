@@ -115,6 +115,16 @@ For difficult circuits, use the simulation diagnostics and profiling tools descr
 
 ## Android controls
 
+Android opens in the same interface as the desktop sim: the chip bar along the bottom and the *MENU* button. It works with touch:
+
+- Tap a chip in the bottom bar, then tap where it should go.
+- Long-press a chip, pin or wire for its menu (the desktop right-click).
+- Two fingers move and zoom the view.
+
+Undo, redo and single-step use keyboard shortcuts there, as on desktop, so they need a hardware keyboard. Set *Interface* to *TOUCH* in the main menu *SETTINGS* for the touch interface, which has buttons for them; its *SETTINGS → CLASSIC* switches back.
+
+In the touch interface:
+
 - Tap an input pin to toggle it; start a wire on one pin and finish it on another.
 - Long-press a chip, pin or wire for its menu.
 - Two fingers move and zoom the view; *PAN: ON* does it with one finger.

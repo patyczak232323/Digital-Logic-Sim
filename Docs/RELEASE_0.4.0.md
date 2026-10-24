@@ -4,7 +4,7 @@ Rewired v0.4.0 brings Rewired to Android, adds chips shared across projects and 
 
 ## Highlights
 
-- **Android (ARM64)**: a full touch interface with its own main menu, project management, chip picker, chip library, chip save flow and RHDL Studio layout. Touch gestures, safe-area and landscape layout, and the Android system keyboard are supported.
+- **Android (ARM64)**: starts in the same interface as the desktop sim, driven by touch (tap to place, long-press for menus, pinch to zoom). An optional touch interface, chosen in *SETTINGS*, has its own main menu, project management, chip picker, chip library, chip save flow and RHDL Studio layout. Touch gestures, safe-area and landscape layout, and the Android system keyboard are supported.
 - **Global chips**: save a custom chip with `AVAILABILITY` set to `ALL PROJECTS` and it is available in every project. Renames propagate to other projects, and deleting a global chip warns that other projects may depend on it.
 - **Readable RHDL schematics**: chips generated from RHDL use a left-to-right block layout with orthogonal wiring, and keep the root pin order from the source.
 - **Built-in name conflicts**: if a custom chip has the same name as a newer built-in chip, the project menus now show which chip to rename to use the built-in one.
