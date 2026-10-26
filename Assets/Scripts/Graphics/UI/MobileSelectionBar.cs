@@ -25,31 +25,36 @@ namespace DLS.Graphics
 			public readonly bool Enabled;
 			public readonly bool Danger;
 
-			public BarAction(string label, Action onPress, bool enabled, bool danger = false)
+			// When the bar is too wide, actions with the highest value move into MORE first.
+			// Zero means the action always stays: COPY and DELETE, which MORE does not have.
+			public readonly int DropOrder;
+
+			public BarAction(string label, Action onPress, bool enabled, int dropOrder, bool danger = false)
 			{
 				Label = label;
 				OnPress = onPress;
 				Enabled = enabled;
+				DropOrder = dropOrder;
 				Danger = danger;
 			}
 		}
 
 		static readonly List<BarAction> actions = new();
 
-		// Short names for a phone; null keeps an action in MORE only.
-		static string BarLabel(string menuText) => menuText switch
+		// Short names for a phone and the order they give way in; null keeps an action in MORE only.
+		static (string label, int dropOrder) BarLabel(string menuText) => menuText switch
 		{
-			"VIEW" => "LOOK INSIDE",
-			"OPEN" => "EDIT CHIP",
-			"TRUTH TABLE" => "TRUTH TABLE",
-			"LABEL" => "LABEL",
-			"MIRROR H" => "FLIP",
-			"FLIP" => "FLIP",
-			"EDIT" => "EDIT",
-			"REBIND" => "SET KEY",
-			"BREAKPOINT" => "BREAKPOINT",
-			"DELETE" => "DELETE",
-			_ => null
+			"VIEW" => ("LOOK INSIDE", 1),
+			"EDIT" => ("EDIT", 1),
+			"REBIND" => ("SET KEY", 1),
+			"TRUTH TABLE" => ("TRUTH TABLE", 2),
+			"BREAKPOINT" => ("BREAKPOINT", 2),
+			"MIRROR H" => ("FLIP", 3),
+			"FLIP" => ("FLIP", 3),
+			"LABEL" => ("LABEL", 4),
+			"OPEN" => ("EDIT CHIP", 5),
+			"DELETE" => ("DELETE", 0),
+			_ => (null, 0)
 		};
 
 		public static void Draw(Project project, Rect canvas)
@@ -78,31 +83,31 @@ namespace DLS.Graphics
 						continue;
 					}
 
-					string label = BarLabel(entry.Text.Trim().ToUpperInvariant());
+					(string label, int dropOrder) = BarLabel(entry.Text.Trim().ToUpperInvariant());
 					if (label == null)
 					{
 						showMore = true;
 						continue;
 					}
 
-					BarAction action = new(label, entry.OnPress, entry.IsEnabled(), label == "DELETE");
+					BarAction action = new(label, entry.OnPress, entry.IsEnabled(), dropOrder, label == "DELETE");
 					if (action.Danger) delete = action;
 					else actions.Add(action);
 				}
 
-				actions.Add(new BarAction("COPY", controller.DuplicateSelection, canEdit));
+				actions.Add(new BarAction("COPY", controller.DuplicateSelection, canEdit, 0));
 				if (delete.HasValue) actions.Add(delete.Value);
 			}
 			else
 			{
 				title = $"{selection.Count} SELECTED";
 				SubChipInstance[] subchips = selection.OfType<SubChipInstance>().Where(s => !s.IsBus).ToArray();
-				actions.Add(new BarAction("COPY", controller.DuplicateSelection, canEdit));
-				actions.Add(new BarAction("FLIP", () => controller.MirrorSubChips(subchips, true), canEdit && subchips.Length > 0));
-				actions.Add(new BarAction("DELETE", controller.DeleteSelection, canEdit, true));
+				actions.Add(new BarAction("COPY", controller.DuplicateSelection, canEdit, 0));
+				actions.Add(new BarAction("FLIP", () => controller.MirrorSubChips(subchips, true), canEdit && subchips.Length > 0, 0));
+				actions.Add(new BarAction("DELETE", controller.DeleteSelection, canEdit, 0, true));
 			}
 
-			// ---- Layout: drop actions into MORE until the bar fits the board ----
+			// ---- Layout: move actions into MORE until the bar fits the board ----
 			ButtonTheme theme = MobileTheme.Neutral;
 			const float titleScale = 0.68f;
 			float maxWidth = canvas.width - 3f;
@@ -112,10 +117,14 @@ namespace DLS.Graphics
 			while (true)
 			{
 				float width = 0.6f + titleWidth + actions.Sum(a => ButtonWidth(a.Label, theme) + Gap) + (showMore ? moreWidth + Gap : 0) + 0.3f;
-				if (width <= maxWidth || actions.Count <= 1) break;
+				if (width <= maxWidth) break;
 
-				// Keep DELETE; the action before it goes into MORE.
-				int removeIndex = actions[^1].Danger ? actions.Count - 2 : actions.Count - 1;
+				int removeIndex = -1;
+				for (int i = 0; i < actions.Count; i++)
+				{
+					if (actions[i].DropOrder > 0 && (removeIndex < 0 || actions[i].DropOrder >= actions[removeIndex].DropOrder)) removeIndex = i;
+				}
+
 				if (removeIndex < 0) break;
 				actions.RemoveAt(removeIndex);
 				showMore = single != null;
