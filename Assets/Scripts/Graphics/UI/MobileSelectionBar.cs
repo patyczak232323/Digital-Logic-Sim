@@ -104,7 +104,7 @@ namespace DLS.Graphics
 
 			// ---- Layout: drop actions into MORE until the bar fits the board ----
 			ButtonTheme theme = MobileTheme.Neutral;
-			const float titleScale = 0.6f;
+			const float titleScale = 0.68f;
 			float maxWidth = canvas.width - 3f;
 			float titleWidth = Mathf.Min(MobileTheme.TextWidth(title, titleScale, true) + 1.6f, 15f);
 			float moreWidth = ButtonWidth("MORE", theme);
@@ -126,7 +126,7 @@ namespace DLS.Graphics
 			Bounds2D bar = MobileTheme.Card(bottomCentre, new Vector2(barWidth, BarHeight), Anchor.CentreBottom);
 
 			string fittedTitle = MobileTheme.Fit(title, titleWidth - 1.2f, titleScale, true);
-			MobileTheme.Text(fittedTitle, bar.CentreLeft + Vector2.right * 0.9f, titleScale, MobileTheme.Accent, Anchor.TextCentreLeft, true);
+			MobileTheme.Text(fittedTitle, bar.CentreLeft + Vector2.right * 0.9f, titleScale, Color.white, Anchor.TextCentreLeft, true);
 
 			float x = bar.Left + 0.6f + titleWidth;
 			float y = bar.Centre.y + ButtonHeight / 2;
@@ -142,7 +142,7 @@ namespace DLS.Graphics
 				x += w + Gap;
 			}
 
-			if (showMore && MobileTheme.Button("MORE", MobileTheme.Quiet, new Vector2(x, y), new Vector2(moreWidth, ButtonHeight), true, Anchor.TopLeft))
+			if (showMore && MobileTheme.Button("MORE", MobileTheme.Neutral, new Vector2(x, y), new Vector2(moreWidth, ButtonHeight), true, Anchor.TopLeft))
 			{
 				// Opens above the bar, clear of the finger that pressed MORE.
 				ContextMenu.OpenFor(single, new Vector2(bar.Right - 2.5f, bar.Top + 0.6f));

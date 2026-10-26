@@ -208,12 +208,6 @@ namespace DLS.Game
 			}
 
 			Touch touch = TouchInput.GetTouch(0);
-			if (MobileInputBridge.IsPointOverKeyboard(touch.position) || InteractionState.MouseIsOverUI)
-			{
-				CancelLongPress();
-				return;
-			}
-
 			float dpi = Screen.dpi > 0 ? Screen.dpi : 320f;
 			float moveTolerance = Mathf.Clamp(dpi * 0.08f, 20f, 54f);
 
@@ -238,6 +232,14 @@ namespace DLS.Game
 
 			if (!longPressTriggered && Time.unscaledTime - longPressStartTime >= LongPressSeconds)
 			{
+				// Whether the finger is over the interface is only known once a frame has been
+				// drawn with it there, so it is checked now rather than when the finger landed.
+				if (MobileInputBridge.IsPointOverKeyboard(touch.position) || InteractionState.MouseIsOverUI)
+				{
+					CancelLongPress();
+					return;
+				}
+
 				longPressTriggered = true;
 				inputSource.BlockPrimaryPointerUntilRelease();
 				inputSource.TriggerRightClickThisFrame(touch.position);

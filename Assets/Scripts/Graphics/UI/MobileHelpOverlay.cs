@@ -25,7 +25,7 @@ namespace DLS.Graphics
 			MenuHelper.DrawBackgroundOverlay();
 			Rect safe = MobileUI.SafeRectUI;
 
-			float width = Mathf.Min(safe.width - 4f, 86f);
+			float width = Mathf.Min(safe.width - 4f, 70f);
 			const float stepHeight = 4.5f;
 			float height = 4.2f + Steps.Length * stepHeight + 2.6f + 5.6f;
 			height = Mathf.Min(height, safe.height - 1f);

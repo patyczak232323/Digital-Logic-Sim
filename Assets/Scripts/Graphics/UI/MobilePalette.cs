@@ -257,13 +257,25 @@ namespace DLS.Graphics
 			return point.y >= itemTop - ItemHeight ? items[index] : null;
 		}
 
+		// The project's collections, then MY CHIPS with every chip the user has made. OTHER, where
+		// saved chips go by default, is only listed if it holds built-in chips as well.
 		static void CollectCategories(Project project)
 		{
 			categories.Clear();
+			bool otherHasBuiltins = false;
 			foreach (ChipCollection collection in project.description.ChipCollections)
 			{
+				if (collection.Name == OtherCollectionName)
+				{
+					otherHasBuiltins = collection.Chips.Exists(c => project.chipLibrary.IsBuiltinChip(c));
+					continue;
+				}
+
 				categories.Add(collection.Name);
 			}
+
+			categories.Add(MyChipsCategory);
+			if (otherHasBuiltins) categories.Add(OtherCollectionName);
 
 			if (selectedCategory == null || !categories.Contains(selectedCategory))
 			{
@@ -275,6 +287,17 @@ namespace DLS.Graphics
 		static void CollectItems(Project project)
 		{
 			items.Clear();
+			if (selectedCategory == MyChipsCategory)
+			{
+				foreach (ChipDescription chip in project.chipLibrary.allChips)
+				{
+					if (chip.ChipType == ChipType.Custom && project.ViewedChip.CanAddSubchip(chip.Name)) items.Add(chip.Name);
+				}
+
+				items.Sort(System.StringComparer.OrdinalIgnoreCase);
+				return;
+			}
+
 			foreach (ChipCollection collection in project.description.ChipCollections)
 			{
 				if (collection.Name != selectedCategory) continue;
@@ -285,7 +308,11 @@ namespace DLS.Graphics
 			}
 		}
 
-		static bool IsMyChipsCategory(string name) => name == "OTHER";
+		const string OtherCollectionName = "OTHER";
+		// A key no collection can have, shown as MY CHIPS.
+		const string MyChipsCategory = "\u0001MY CHIPS";
+
+		static bool IsMyChipsCategory(string name) => name == MyChipsCategory;
 
 		static string DisplayName(string category) => IsMyChipsCategory(category) ? "MY CHIPS" : category ?? string.Empty;
 

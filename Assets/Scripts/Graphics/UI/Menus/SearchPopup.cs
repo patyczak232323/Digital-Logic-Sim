@@ -100,13 +100,13 @@ namespace DLS.Graphics
 			float width = safe.width - pad * 2f;
 
 			// The title sits beside the BACK button, which MobileUI draws over this menu.
-			UI.DrawText("ADD CHIP", theme.FontBold, theme.FontSizeRegular * 1.05f,
+			UI.DrawText("FIND A PART", theme.FontBold, theme.FontSizeRegular * 1.05f,
 				new Vector2(safe.xMin + 13.3f, safe.yMax - 3f), Anchor.TextCentreLeft, Color.white);
 
 			Vector2 topLeft = new(safe.xMin + pad, safe.yMax - 6.2f);
 			InputFieldTheme inputTheme = theme.ChipNameInputField;
 			UI.InputField(ID_SearchInput, inputTheme, topLeft, new Vector2(width, 5.6f),
-				"SEARCH CHIPS", Anchor.TopLeft, 1.2f, searchStringValidator, true);
+				"TYPE A NAME", Anchor.TopLeft, 1.2f, searchStringValidator, true);
 
 			topLeft = UI.PrevBounds.BottomLeft + Vector2.down * 0.8f;
 			float bottom = safe.yMin + 1.0f;
@@ -127,7 +127,7 @@ namespace DLS.Graphics
 
 		static void DrawChipSearchEntryMobile(Vector2 topLeft, float width, int index, bool isLayoutPass)
 		{
-			const float rowHeight = 5.6f;
+			const float rowHeight = 5.2f;
 			Bounds2D entryBounds = Bounds2D.CreateFromTopLeftAndSize(topLeft, new Vector2(width, rowHeight));
 			if (isLayoutPass)
 			{
@@ -137,46 +137,35 @@ namespace DLS.Graphics
 
 			string chipName = filteredChipNames[index];
 			Project project = Project.ActiveProject;
-			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
 
 			const float gap = 0.35f;
-			float nameWidth = width * 0.46f;
-			float actionWidth = (width - nameWidth - gap * 3f) / 3f;
+			const float actionWidth = 10f;
+			bool canOpen = !project.chipLibrary.IsBuiltinChip(chipName);
+			float nameWidth = width - actionWidth * 2 - gap * 2;
 
-			string displayName = project.chipLibrary.IsGlobalChip(chipName) ? chipName + "  [GLOBAL]" : chipName;
+			string displayName = project.chipLibrary.IsGlobalChip(chipName) ? chipName + "  [ALL PROJECTS]" : chipName;
 			bool canPlace = project.ViewedChip.CanAddSubchip(chipName);
-			// Tapping the name places the chip, the same as USE.
-			if (UI.Button(displayName, theme.ChipButton, topLeft,
-				    new Vector2(nameWidth, rowHeight), canPlace, false, false, Anchor.TopLeft, true, 0.8f))
+
+			// Tapping the name places the chip, the same as PLACE.
+			if (UI.Button(displayName, MobileTheme.Neutral, topLeft, new Vector2(nameWidth, rowHeight), canPlace, false, false, Anchor.TopLeft, true, 1f, false, false))
 			{
 				UseChip(chipName);
 				return;
 			}
 
-			bool canOpen = !project.chipLibrary.IsBuiltinChip(chipName);
-			bool starred = project.description.IsStarred(chipName, false);
 			float x = topLeft.x + nameWidth + gap;
-
-			if (UI.Button("USE", theme.MainMenuButtonTheme, new Vector2(x, topLeft.y), new Vector2(actionWidth, rowHeight),
-				canPlace, false, false, Anchor.TopLeft))
+			if (MobileTheme.Button("PLACE", MobileTheme.Primary, new Vector2(x, topLeft.y), new Vector2(actionWidth, rowHeight), canPlace))
 			{
 				UseChip(chipName);
 				return;
 			}
 			x += actionWidth + gap;
 
-			if (UI.Button("OPEN", theme.MenuButtonTheme, new Vector2(x, topLeft.y), new Vector2(actionWidth, rowHeight),
-				canOpen, false, false, Anchor.TopLeft))
+			// Opens a saved chip for editing; built-in chips have nothing to open.
+			if (MobileTheme.Button("EDIT", MobileTheme.Quiet, new Vector2(x, topLeft.y), new Vector2(actionWidth, rowHeight), canOpen))
 			{
 				OpenChip(chipName);
 				return;
-			}
-			x += actionWidth + gap;
-
-			if (UI.Button(starred ? "UNSTAR" : "STAR", theme.MenuButtonTheme, new Vector2(x, topLeft.y), new Vector2(actionWidth, rowHeight),
-				true, false, false, Anchor.TopLeft))
-			{
-				project.SetStarred(chipName, !starred, false);
 			}
 
 			UI.OverridePreviousBounds(entryBounds);

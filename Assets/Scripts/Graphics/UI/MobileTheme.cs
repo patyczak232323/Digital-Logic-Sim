@@ -98,7 +98,7 @@ namespace DLS.Graphics
 		public static void DrawIcon(MobileIcon icon, Vector2 c, float size, Color col)
 		{
 			float h = size / 2;
-			float t = Mathf.Max(0.16f, size * 0.12f);
+			float t = Mathf.Max(0.1f, size * 0.075f);
 
 			switch (icon)
 			{
@@ -116,14 +116,25 @@ namespace DLS.Graphics
 				case MobileIcon.Undo:
 				case MobileIcon.Redo:
 				{
+					// An arrow pointing back (or forward) that bends round from below.
 					float dir = icon == MobileIcon.Undo ? 1 : -1;
 					Vector2 P(float x, float y) => new(c.x + x * h * dir, c.y + y * h);
-					UI.DrawLine(P(-0.75f, 0.25f), P(0.35f, 0.25f), t, col);
-					UI.DrawLine(P(0.35f, 0.25f), P(0.75f, -0.1f), t, col);
-					UI.DrawLine(P(0.75f, -0.1f), P(0.35f, -0.55f), t, col);
-					UI.DrawLine(P(0.35f, -0.55f), P(-0.2f, -0.55f), t, col);
-					UI.DrawLine(P(-0.75f, 0.25f), P(-0.3f, 0.7f), t, col);
-					UI.DrawLine(P(-0.75f, 0.25f), P(-0.3f, -0.2f), t, col);
+					const int segments = 10;
+					const float radius = 0.42f;
+					Vector2 arcCentre = new(0.2f, -0.08f);
+					Vector2 prev = P(arcCentre.x, arcCentre.y + radius);
+					for (int i = 1; i <= segments; i++)
+					{
+						float angle = Mathf.PI / 2 - Mathf.PI * i / segments;
+						Vector2 next = P(arcCentre.x + Mathf.Cos(angle) * radius, arcCentre.y + Mathf.Sin(angle) * radius);
+						UI.DrawLine(prev, next, t, col);
+						prev = next;
+					}
+
+					UI.DrawLine(P(-0.8f, arcCentre.y + radius), P(arcCentre.x, arcCentre.y + radius), t, col);
+					UI.DrawLine(prev, P(-0.35f, arcCentre.y - radius), t, col);
+					UI.DrawLine(P(-0.8f, arcCentre.y + radius), P(-0.45f, arcCentre.y + radius + 0.35f), t, col);
+					UI.DrawLine(P(-0.8f, arcCentre.y + radius), P(-0.45f, arcCentre.y + radius - 0.35f), t, col);
 					break;
 				}
 				case MobileIcon.Play:

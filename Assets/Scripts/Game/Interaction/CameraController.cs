@@ -306,13 +306,13 @@ namespace DLS.Game
 
 			if (MobileUI.IsActive)
 			{
-				// Fit the chip into the part of the screen the top bar and the parts panel leave
-				// free, and centre it there.
+				// Fit the chip into the part of the screen the top bar, the parts panel and the
+				// board's own buttons leave free, and centre it there.
 				float uiHeight = UI.Width * Screen.height / Mathf.Max(1f, Screen.width);
-				Rect canvas = MobileUI.CanvasRectUI;
+				Rect canvas = MobileUI.FitRectUI;
 				float fitHeight = bounds.Height * uiHeight / Mathf.Max(1f, canvas.height);
 				float fitWidth = bounds.Width * uiHeight / Mathf.Max(1f, canvas.width);
-				view.OrthoSize = Mathf.Max(fitHeight, fitWidth) * 0.5f * 1.15f;
+				view.OrthoSize = Mathf.Max(fitHeight, fitWidth) * 0.5f * 1.08f;
 				view.OrthoSize = Mathf.Clamp(view.OrthoSize, zoomRange.x, zoomRange.y);
 				float worldPerUI = view.OrthoSize * 2 / uiHeight;
 				Vector2 canvasOffsetUI = canvas.center - new Vector2(UI.Width / 2f, uiHeight / 2f);

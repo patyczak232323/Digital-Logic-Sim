@@ -111,6 +111,17 @@ namespace DLS.Graphics
 			}
 		}
 
+		// The board without the view buttons and the room the selection bar takes at the bottom,
+		// so FIT leaves the whole circuit visible.
+		public static Rect FitRectUI
+		{
+			get
+			{
+				Rect canvas = CanvasRectUI;
+				return Rect.MinMaxRect(canvas.xMin + 1f, canvas.yMin + 7f, canvas.xMax - ToolSize - 2f, canvas.yMax - 1f);
+			}
+		}
+
 		public static void ApplyRuntimePreferences()
 		{
 			Application.targetFrameRate = TargetFrameRate;
@@ -523,6 +534,9 @@ namespace DLS.Graphics
 
 		static void DrawMenuDrawer(Project project, Rect safe)
 		{
+			// Above the parts panel's text, which is drawn in a later pass of the same layer.
+			UI.StartNewLayer();
+
 			// Dim the board; tapping it closes the drawer.
 			UI.DrawPanel(new Vector2(safe.xMin, safe.yMin), new Vector2(UI.Width, safe.height - TopBarHeight), new Color(0, 0, 0, 0.55f), Anchor.BottomLeft);
 			bool tappedOutside = InputHelper.IsMouseDownThisFrame(MouseButton.Left);
