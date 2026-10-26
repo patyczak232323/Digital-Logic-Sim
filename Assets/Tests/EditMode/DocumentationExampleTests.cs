@@ -31,7 +31,7 @@ namespace DLS.Tests
 
 			foreach (string file in files)
 			{
-				string relativePath = Path.GetRelativePath(root, file).Replace('\\', '/');
+				string relativePath = Path.ChangeExtension(file.Substring(root.Length), null).Replace('\\', '/').TrimStart('/');
 				int index = 0;
 				foreach (Match match in CodeBlock.Matches(File.ReadAllText(file)))
 				{
