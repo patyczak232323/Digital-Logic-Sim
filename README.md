@@ -47,7 +47,7 @@ The repository includes a compact example progression ending with a **4-bit CPU*
 - export to structural Verilog, SVG schematics and PNG screenshots
 - guided challenges from a NOT gate built from NAND to a 4-bit adder
 - Windows x64, Linux x86_64, WebGL (browser) and Android ARM64 (experimental) release builds
-- touch interface for Android tablets and phones, with undo/redo, run/pause/step and a gesture guide
+- touch interface for Android tablets and phones: drag parts from a categorised panel, tap a part for its actions, one-finger panning and a step-by-step guide
 
 ## Download
 

@@ -168,8 +168,8 @@ namespace DLS.Graphics
 
 			string label = MobileTheme.Fit(name, width - 1.6f, 0.68f, true);
 			MobileTheme.Text(label, new Vector2(card.Left + 1.1f, card.Centre.y + 0.75f), 0.68f, isBlocked ? MobileTheme.DimTextCol : Color.white, Anchor.TextCentreLeft, true);
-			string description = isBlocked ? BlockedReason(project, name) : Describe(project, name);
-			string detail = MobileTheme.Fit(description, width - 1.6f, 0.5f);
+			string about = isBlocked ? BlockedReason(project, name) : Describe(project, name);
+			string detail = MobileTheme.Fit(about, width - 1.6f, 0.5f);
 			MobileTheme.Text(detail, new Vector2(card.Left + 1.1f, card.Centre.y - 0.95f), 0.5f, armed ? Color.white : isBlocked ? MobileTheme.DimTextCol : MobileTheme.SecondaryTextCol);
 		}
 

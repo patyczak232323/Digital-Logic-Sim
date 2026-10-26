@@ -116,22 +116,25 @@ See `Examples/RHDL/CPU4/README.md` for the ISA and a test ROM program.
 
 For difficult circuits, use the simulation diagnostics and profiling tools described in [SIMULATION_DIAGNOSTICS.md](SIMULATION_DIAGNOSTICS.md).
 
-- **Truth table**: right-click (long-press on Android) a custom chip and pick *TRUTH TABLE* to see every input combination. *RECORD TEST* saves the table; the test re-runs whenever the window opens, so a later change that breaks the chip shows up in red.
-- **Breakpoints**: right-click a pin and pick *BREAKPOINT* to pause the simulation when it changes, rises, falls or reaches a value. *SPACE* (or *STEP* on Android) then advances one tick at a time.
-- **Export**: *EXPORT* in a chip's menu or the bottom-bar menu writes structural Verilog (also copied to the clipboard), an SVG schematic or a PNG screenshot to the project's `Exports` folder. On Android 10 and later each export is also copied to `Download/Rewired`, and *SHARE LAST EXPORT* sends it to another app.
+- **Truth table**: right-click a custom chip (on Android, tap it) and pick *TRUTH TABLE* to see every input combination. *RECORD TEST* saves the table; the test re-runs whenever the window opens, so a later change that breaks the chip shows up in red.
+- **Breakpoints**: right-click a pin (on Android, tap it) and pick *BREAKPOINT* to pause the simulation when it changes, rises, falls or reaches a value. *SPACE* (or *STEP* on Android) then advances one tick at a time.
+- **Export**: *EXPORT* in a chip's menu or the bottom-bar menu (*MENU* on Android) writes structural Verilog (also copied to the clipboard), an SVG schematic or a PNG screenshot to the project's `Exports` folder. On Android 10 and later each export is also copied to `Download/Rewired`, and *SHARE LAST EXPORT* sends it to another app.
 
 ## 8. Learn with challenges
 
-*CHALLENGES* (bottom-bar menu, or *TOOLS* on Android) walks from a NOT gate built from NAND to a 4-bit adder. Each step names the chip to build and its pins; *CHECK* compares your saved chip's truth table with the goal and tells you the first input combination that is still wrong.
+*CHALLENGES* (bottom-bar menu, or *MENU* on Android) walks from a NOT gate built from NAND to a 4-bit adder. Each step names the chip to build and its pins; *CHECK* compares your saved chip's truth table with the goal and tells you the first input combination that is still wrong.
 
 ## Android controls
 
-- Tap an input pin to toggle it; start a wire on one pin and finish it on another.
-- Long-press a chip, pin or wire for its menu.
-- Tap a chip in the bottom bar, then tap where it should go.
-- Two fingers move and zoom the view; *PAN* in the top bar does it with one finger.
-- Swipe in from the left edge, or press *TOOLS*, for the tools sheet.
-- The top bar has *PAN*, *UNDO*, *REDO*, *RUN*/*PAUSE* and *STEP*. *TOOLS → HELP* shows the gesture guide again.
+The screen has three parts: the top bar, the *PARTS* panel on the left and the board.
+
+- **Add parts**: drag a part from *PARTS* onto the board, or tap it and then tap the board. The panel's left column picks a category; *MY CHIPS* lists the chips you have saved, and *FIND* searches every chip by name.
+- **Wire**: tap a pin, then another pin. Tapping empty space on the way adds a bend; the banner at the top has *UNDO BEND* and *CANCEL*.
+- **Try it**: tap the round button of an input to switch it on and off.
+- **Change**: tap a part to select it. Its actions (*LOOK INSIDE*, *TRUTH TABLE*, *LABEL*, *FLIP*, *COPY*, *DELETE*, *MORE*) appear at the bottom of the board. Drag a part to move it.
+- **Move around**: drag empty space to move the view, pinch to zoom. The buttons on the right fit the whole chip on screen, switch on area selection (drag a box round several parts), and zoom in and out.
+- **Top bar**: *MENU* (new chip, chip library, truth table, export, challenges, RHDL Studio, settings, the guide, main menu), *PARTS* to show or hide the panel, undo and redo, *RUN*/*PAUSE*, *STEP* and *SAVE*.
+- Holding a finger on a part, pin or wire opens its full menu. Android's Back button closes whatever is open, one step at a time.
 
 ## Compatibility note
 

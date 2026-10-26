@@ -4,7 +4,7 @@ Rewired v0.4.0 brings Rewired to Android phones and tablets and to the browser, 
 
 ## Highlights
 
-- **Android (ARM64)**: a full touch interface with its own main menu, project management, chip picker, chip library, chip save flow and RHDL Studio layout. A top bar has *PAN*, *UNDO*, *REDO*, *RUN*/*PAUSE* and *STEP*; one bottom bar holds the starred chips and *ADD CHIP*, *SAVE*, *LIBRARY* and *TOOLS*. Lists scroll with a swipe, the long-press menu has finger-sized rows, *KEY* chips can be pressed with a finger, and a one-screen gesture guide opens on the first project and from *TOOLS → HELP*.
+- **Android (ARM64)**: a touch interface built for phones and tablets. Parts are dragged onto the board from a *PARTS* panel sorted into categories, with a short description of each; tapping a part shows its actions along the bottom of the board; one finger on empty space moves the view and two fingers zoom. The top bar has *MENU*, *UNDO*, *REDO*, *RUN*/*PAUSE*, *STEP* and *SAVE*, and banners say what the next tap will do while a wire or a part is being placed. The main menu opens a project with one tap, an empty board explains the first steps, and a six-step guide opens on the first project and from *MENU → HOW IT WORKS*.
 - **WebGL (browser)**: a build that runs from any static web host. Projects are kept in the browser's storage and survive a reload. The native JIT and FULL LUT background builds are not available there, so large circuits run slower.
 - **Truth tables**: *TRUTH TABLE* in a custom chip's menu lists every input combination (chips with more than 12 input bits show a 4096-row sample). *RECORD TEST* saves the table; the test runs again whenever the window opens and differing rows are shown in red.
 - **Breakpoints**: *BREAKPOINT* in a pin's menu pauses the simulation on the step where the pin changes, rises, falls or reaches a value. *SPACE* (or *STEP* on Android) then advances one tick at a time.
@@ -19,6 +19,7 @@ Rewired v0.4.0 brings Rewired to Android phones and tablets and to the browser, 
 - RHDL `not X` no longer changes every later use of `X` in the same circuit. In CPU4 this made `INC` and `DEC` compute `~A + 1` and `~A - 1`.
 - RHDL structural `connect` accepts the same short pin names as named bindings, so `connect A -> gate.A` reaches the NAND pin `IN A`.
 - Renaming a project no longer reports that its own name already exists.
+- On a touch screen, a tap on a pin or a part right after touching somewhere else now acts on what is under the finger: the press used to be handled before the app had looked at the new position.
 
 ## Saving and data
 
