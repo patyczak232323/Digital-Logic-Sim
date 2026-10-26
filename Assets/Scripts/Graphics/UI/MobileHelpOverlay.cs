@@ -6,51 +6,48 @@ using UnityEngine;
 
 namespace DLS.Graphics
 {
-	// One-screen guide to the touch controls. Shown once on the first project opened on a
-	// touch device, and from TOOLS > HELP.
+	// "How it works": the touch interface in six steps. Shown once the first time a project is
+	// opened, and from MENU > HOW IT WORKS and the empty board.
 	public static class MobileHelpOverlay
 	{
-		static readonly (string gesture, string effect)[] Lines =
+		static readonly (string title, string text)[] Steps =
 		{
-			("PLACE", "tap a chip in the bottom bar, then tap where it should go"),
-			("TAP", "an input pin to switch it on or off"),
-			("WIRE", "start on a pin, finish on another pin"),
-			("LONG-PRESS", "a chip, pin or wire for its menu: delete, truth table, export, breakpoint"),
-			("TWO FINGERS", "move and zoom the view (PAN in the top bar does it with one finger)"),
-			("SWIPE", "in from the left edge, or press TOOLS, for more tools"),
-			("ADD CHIP", "search every chip; SAVE saves the chip you are building"),
-			("TOP BAR", "PAN, UNDO / REDO, RUN / PAUSE and STEP one tick at a time")
+			("ADD PARTS", "Drag a part from PARTS onto the board, or tap it and then tap the board."),
+			("CONNECT", "Tap a pin, then another pin. Tap empty space on the way to bend the wire."),
+			("TRY IT", "Tap the round button of an input to switch it on and off."),
+			("CHANGE", "Tap a part to select it: its actions appear below. Drag a part to move it."),
+			("LOOK AROUND", "Drag empty space to move, pinch or + and - to zoom. FIT shows everything."),
+			("SAVE", "SAVE turns the board into a chip. Find it under MY CHIPS and use it again.")
 		};
 
 		public static void Draw()
 		{
 			MenuHelper.DrawBackgroundOverlay();
-			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
 			Rect safe = MobileUI.SafeRectUI;
 
-			float width = Mathf.Min(safe.width - 4f, 80f);
-			const float lineHeight = 3.1f;
-			float height = 4.5f + Lines.Length * lineHeight + 7f;
-			Vector2 topLeft = new(safe.center.x - width / 2, safe.center.y + height / 2);
+			float width = Mathf.Min(safe.width - 4f, 70f);
+			const float stepHeight = 4.5f;
+			float height = 4.2f + Steps.Length * stepHeight + 2.6f + 5.6f;
+			height = Mathf.Min(height, safe.height - 1f);
+			Bounds2D panel = MobileTheme.Card(new Vector2(safe.center.x, safe.center.y), new Vector2(width, height), Anchor.Centre);
 
-			UI.DrawPanel(topLeft, new Vector2(width, height), RewiredUI.SurfaceRaised, Anchor.TopLeft);
-			Bounds2D panel = UI.PrevBounds;
-			RewiredUI.DrawFrame(panel);
+			MobileTheme.Text("HOW IT WORKS", panel.TopLeft + new Vector2(1.5f, -2.2f), 0.86f, Color.white, Anchor.TextCentreLeft, true);
 
-			RewiredUI.DrawSectionHeader("TOUCH CONTROLS", panel.TopLeft, panel.Width, true);
-			float y = UI.PrevBounds.Bottom - 2f;
-			float gestureColumn = panel.Left + 1.2f;
-			float effectColumn = panel.Left + 15.5f;
-
-			foreach ((string gesture, string effect) in Lines)
+			float y = panel.Top - 5.6f;
+			float textX = panel.Left + 4.6f;
+			for (int i = 0; i < Steps.Length; i++)
 			{
-				RewiredUI.DrawLabel(gesture, new Vector2(gestureColumn, y), true, 0.72f, RewiredUI.Accent);
-				RewiredUI.DrawLabel(effect, new Vector2(effectColumn, y), false, 0.68f, Color.white);
-				y -= lineHeight;
+				(string title, string text) = Steps[i];
+				UI.DrawCircle(new Vector2(panel.Left + 2.4f, y), 1.3f, MobileTheme.Accent);
+				MobileTheme.Text((i + 1).ToString(), new Vector2(panel.Left + 2.4f, y), 0.62f, Color.white, Anchor.TextCentre, true);
+				MobileTheme.Text(title, new Vector2(textX, y + 0.85f), 0.62f, MobileTheme.Accent, Anchor.TextCentreLeft, true);
+				MobileTheme.Text(MobileTheme.Fit(text, panel.Right - textX - 1f, 0.6f), new Vector2(textX, y - 1.05f), 0.6f, Color.white);
+				y -= stepHeight;
 			}
 
-			Vector2 buttonSize = new(16f, 4.6f);
-			if (UI.Button("GOT IT", theme.MainMenuButtonTheme, panel.CentreBottom + Vector2.up * 1f, buttonSize, true, false, false, Anchor.CentreBottom) ||
+			MobileTheme.Text("Hold a finger on anything to see all its options.", new Vector2(panel.Left + 1.5f, panel.Bottom + 3f), 0.58f, MobileTheme.SecondaryTextCol);
+
+			if (MobileTheme.Button("GOT IT", MobileTheme.Primary, panel.BottomRight + new Vector2(-1f, 0.9f), new Vector2(15f, 4.4f), true, Anchor.BottomRight) ||
 			    KeyboardShortcuts.CancelShortcutTriggered)
 			{
 				UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);

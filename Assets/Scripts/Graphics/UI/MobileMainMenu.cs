@@ -18,7 +18,7 @@ namespace DLS.Graphics
 		enum ScreenKind
 		{
 			Home,
-			Projects,
+			ProjectActions,
 			ProjectName,
 			DeleteProject,
 			Settings,
@@ -57,7 +57,7 @@ namespace DLS.Graphics
 			switch (screen)
 			{
 				case ScreenKind.Home: DrawHome(safe); break;
-				case ScreenKind.Projects: DrawProjects(safe); break;
+				case ScreenKind.ProjectActions: DrawProjectActions(safe); break;
 				case ScreenKind.ProjectName: DrawProjectName(safe); break;
 				case ScreenKind.DeleteProject: DrawDeleteProject(safe); break;
 				case ScreenKind.Settings: DrawMobileSettings(safe); break;
@@ -75,8 +75,8 @@ namespace DLS.Graphics
 
 			if (screen != ScreenKind.Home)
 			{
-				if (UI.Button("BACK", theme.MainMenuButtonTheme, bar.CentreLeft + Vector2.right * 0.6f,
-					    new Vector2(11.5f, 4.8f), true, false, false, Anchor.CentreLeft))
+				if (MobileTheme.IconButton("BACK", MobileIcon.Back, MobileTheme.Neutral, bar.CentreLeft + Vector2.right * 0.6f,
+					    new Vector2(11.5f, 4.8f), true, Anchor.CentreLeft))
 				{
 					NavigateBack();
 				}
@@ -94,142 +94,70 @@ namespace DLS.Graphics
 				bar.CentreRight + Vector2.left * 1.1f, Anchor.TextCentreRight, RewiredUI.SecondaryText);
 		}
 
+		// Home: start a new project on the left, open an existing one on the right with one tap.
 		static void DrawHome(Rect safe)
 		{
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
-			float contentTop = safe.yMax - 8.5f;
-			float width = Mathf.Min(48f, safe.width - 4f);
-			float x = safe.center.x - width / 2f;
-			float h = 5.6f;
-			float gap = 0.7f;
-			float y = contentTop;
+			const float pad = 1.4f;
+			float top = safe.yMax - 6.4f - pad;
+			float bottom = safe.yMin + pad;
+			float leftWidth = Mathf.Min(30f, safe.width * 0.34f);
+			float x = safe.xMin + pad;
 
-			y -= 0.6f;
-
-			if (UI.Button("NEW PROJECT", theme.MainMenuButtonTheme, new Vector2(x, y), new Vector2(width, h),
-				    true, false, false, Anchor.TopLeft))
+			// ---- Left: actions ----
+			float y = top;
+			if (MobileTheme.Button("NEW PROJECT", MobileTheme.Primary, new Vector2(x, y), new Vector2(leftWidth, 7f), true, Anchor.TopLeft))
 			{
 				OpenProjectNameScreen(ProjectNameMode.New);
 			}
-			y -= h + gap;
+			y -= 7f + 0.8f;
 
-			if (UI.Button("OPEN PROJECT", theme.MainMenuButtonTheme, new Vector2(x, y), new Vector2(width, h),
-				    true, false, false, Anchor.TopLeft))
+			float half = (leftWidth - 0.6f) / 2;
+			if (MobileTheme.Button("SETTINGS", MobileTheme.Neutral, new Vector2(x, y), new Vector2(half, 5f), true, Anchor.TopLeft))
 			{
-				RefreshProjects();
-				selectedProjectIndex = -1;
-				screen = ScreenKind.Projects;
-			}
-			y -= h + gap;
-
-			if (UI.Button("SETTINGS", theme.MainMenuButtonTheme, new Vector2(x, y), new Vector2(width, h),
-				    true, false, false, Anchor.TopLeft))
 				screen = ScreenKind.Settings;
-			y -= h + gap;
-
-			if (UI.Button("ABOUT", theme.MainMenuButtonTheme, new Vector2(x, y), new Vector2(width, h),
-				    true, false, false, Anchor.TopLeft))
+			}
+			if (MobileTheme.Button("ABOUT", MobileTheme.Neutral, new Vector2(x + half + 0.6f, y), new Vector2(half, 5f), true, Anchor.TopLeft))
+			{
 				screen = ScreenKind.About;
-			y -= h + gap;
+			}
+			y -= 5f + 1.6f;
 
-			if (UI.Button("QUIT", theme.MenuPopupButtonTheme, new Vector2(x, y), new Vector2(width, h),
-				    true, false, false, Anchor.TopLeft))
+			string[] tips =
+			{
+				"Build chips from NAND gates up,",
+				"then use them inside bigger chips.",
+				"",
+				"Drag empty space to move around,",
+				"pinch to zoom, and hold a finger on",
+				"anything to see all its options."
+			};
+			foreach (string tip in tips)
+			{
+				UI.DrawText(tip, theme.FontRegular, theme.FontSizeRegular * 0.6f, new Vector2(x, y), Anchor.TextCentreLeft, MobileTheme.DimTextCol);
+				y -= 2f;
+			}
+
+			if (MobileTheme.Button("QUIT", MobileTheme.Quiet, new Vector2(x, bottom), new Vector2(half, 4.4f), true, Anchor.BottomLeft))
+			{
 				Application.Quit();
+			}
 
-			UI.DrawText("Tip: hold a finger on a chip or wire for options; two fingers move and zoom the view.",
-				theme.FontRegular, theme.FontSizeRegular * 0.68f,
-				new Vector2(safe.center.x, safe.yMin + 2.2f), Anchor.Centre, new Color(1, 1, 1, 0.45f));
-		}
-
-		static void DrawProjects(Rect safe)
-		{
-			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
-			const float pad = 1.2f;
-			const float gap = 1.1f;
-			float top = safe.yMax - 7.7f;
-			float bottom = safe.yMin + 1.1f;
-			float totalWidth = safe.width - pad * 2f;
-			float listWidth = (totalWidth - gap) * 0.60f;
-			float actionWidth = totalWidth - gap - listWidth;
-			float height = Mathf.Max(10f, top - bottom);
-
-			Vector2 listTop = new(safe.xMin + pad, top);
-			Vector2 actionTop = new(listTop.x + listWidth + gap, top);
-
-			UI.DrawText("PROJECTS", theme.FontBold, theme.FontSizeRegular * 1.0f,
-				listTop, Anchor.TextCentreLeft, Color.white);
-			listTop.y -= 2.2f;
-			float listHeight = height - 2.2f;
+			// ---- Right: projects ----
+			float listX = x + leftWidth + 2f;
+			float listWidth = safe.xMax - pad - listX;
+			UI.DrawText("YOUR PROJECTS", theme.FontBold, theme.FontSizeRegular * 0.72f, new Vector2(listX, top - 1f), Anchor.TextCentreLeft, MobileTheme.SecondaryTextCol);
+			float listTop = top - 2.6f;
 
 			if (projects.Length == 0)
 			{
-				UI.DrawText("NO PROJECTS", theme.FontRegular, theme.FontSizeRegular,
-					new Vector2(listTop.x + listWidth / 2f, safe.center.y), Anchor.Centre, RewiredUI.SecondaryText);
+				UI.DrawText("No projects yet: tap NEW PROJECT to start one.", theme.FontRegular, theme.FontSizeRegular * 0.66f,
+					new Vector2(listX, listTop - 2f), Anchor.TextCentreLeft, MobileTheme.DimTextCol);
 			}
 			else
 			{
-				UI.DrawScrollView(ID_ProjectScroll, listTop, new Vector2(listWidth, listHeight), 0.55f,
+				UI.DrawScrollView(ID_ProjectScroll, new Vector2(listX, listTop), new Vector2(listWidth, listTop - bottom), 0.45f,
 					Anchor.TopLeft, theme.ScrollTheme, DrawProjectElementFunc, projects.Length);
-			}
-
-			UI.DrawText(HasSelectedProject ? SelectedProjectName.ToUpperInvariant() : "SELECT PROJECT",
-				theme.FontBold, theme.FontSizeRegular * 0.92f,
-				actionTop, Anchor.TextCentreLeft, Color.white);
-			actionTop.y -= 2.4f;
-
-			if (!HasSelectedProject)
-			{
-				UI.DrawText("Tap a project on the left.", theme.FontRegular, theme.FontSizeRegular * 0.75f,
-					actionTop, Anchor.TextCentreLeft, RewiredUI.SecondaryText);
-				DrawStatus(safe, theme);
-				return;
-			}
-
-			(bool compatible, string message) = CanOpenProject(projects[selectedProjectIndex]);
-			if (!compatible)
-			{
-				UI.DrawText(message, theme.FontRegular, theme.FontSizeRegular * 0.68f,
-					actionTop, Anchor.TextCentreLeft, Color.yellow);
-				actionTop.y -= 3.0f;
-			}
-			else if (selectedProjectIndex < projectWarnings.Length && projectWarnings[selectedProjectIndex].Length > 0)
-			{
-				UI.DrawText(projectWarnings[selectedProjectIndex], theme.FontRegular, theme.FontSizeRegular * 0.68f,
-					actionTop, Anchor.TextCentreLeft, Color.yellow);
-				actionTop.y -= 3.0f;
-			}
-
-			float buttonH = 5.0f;
-			float buttonGap = 0.55f;
-			if (UI.Button("OPEN", theme.MainMenuButtonTheme, actionTop, new Vector2(actionWidth, buttonH),
-				    compatible, false, false, Anchor.TopLeft))
-			{
-				TryOpenProject(SelectedProjectName);
-				return;
-			}
-			actionTop.y -= buttonH + buttonGap;
-
-			if (UI.Button("DUPLICATE", theme.MenuButtonTheme, actionTop, new Vector2(actionWidth, buttonH),
-				    compatible, false, false, Anchor.TopLeft))
-			{
-				OpenProjectNameScreen(ProjectNameMode.Duplicate);
-				return;
-			}
-			actionTop.y -= buttonH + buttonGap;
-
-			if (UI.Button("RENAME", theme.MenuButtonTheme, actionTop, new Vector2(actionWidth, buttonH),
-				    compatible, false, false, Anchor.TopLeft))
-			{
-				OpenProjectNameScreen(ProjectNameMode.Rename);
-				return;
-			}
-			actionTop.y -= buttonH + buttonGap;
-
-			if (UI.Button("DELETE", theme.MenuPopupButtonTheme, actionTop, new Vector2(actionWidth, buttonH),
-				    true, false, false, Anchor.TopLeft))
-			{
-				status = string.Empty;
-				screen = ScreenKind.DeleteProject;
 			}
 
 			DrawStatus(safe, theme);
@@ -238,6 +166,7 @@ namespace DLS.Graphics
 		static void DrawProjectElement(Vector2 topLeft, float width, int index, bool isLayoutOnly)
 		{
 			const float height = 5.4f;
+			const float manageWidth = 9f;
 			Bounds2D entryBounds = Bounds2D.CreateFromTopLeftAndSize(topLeft, new Vector2(width, height));
 			if (isLayoutOnly)
 			{
@@ -246,25 +175,90 @@ namespace DLS.Graphics
 			}
 
 			ProjectDescription project = projects[index];
-			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
-			bool selected = index == selectedProjectIndex;
-			ButtonTheme rowTheme = selected ? theme.ProjectSelectionButtonSelected : theme.ProjectSelectionButton;
-			bool pressed = UI.Button(project.ProjectName.ToUpperInvariant(), rowTheme, topLeft,
-				new Vector2(width, height), true, false, false, Anchor.TopLeft, true, 1f);
-			Bounds2D bounds = UI.PrevBounds;
+			(bool compatible, string message) = CanOpenProject(project);
+			string warning = compatible ? (index < projectWarnings.Length ? projectWarnings[index] : string.Empty) : message;
 
-			bool compatible = CanOpenProject(project).compatible;
-			UI.DrawText(compatible ? "READY" : "VERSION",
-				theme.FontBold, theme.FontSizeRegular * 0.62f,
-				bounds.CentreRight + Vector2.left * 0.9f, Anchor.TextCentreRight,
-				compatible ? RewiredUI.SecondaryText : Color.yellow);
-			UI.OverridePreviousBounds(bounds);
+			// Tapping the row opens the project; MANAGE has rename, duplicate and delete.
+			bool open = MobileTheme.Button(string.Empty, MobileTheme.Neutral, topLeft, new Vector2(width - manageWidth - 0.4f, height), true, Anchor.TopLeft);
+			Bounds2D row = UI.PrevBounds;
+			string name = MobileTheme.Fit(project.ProjectName.ToUpperInvariant(), row.Width - 2f, 0.78f, true);
+			bool hasWarning = !string.IsNullOrEmpty(warning);
+			MobileTheme.Text(name, row.CentreLeft + new Vector2(1.2f, hasWarning ? 0.8f : 0), 0.78f, Color.white, Anchor.TextCentreLeft, true);
+			if (hasWarning)
+			{
+				MobileTheme.Text(MobileTheme.Fit(warning, row.Width - 2f, 0.52f), row.CentreLeft + new Vector2(1.2f, -1.1f), 0.52f, MobileTheme.WarningCol);
+			}
 
-			if (pressed)
+			bool manage = MobileTheme.Button("MANAGE", MobileTheme.Quiet, new Vector2(row.Right + 0.4f, topLeft.y), new Vector2(manageWidth, height), true, Anchor.TopLeft);
+			UI.OverridePreviousBounds(entryBounds);
+
+			if (open)
+			{
+				selectedProjectIndex = index;
+				TryOpenProject(project.ProjectName);
+			}
+			else if (manage)
 			{
 				selectedProjectIndex = index;
 				status = string.Empty;
+				screen = ScreenKind.ProjectActions;
 			}
+		}
+
+		static void DrawProjectActions(Rect safe)
+		{
+			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
+			if (!HasSelectedProject)
+			{
+				screen = ScreenKind.Home;
+				return;
+			}
+
+			float width = Mathf.Min(44f, safe.width - 4f);
+			float x = safe.center.x - width / 2f;
+			float y = safe.yMax - 10f;
+
+			UI.DrawText(SelectedProjectName.ToUpperInvariant(), theme.FontBold, theme.FontSizeRegular * 1.1f, new Vector2(x, y), Anchor.TextCentreLeft, Color.white);
+			y -= 2.6f;
+
+			(bool compatible, string message) = CanOpenProject(projects[selectedProjectIndex]);
+			string warning = compatible ? (selectedProjectIndex < projectWarnings.Length ? projectWarnings[selectedProjectIndex] : string.Empty) : message;
+			if (!string.IsNullOrEmpty(warning))
+			{
+				UI.DrawText(warning, theme.FontRegular, theme.FontSizeRegular * 0.62f, new Vector2(x, y), Anchor.TextCentreLeft, MobileTheme.WarningCol);
+				y -= 2.4f;
+			}
+
+			const float h = 5f;
+			const float gap = 0.55f;
+			if (MobileTheme.Button("OPEN", MobileTheme.Primary, new Vector2(x, y), new Vector2(width, h), compatible, Anchor.TopLeft))
+			{
+				TryOpenProject(SelectedProjectName);
+				return;
+			}
+			y -= h + gap;
+
+			if (MobileTheme.Button("RENAME", MobileTheme.Neutral, new Vector2(x, y), new Vector2(width, h), compatible, Anchor.TopLeft))
+			{
+				OpenProjectNameScreen(ProjectNameMode.Rename);
+				return;
+			}
+			y -= h + gap;
+
+			if (MobileTheme.Button("DUPLICATE", MobileTheme.Neutral, new Vector2(x, y), new Vector2(width, h), compatible, Anchor.TopLeft))
+			{
+				OpenProjectNameScreen(ProjectNameMode.Duplicate);
+				return;
+			}
+			y -= h + gap;
+
+			if (MobileTheme.Button("DELETE", MobileTheme.Danger, new Vector2(x, y), new Vector2(width, h), true, Anchor.TopLeft))
+			{
+				status = string.Empty;
+				screen = ScreenKind.DeleteProject;
+			}
+
+			DrawStatus(safe, theme);
 		}
 
 		static void DrawProjectName(Rect safe)
@@ -320,17 +314,17 @@ namespace DLS.Graphics
 			Vector2 buttonPos = UI.PrevBounds.BottomLeft + Vector2.down * 1f;
 			float bw = (width - 0.6f) / 2f;
 
-			if (UI.Button("CANCEL", theme.MenuPopupButtonTheme, buttonPos, new Vector2(bw, 5.3f),
-				    true, false, false, Anchor.TopLeft))
+			if (MobileTheme.Button("CANCEL", theme.MenuPopupButtonTheme, buttonPos, new Vector2(bw, 5.3f),
+				    true, Anchor.TopLeft))
 			{
 				field.ClearText();
 				NavigateBack();
 				return;
 			}
 
-			if (UI.Button(confirmLabel, theme.MainMenuButtonTheme,
+			if (MobileTheme.Button(confirmLabel, theme.MainMenuButtonTheme,
 				    buttonPos + Vector2.right * (bw + 0.6f), new Vector2(bw, 5.3f),
-				    valid, false, false, Anchor.TopLeft))
+				    valid, Anchor.TopLeft))
 			{
 				PerformProjectNameAction(name);
 				return;
@@ -366,16 +360,16 @@ namespace DLS.Graphics
 
 			float gap = 0.6f;
 			float bw = (width - gap) / 2f;
-			if (UI.Button("CANCEL", theme.MenuButtonTheme, new Vector2(x, y), new Vector2(bw, 5.4f),
-				    true, false, false, Anchor.TopLeft))
+			if (MobileTheme.Button("CANCEL", theme.MenuButtonTheme, new Vector2(x, y), new Vector2(bw, 5.4f),
+				    true, Anchor.TopLeft))
 			{
-				screen = ScreenKind.Projects;
+				screen = ScreenKind.ProjectActions;
 				return;
 			}
 
-			if (UI.Button("DELETE", theme.MenuPopupButtonTheme,
+			if (MobileTheme.Button("DELETE", MobileTheme.Danger,
 				    new Vector2(x + bw + gap, y), new Vector2(bw, 5.4f),
-				    HasSelectedProject, false, false, Anchor.TopLeft))
+				    HasSelectedProject, Anchor.TopLeft))
 			{
 				DeleteSelectedProject();
 			}
@@ -395,54 +389,42 @@ namespace DLS.Graphics
 			float width = Mathf.Min(64f, safe.width - 4f);
 			float x = safe.center.x - width / 2f;
 			float y = safe.yMax - 10f;
-			float h = 5.2f;
+			const float h = 5.2f;
 
 			UI.DrawText("SETTINGS", theme.FontBold, theme.FontSizeRegular * 1.15f,
 				new Vector2(x, y + 2f), Anchor.TextCentreLeft, Color.white);
 
 			y -= 1.5f;
-			UI.DrawText("DEFAULT TOUCH MODE", theme.FontBold, theme.FontSizeRegular * 0.72f,
-				new Vector2(x, y), Anchor.TextCentreLeft, RewiredUI.SecondaryText);
-			y -= 1.6f;
-			float half = (width - 0.6f) / 2f;
-			bool panDefault = MobileUI.PanByDefault;
-			if (UI.Button("SELECT", panDefault ? theme.MenuButtonTheme : theme.ChipLibraryCollectionToggleOn,
-				    new Vector2(x, y), new Vector2(half, h), true, false, false, Anchor.TopLeft))
-			{
-				MobileUI.SetPanDefault(false);
-				MobileUI.SetPanMode(false);
-			}
-			if (UI.Button("PAN", panDefault ? theme.ChipLibraryCollectionToggleOn : theme.MenuButtonTheme,
-				    new Vector2(x + half + 0.6f, y), new Vector2(half, h), true, false, false, Anchor.TopLeft))
-			{
-				MobileUI.SetPanDefault(true);
-				MobileUI.SetPanMode(true);
-			}
-
-			y -= h + 2.3f;
 			UI.DrawText("FRAME RATE", theme.FontBold, theme.FontSizeRegular * 0.72f,
 				new Vector2(x, y), Anchor.TextCentreLeft, RewiredUI.SecondaryText);
 			y -= 1.6f;
 
 			int[] rates = { 60, 90, 120 };
-			float gap = 0.45f;
+			const float gap = 0.45f;
 			float third = (width - gap * 2f) / 3f;
 			for (int i = 0; i < rates.Length; i++)
 			{
 				int fps = rates[i];
-				ButtonTheme bt = MobileUI.TargetFrameRate == fps ? theme.ChipLibraryCollectionToggleOn : theme.MenuButtonTheme;
-				if (UI.Button($"{fps} FPS", bt, new Vector2(x + i * (third + gap), y),
-					    new Vector2(third, h), true, false, false, Anchor.TopLeft))
+				if (MobileTheme.Button($"{fps} FPS", MobileTheme.Toggle(MobileUI.TargetFrameRate == fps), new Vector2(x + i * (third + gap), y),
+					    new Vector2(third, h), true, Anchor.TopLeft))
 					MobileUI.SetTargetFrameRate(fps);
 			}
 
 			y -= h + 2.6f;
-			UI.DrawText("GESTURES", theme.FontBold, theme.FontSizeRegular * 0.72f,
+			UI.DrawText("TOUCH", theme.FontBold, theme.FontSizeRegular * 0.72f,
 				new Vector2(x, y), Anchor.TextCentreLeft, RewiredUI.SecondaryText);
 			y -= 2f;
-			UI.DrawText("Pinch: zoom  •  Two fingers: pan  •  Long press: context menu  •  Left-edge swipe: tools",
-				theme.FontRegular, theme.FontSizeRegular * 0.72f,
-				new Vector2(x, y), Anchor.TextCentreLeft, Color.white);
+			string[] lines =
+			{
+				"Tap a part to select it; drag it to move it.",
+				"Drag empty space to move around; pinch to zoom.",
+				"Hold a finger on anything to see all its options."
+			};
+			foreach (string line in lines)
+			{
+				UI.DrawText(line, theme.FontRegular, theme.FontSizeRegular * 0.68f, new Vector2(x, y), Anchor.TextCentreLeft, Color.white);
+				y -= 2.2f;
+			}
 		}
 
 		static void DrawAbout(Rect safe)
@@ -524,14 +506,14 @@ namespace DLS.Graphics
 						Saver.RenameProject(oldName, name);
 						RefreshProjects();
 						SelectProjectByName(name);
-						screen = ScreenKind.Projects;
+						screen = ScreenKind.ProjectActions;
 						break;
 					}
 					case ProjectNameMode.Duplicate:
 						Saver.DuplicateProject(SelectedProjectName, name);
 						RefreshProjects();
 						SelectProjectByName(name);
-						screen = ScreenKind.Projects;
+						screen = ScreenKind.ProjectActions;
 						break;
 				}
 
@@ -554,7 +536,7 @@ namespace DLS.Graphics
 				RefreshProjects();
 				selectedProjectIndex = -1;
 				status = string.Empty;
-				screen = ScreenKind.Projects;
+				screen = ScreenKind.Home;
 			}
 			catch (Exception e)
 			{
@@ -648,7 +630,7 @@ namespace DLS.Graphics
 			if (screen == ScreenKind.DeleteProject ||
 			    (screen == ScreenKind.ProjectName && projectNameMode != ProjectNameMode.New))
 			{
-				screen = ScreenKind.Projects;
+				screen = ScreenKind.ProjectActions;
 				return;
 			}
 

@@ -64,6 +64,14 @@ What runs in CI:
 - The benchmarks fail when gate evaluations or propagations per step grow more than 25% over `Tools/EngineHarness/benchmark-baseline.json`. Lower the baseline after an optimisation; raise it only with a reason in the commit message.
 - Keep pull requests focused, and describe what changed for users and how you tested it.
 
+## Trying the touch interface without a phone
+
+A desktop build started with `-mobile-ui` shows the Android interface, and the left mouse button acts as one finger: tap, drag, and hold to long-press; the mouse wheel zooms and Escape works as Android's Back button. The *UI preview build* workflow (`ui-preview.yml`, run by hand) builds the Linux player from any branch and attaches it to the `ui-preview` pre-release, so the interface can be run under Xvfb and screenshotted:
+
+```bash
+./DLSRewired -mobile-ui -screen-fullscreen 0 -screen-width 2400 -screen-height 1080
+```
+
 ## Releasing
 
 1. Set the new version in `VERSION`, `Main.RewiredVersion` (`Assets/Scripts/Game/Main/Main.cs`, with the date in `RewiredLastUpdatedString`) and `bundleVersion` in `ProjectSettings/ProjectSettings.asset`; increase `AndroidBundleVersionCode` there by one.

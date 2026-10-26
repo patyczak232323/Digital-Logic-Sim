@@ -25,6 +25,7 @@ namespace DLS.Graphics
 		static readonly MenuEntry dividerMenuEntry = new(menuDividerString, null, null);
 		static bool wasMouseOverMenu;
 		static string contextMenuHeader;
+		static int openedFrame = -1;
 
 		static readonly MenuEntry[] pinColEntries = ((PinColour[])Enum.GetValues(typeof(PinColour))).Select(col =>
 			new MenuEntry(Format(Enum.GetName(typeof(PinColour), col)), () => SetCol(col), CanSetCol)
@@ -172,8 +173,8 @@ namespace DLS.Graphics
 				// Draw
 				if (IsOpen) DrawContextMenu(activeContextMenuEntries);
 
-				// Close menu input
-				if (InputHelper.IsMouseDownThisFrame(MouseButton.Left) || KeyboardShortcuts.CancelShortcutTriggered)
+				// Close menu input (not on the press that opened it from a button)
+				if ((InputHelper.IsMouseDownThisFrame(MouseButton.Left) && openedFrame != Time.frameCount) || KeyboardShortcuts.CancelShortcutTriggered)
 				{
 					CloseContextMenu();
 				}
@@ -185,68 +186,8 @@ namespace DLS.Graphics
 			// Open menu input
 			if (InputHelper.IsMouseDownThisFrame(MouseButton.Right) && !KeyboardShortcuts.CameraActionKeyHeld && !InteractionState.MouseIsOverUI)
 			{
-				bool inCustomizeMenu = UIDrawer.ActiveMenu == UIDrawer.MenuType.ChipCustomization;
-				IInteractable hoverElement = InteractionState.ElementUnderMouse;
-
-				bool openSubChipContextMenu = hoverElement is SubChipInstance && !inCustomizeMenu;
-				bool openDevPinContextMenu = (hoverElement is PinInstance pin && pin.parent is DevPinInstance) || hoverElement is DevPinInstance;
-				bool openWireContextMenu = hoverElement is WireInstance;
-				bool openSubchipOutputPinContextMenu = hoverElement is PinInstance pin2 && pin2.parent is SubChipInstance && pin2.IsSourcePin && !pin2.IsBusPin;
-
-				if (openSubChipContextMenu || openDevPinContextMenu || openWireContextMenu || openSubchipOutputPinContextMenu)
+				if (PrepareContext(InteractionState.ElementUnderMouse, true, out string headerName))
 				{
-					interactionContextName = string.Empty;
-					interactionContext = hoverElement;
-					string headerName = string.Empty;
-
-					if (openSubChipContextMenu)
-					{
-						SubChipInstance subChip = (SubChipInstance)hoverElement;
-						interactionContextName = subChip.Description.Name;
-
-						if (subChip.ChipType == ChipType.Custom)
-						{
-							headerName = subChip.Description.Name;
-							activeContextMenuEntries = entries_customSubchip;
-						}
-						else // builtin type
-						{
-							headerName = ChipTypeHelper.IsBusType(subChip.ChipType) ? "BUS" : subChip.Description.Name;
-							if (subChip.ChipType is ChipType.Key) activeContextMenuEntries = entries_builtinKeySubchip;
-							else if (ChipTypeHelper.IsRomType(subChip.ChipType)) activeContextMenuEntries = entries_builtinRomSubchip;
-							else if (subChip.ChipType is ChipType.Pulse) activeContextMenuEntries = entries_builtinPulseChip;
-							else if (ChipTypeHelper.IsBusType(subChip.ChipType)) activeContextMenuEntries = entries_builtinBus;
-							else if (subChip.ChipType == ChipType.DisplayLED) activeContextMenuEntries = entries_builtinLED;
-							else activeContextMenuEntries = entries_builtinSubchip;
-						}
-
-						Project.ActiveProject.controller.Select(interactionContext as IMoveable, false);
-					}
-					else if (openDevPinContextMenu)
-					{
-						if (interactionContext is DevPinInstance devPinInstance) interactionContext = devPinInstance.Pin;
-
-						PinInstance activePin = (PinInstance)interactionContext;
-						headerName = CreatePinHeaderName(activePin.Name);
-						interactionContextName = activePin.Name;
-						Project.ActiveProject.controller.Select(activePin.parent, false);
-						activeContextMenuEntries = activePin.IsSourcePin ? entries_inputDevPin : entries_outputDevPin;
-					}
-					else if (openWireContextMenu)
-					{
-						WireInstance wire = (WireInstance)interactionContext;
-						if (wire.IsBusWire) headerName = "BUS LINE";
-						else headerName = CreateWireHeaderString(wire);
-
-						activeContextMenuEntries = entries_wire;
-					}
-					else if (openSubchipOutputPinContextMenu)
-					{
-						PinInstance pinContext = (PinInstance)interactionContext;
-						headerName = CreatePinHeaderName(pinContext.Name);
-						activeContextMenuEntries = entries_subChipOutput;
-					}
-
 					SetContextMenuOpen(headerName);
 				}
 				else
@@ -255,6 +196,103 @@ namespace DLS.Graphics
 				}
 			}
 		}
+
+		// Makes the given element the menu's context and picks its entries. Returns false for
+		// elements that have no menu.
+		static bool PrepareContext(IInteractable hoverElement, bool selectElement, out string headerName)
+		{
+			headerName = string.Empty;
+
+			bool inCustomizeMenu = UIDrawer.ActiveMenu == UIDrawer.MenuType.ChipCustomization;
+
+			bool openSubChipContextMenu = hoverElement is SubChipInstance && !inCustomizeMenu;
+			bool openDevPinContextMenu = (hoverElement is PinInstance pin && pin.parent is DevPinInstance) || hoverElement is DevPinInstance;
+			bool openWireContextMenu = hoverElement is WireInstance;
+			bool openSubchipOutputPinContextMenu = hoverElement is PinInstance pin2 && pin2.parent is SubChipInstance && pin2.IsSourcePin && !pin2.IsBusPin;
+
+			if (openSubChipContextMenu || openDevPinContextMenu || openWireContextMenu || openSubchipOutputPinContextMenu)
+			{
+				interactionContextName = string.Empty;
+				interactionContext = hoverElement;
+
+				if (openSubChipContextMenu)
+				{
+					SubChipInstance subChip = (SubChipInstance)hoverElement;
+					interactionContextName = subChip.Description.Name;
+
+					if (subChip.ChipType == ChipType.Custom)
+					{
+						headerName = subChip.Description.Name;
+						activeContextMenuEntries = entries_customSubchip;
+					}
+					else // builtin type
+					{
+						headerName = ChipTypeHelper.IsBusType(subChip.ChipType) ? "BUS" : subChip.Description.Name;
+						if (subChip.ChipType is ChipType.Key) activeContextMenuEntries = entries_builtinKeySubchip;
+						else if (ChipTypeHelper.IsRomType(subChip.ChipType)) activeContextMenuEntries = entries_builtinRomSubchip;
+						else if (subChip.ChipType is ChipType.Pulse) activeContextMenuEntries = entries_builtinPulseChip;
+						else if (ChipTypeHelper.IsBusType(subChip.ChipType)) activeContextMenuEntries = entries_builtinBus;
+						else if (subChip.ChipType == ChipType.DisplayLED) activeContextMenuEntries = entries_builtinLED;
+						else activeContextMenuEntries = entries_builtinSubchip;
+					}
+
+					if (selectElement) Project.ActiveProject.controller.Select(interactionContext as IMoveable, false);
+				}
+				else if (openDevPinContextMenu)
+				{
+					if (interactionContext is DevPinInstance devPinInstance) interactionContext = devPinInstance.Pin;
+
+					PinInstance activePin = (PinInstance)interactionContext;
+					headerName = CreatePinHeaderName(activePin.Name);
+					interactionContextName = activePin.Name;
+					if (selectElement) Project.ActiveProject.controller.Select(activePin.parent, false);
+					activeContextMenuEntries = activePin.IsSourcePin ? entries_inputDevPin : entries_outputDevPin;
+				}
+				else if (openWireContextMenu)
+				{
+					WireInstance wire = (WireInstance)interactionContext;
+					if (wire.IsBusWire) headerName = "BUS LINE";
+					else headerName = CreateWireHeaderString(wire);
+
+					activeContextMenuEntries = entries_wire;
+				}
+				else if (openSubchipOutputPinContextMenu)
+				{
+					PinInstance pinContext = (PinInstance)interactionContext;
+					headerName = CreatePinHeaderName(pinContext.Name);
+					activeContextMenuEntries = entries_subChipOutput;
+				}
+
+				return true;
+			}
+
+			return false;
+		}
+
+		// ---- Used by the touch interface's selection bar ----
+
+		// The menu entries of an element, with it set as the context their actions apply to.
+		public static bool TryGetEntriesFor(IInteractable element, out string header, out MenuEntry[] entries)
+		{
+			entries = null;
+			if (!PrepareContext(element, false, out header)) return false;
+			entries = activeContextMenuEntries;
+			return true;
+		}
+
+		// Opens the full menu of an element at a point in UI space.
+		public static void OpenFor(IInteractable element, Vector2 uiPos)
+		{
+			if (!PrepareContext(element, false, out string header)) return;
+			contextMenuHeader = header.PadRight(pad);
+			mouseOpenMenuPos = uiPos;
+			IsOpen = true;
+			openedFrame = Time.frameCount;
+		}
+
+		public static bool IsDivider(MenuEntry entry) => entry.Text == menuDividerString;
+
+		public static bool IsColourEntry(MenuEntry entry) => Array.Exists(pinColEntries, e => e.Text == entry.Text);
 
 		static string CreateWireHeaderString(WireInstance wire)
 		{
@@ -323,11 +361,10 @@ namespace DLS.Graphics
 			Vector2 pos = mouseOpenMenuPos;
 			if (mobile)
 			{
-				// Between the top bar and the dock; rows shrink only when a long menu would not
-				// fit otherwise.
-				Rect safe = MobileUI.SafeRectUI;
-				float bottom = safe.yMin + MobileUI.DockHeight;
-				area = Rect.MinMaxRect(safe.xMin + 0.5f, bottom + 0.5f, safe.xMax - 0.5f, Mathf.Max(bottom + 10f, safe.yMax - MobileUI.TopBarHeight - 0.5f));
+				// Inside the board area, clear of the top bar and the parts panel; rows shrink only
+				// when a long menu would not fit otherwise.
+				Rect canvas = MobileUI.CanvasRectUI;
+				area = Rect.MinMaxRect(canvas.xMin + 0.5f, canvas.yMin + 0.5f, canvas.xMax - 0.5f, Mathf.Max(canvas.yMin + 10f, canvas.yMax - 0.5f));
 				buttonSize.y = Mathf.Clamp((area.height - 1f) / (menuEntries.Length + 1), 2.6f, 4f);
 				menuWidth = Mathf.Max(menuWidth + 1.5f, 22f);
 				buttonSize.x = menuWidth;
