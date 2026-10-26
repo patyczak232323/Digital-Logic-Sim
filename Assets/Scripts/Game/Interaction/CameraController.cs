@@ -179,6 +179,34 @@ namespace DLS.Game
 			UpdateCameraState();
 		}
 
+		// Touch interface: one finger dragged on empty space moves the view. Started by the
+		// interaction controller when a press lands on nothing; ends when the finger lifts.
+		public static void StartDragPan()
+		{
+			if (!CanMove || isDragZoomingCamera) return;
+			mouseDragScreenPosOld = InputHelper.MousePos;
+			isMovingCamera = true;
+			ContextMenu.CloseContextMenu();
+		}
+
+		// Forgets the stored view of the chip being edited, so it is fitted to the screen again.
+		public static void FitViewToChip()
+		{
+			Project project = Project.ActiveProject;
+			if (project == null) return;
+			chipViewStateLookup.Remove(project.ViewedChip.ChipName);
+		}
+
+		// Zooms by a factor (below 1 zooms in) around a point given in screen pixels.
+		public static void ZoomAround(Vector2 screenPos, float factor)
+		{
+			if (camera == null || activeView == null || !CanZoom) return;
+			Vector2 worldBefore = camera.ScreenToWorldPoint(screenPos);
+			SetZoom(activeView.OrthoSize * factor);
+			Vector2 worldAfter = camera.ScreenToWorldPoint(screenPos);
+			MovePosition(worldBefore - worldAfter);
+		}
+
 		/// <summary>
 		/// Native touch navigation for mobile builds. The previous/current centres are
 		/// screen-space pinch centres; distance ratio controls zoom. Keeping the old
@@ -278,13 +306,17 @@ namespace DLS.Game
 
 			if (MobileUI.IsActive)
 			{
-				// The top bar and the dock cover about a quarter of a phone screen.
-				const float covered = MobileUI.TopBarHeight + MobileUI.DockHeight;
+				// Fit the chip into the part of the screen the top bar and the parts panel leave
+				// free, and centre it there.
 				float uiHeight = UI.Width * Screen.height / Mathf.Max(1f, Screen.width);
-				view.OrthoSize *= uiHeight / Mathf.Max(1f, uiHeight - covered);
+				Rect canvas = MobileUI.CanvasRectUI;
+				float fitHeight = bounds.Height * uiHeight / Mathf.Max(1f, canvas.height);
+				float fitWidth = bounds.Width * uiHeight / Mathf.Max(1f, canvas.width);
+				view.OrthoSize = Mathf.Max(fitHeight, fitWidth) * 0.5f * 1.15f;
 				view.OrthoSize = Mathf.Clamp(view.OrthoSize, zoomRange.x, zoomRange.y);
-				float shiftUI = (MobileUI.DockHeight - MobileUI.TopBarHeight) / 2f;
-				view.Pos = bounds.Centre + Vector2.down * (shiftUI / uiHeight * view.OrthoSize * 2);
+				float worldPerUI = view.OrthoSize * 2 / uiHeight;
+				Vector2 canvasOffsetUI = canvas.center - new Vector2(UI.Width / 2f, uiHeight / 2f);
+				view.Pos = bounds.Centre - canvasOffsetUI * worldPerUI;
 				return view;
 			}
 

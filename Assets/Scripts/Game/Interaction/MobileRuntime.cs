@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using DLS.Graphics;
 using Seb.Helpers;
@@ -18,14 +19,6 @@ namespace DLS.Game
 		Vector2 previousGestureCentre;
 		float previousGestureDistance;
 
-		bool singleFingerPanActive;
-		int singleFingerPanId = -1;
-		Vector2 previousSinglePanPosition;
-
-		bool edgeSwipeTracking;
-		int edgeSwipeFingerId = -1;
-		Vector2 edgeSwipeStart;
-
 		bool longPressTracking;
 		bool longPressTriggered;
 		int longPressFingerId = -1;
@@ -39,15 +32,20 @@ namespace DLS.Game
 		int lastSystemSelectionStart;
 		int lastSystemSelectionLength;
 
+		static bool IsAndroid => Application.platform == RuntimePlatform.Android;
+
+		// Runs on Android, and in a desktop build started with "-mobile-ui", where the mouse
+		// acts as one finger so the touch interface behaves as it does on a phone.
 		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterAssembliesLoaded)]
 		static void Bootstrap()
 		{
-#if UNITY_ANDROID && !UNITY_EDITOR
-			if (instance != null) return;
+			if (instance != null || Application.isEditor) return;
+			bool preview = Array.Exists(Environment.GetCommandLineArgs(), a => string.Equals(a, "-mobile-ui", StringComparison.OrdinalIgnoreCase));
+			if (!IsAndroid && !preview) return;
+
 			GameObject go = new("Rewired Mobile Runtime");
 			DontDestroyOnLoad(go);
 			instance = go.AddComponent<MobileRuntime>();
-#endif
 		}
 
 		void Awake()
@@ -59,22 +57,26 @@ namespace DLS.Game
 			}
 
 			instance = this;
+			TouchInput.EmulateWithMouse = !IsAndroid;
 			inputSource = new MobileInputSource();
 			InputHelper.InputSource = inputSource;
 			MobileInputBridge.EnableRuntime(true);
 			handledKeyboardOpenVersion = MobileInputBridge.OpenRequestVersion;
 			handledKeyboardSynchronizeVersion = MobileInputBridge.SynchronizeRequestVersion;
 
-			Input.multiTouchEnabled = true;
-			Input.simulateMouseWithTouches = false;
-			TouchScreenKeyboard.hideInput = false;
-			Screen.autorotateToPortrait = false;
-			Screen.autorotateToPortraitUpsideDown = false;
-			Screen.autorotateToLandscapeLeft = true;
-			Screen.autorotateToLandscapeRight = true;
-			Screen.orientation = ScreenOrientation.AutoRotation;
-			Screen.fullScreen = true;
-			Screen.sleepTimeout = SleepTimeout.NeverSleep;
+			if (IsAndroid)
+			{
+				Input.multiTouchEnabled = true;
+				Input.simulateMouseWithTouches = false;
+				TouchScreenKeyboard.hideInput = false;
+				Screen.autorotateToPortrait = false;
+				Screen.autorotateToPortraitUpsideDown = false;
+				Screen.autorotateToLandscapeLeft = true;
+				Screen.autorotateToLandscapeRight = true;
+				Screen.orientation = ScreenOrientation.AutoRotation;
+				Screen.fullScreen = true;
+				Screen.sleepTimeout = SleepTimeout.NeverSleep;
+			}
 			MobileUI.ApplyRuntimePreferences();
 		}
 
@@ -123,11 +125,11 @@ namespace DLS.Game
 			RefreshKeyboardScreenRect();
 
 			// Main.Update processes world interaction before drawing UI. Pre-mark the
-			// persistent mobile chrome so a first tap on the dock/top bar cannot leak
+			// persistent mobile chrome so a tap on the top bar or the parts panel cannot leak
 			// through and select/place something in the circuit underneath it.
-			for (int i = 0; i < Input.touchCount; i++)
+			for (int i = 0; i < TouchInput.Count; i++)
 			{
-				Vector2 touchPosition = Input.GetTouch(i).position;
+				Vector2 touchPosition = TouchInput.GetTouch(i).position;
 				bool overKeyboard = MobileInputBridge.IsPointOverKeyboard(touchPosition);
 				if (MobileUI.IsScreenPointOverPersistentChrome(touchPosition) || overKeyboard)
 				{
@@ -151,129 +153,21 @@ namespace DLS.Game
 				}
 			}
 
-			UpdateEdgeSwipe();
-			UpdateSingleFingerPan();
-			if (!MobileUI.PanMode && !edgeSwipeTracking) UpdateLongPress();
-			else CancelLongPress();
+			UpdateLongPress();
 			UpdateTwoFingerGesture();
 		}
 
 
-		void UpdateEdgeSwipe()
-		{
-			if (UIDrawer.ActiveMenu != UIDrawer.MenuType.None ||
-			    MobileInputBridge.KeyboardVisible ||
-			    Input.touchCount != 1)
-			{
-				CancelEdgeSwipe();
-				return;
-			}
-
-			Touch touch = Input.GetTouch(0);
-			float edgeWidth = Mathf.Max(24f, Screen.width * 0.035f);
-			float edgeStart = Screen.safeArea.xMin + edgeWidth;
-
-			if (touch.phase == TouchPhase.Began)
-			{
-				if (touch.position.x <= edgeStart)
-				{
-					InteractionState.MouseIsOverUI = true;
-					edgeSwipeTracking = true;
-					edgeSwipeFingerId = touch.fingerId;
-					edgeSwipeStart = touch.position;
-				}
-				return;
-			}
-
-			if (!edgeSwipeTracking || touch.fingerId != edgeSwipeFingerId) return;
-
-			// A possible edge gesture owns the pointer from its first frame so it
-			// cannot accidentally place/select a component underneath the finger.
-			InteractionState.MouseIsOverUI = true;
-			inputSource.CancelPrimaryPointerThisFrame();
-
-			Vector2 delta = touch.position - edgeSwipeStart;
-			float requiredDistance = Mathf.Max(80f, Screen.width * 0.12f);
-			if (delta.x >= requiredDistance && Mathf.Abs(delta.x) > Mathf.Abs(delta.y) * 1.25f)
-			{
-				inputSource.CancelPrimaryPointerThisFrame();
-				MobileUI.OpenDrawer();
-				CancelEdgeSwipe();
-				return;
-			}
-
-			if (touch.phase is TouchPhase.Ended or TouchPhase.Canceled)
-				CancelEdgeSwipe();
-		}
-
-		void CancelEdgeSwipe()
-		{
-			edgeSwipeTracking = false;
-			edgeSwipeFingerId = -1;
-		}
-
-		void UpdateSingleFingerPan()
-		{
-			if (!MobileUI.PanMode ||
-			    UIDrawer.ActiveMenu != UIDrawer.MenuType.None ||
-			    Input.touchCount != 1)
-			{
-				CancelSingleFingerPan();
-				return;
-			}
-
-			Touch touch = Input.GetTouch(0);
-			if (MobileInputBridge.IsPointOverKeyboard(touch.position) || InteractionState.MouseIsOverUI)
-			{
-				CancelSingleFingerPan();
-				return;
-			}
-
-			// In PAN mode a one-finger gesture must never leak through as an editor click.
-			inputSource.CancelPrimaryPointerThisFrame();
-
-			if (touch.phase == TouchPhase.Began)
-			{
-				singleFingerPanActive = true;
-				singleFingerPanId = touch.fingerId;
-				previousSinglePanPosition = touch.position;
-				return;
-			}
-
-			if (!singleFingerPanActive || touch.fingerId != singleFingerPanId) return;
-
-			if (touch.phase == TouchPhase.Moved)
-			{
-				CameraController.ApplyMobilePanZoom(
-					previousSinglePanPosition,
-					touch.position,
-					100f,
-					100f);
-				previousSinglePanPosition = touch.position;
-			}
-			else if (touch.phase is TouchPhase.Ended or TouchPhase.Canceled)
-			{
-				CancelSingleFingerPan();
-			}
-		}
-
-		void CancelSingleFingerPan()
-		{
-			singleFingerPanActive = false;
-			singleFingerPanId = -1;
-		}
-
 		void UpdateTwoFingerGesture()
 		{
-			if (Input.touchCount < 2)
+			if (TouchInput.Count < 2)
 			{
 				twoFingerGestureActive = false;
 				return;
 			}
 
-			CancelSingleFingerPan();
-			Touch a = Input.GetTouch(0);
-			Touch b = Input.GetTouch(1);
+			Touch a = TouchInput.GetTouch(0);
+			Touch b = TouchInput.GetTouch(1);
 			if (MobileInputBridge.IsPointOverKeyboard(a.position) || MobileInputBridge.IsPointOverKeyboard(b.position))
 			{
 				twoFingerGestureActive = false;
@@ -307,13 +201,13 @@ namespace DLS.Game
 
 		void UpdateLongPress()
 		{
-			if (Input.touchCount != 1)
+			if (TouchInput.Count != 1)
 			{
 				CancelLongPress();
 				return;
 			}
 
-			Touch touch = Input.GetTouch(0);
+			Touch touch = TouchInput.GetTouch(0);
 			if (MobileInputBridge.IsPointOverKeyboard(touch.position) || InteractionState.MouseIsOverUI)
 			{
 				CancelLongPress();
@@ -420,6 +314,8 @@ namespace DLS.Game
 		void OpenSystemKeyboard()
 		{
 			CloseSystemKeyboard(false);
+			// The desktop preview types with the real keyboard.
+			if (!TouchScreenKeyboard.isSupported) return;
 			bool multiline = MobileInputBridge.RequestedMode == MobileKeyboardMode.Code;
 			systemKeyboard = TouchScreenKeyboard.Open(
 				MobileInputBridge.RequestedText,
@@ -527,12 +423,21 @@ namespace DLS.Game
 		Vector2 rightClickPosition;
 		Vector2 lastPointerPosition;
 
+		// The press of a finger is reported one frame after it lands. The world and the UI
+		// find what is under the pointer while they are drawn, so on the frame a finger lands
+		// they still describe the previous touch; one frame later a tap on a pin or a chip is
+		// seen as one. The release always follows the press by at least one frame.
+		bool pressActive;
+		int pressFrame = -1;
+		int releaseFrame = -1;
+		int trackedFingerId = -1;
+
 		public Vector2 MousePosition
 		{
 			get
 			{
 				if (rightClickFrame == Time.frameCount) return rightClickPosition;
-				if (Input.touchCount > 0) return Input.GetTouch(0).position;
+				if (TouchInput.Count > 0) return TouchInput.GetTouch(0).position;
 				return lastPointerPosition;
 			}
 		}
@@ -540,12 +445,12 @@ namespace DLS.Game
 		public bool AnyKeyOrMouseDownThisFrame =>
 			IsMouseDownThisFrame(MouseButton.Left) ||
 			IsMouseDownThisFrame(MouseButton.Right) ||
-			(Input.touchCount == 0 && hardware.AnyKeyOrMouseDownThisFrame) ||
+			(TouchInput.Count == 0 && hardware.AnyKeyOrMouseDownThisFrame) ||
 			HasVirtualKeyDownThisFrame();
 
 		public bool AnyKeyOrMouseHeldThisFrame =>
 			IsMouseHeld(MouseButton.Left) ||
-			(Input.touchCount == 0 && hardware.AnyKeyOrMouseHeldThisFrame) ||
+			(TouchInput.Count == 0 && hardware.AnyKeyOrMouseHeldThisFrame) ||
 			virtualCtrlFrame == Time.frameCount ||
 			virtualShiftFrame == Time.frameCount ||
 			HasVirtualKeyDownThisFrame();
@@ -564,12 +469,38 @@ namespace DLS.Game
 
 		public void PrepareFrame()
 		{
-			if (Input.touchCount > 0) lastPointerPosition = Input.GetTouch(0).position;
+			int frame = Time.frameCount;
+			int touchCount = TouchInput.Count;
+			if (touchCount > 0) lastPointerPosition = TouchInput.GetTouch(0).position;
 
 			// After a pinch or a long press the finger still down is not a new click: it
 			// must not drag, select or drop anything until every finger has lifted.
-			if (Input.touchCount == 0) primaryBlockedUntilRelease = false;
-			else if (Input.touchCount >= 2) primaryBlockedUntilRelease = true;
+			if (touchCount == 0) primaryBlockedUntilRelease = false;
+			else if (touchCount >= 2) primaryBlockedUntilRelease = true;
+
+			// A press cancelled on an earlier frame is over; the finger must lift first.
+			if (pressActive && cancelPrimaryFrame >= 0 && cancelPrimaryFrame < frame && cancelPrimaryFrame >= pressFrame - 1) pressActive = false;
+			if (pressActive && releaseFrame >= 0 && frame > releaseFrame) pressActive = false;
+
+			if (touchCount == 1)
+			{
+				Touch touch = TouchInput.GetTouch(0);
+				if (touch.phase == TouchPhase.Began)
+				{
+					pressActive = true;
+					pressFrame = frame + 1;
+					releaseFrame = -1;
+					trackedFingerId = touch.fingerId;
+				}
+				else if (pressActive && releaseFrame < 0 && touch.fingerId == trackedFingerId && touch.phase is TouchPhase.Ended or TouchPhase.Canceled)
+				{
+					releaseFrame = Mathf.Max(frame, pressFrame + 1);
+				}
+			}
+			else if (touchCount == 0 && pressActive && releaseFrame < 0)
+			{
+				releaseFrame = Mathf.Max(frame, pressFrame + 1);
+			}
 
 			if (virtualTextFrame < Time.frameCount)
 			{
@@ -661,34 +592,28 @@ namespace DLS.Game
 		{
 			if (button == MouseButton.Right) return rightClickFrame == Time.frameCount || hardware.IsMouseDownThisFrame(button);
 			if (button != MouseButton.Left) return hardware.IsMouseDownThisFrame(button);
-			if (cancelPrimaryFrame == Time.frameCount || primaryBlockedUntilRelease || Input.touchCount != 1) return false;
-
-			Touch touch = Input.GetTouch(0);
-			if (MobileInputBridge.IsPointOverKeyboard(touch.position)) return false;
-			return touch.phase == TouchPhase.Began;
+			if (cancelPrimaryFrame == Time.frameCount || primaryBlockedUntilRelease) return false;
+			return pressActive && Time.frameCount == pressFrame && !MobileInputBridge.IsPointOverKeyboard(MousePosition);
 		}
 
 		public bool IsMouseUpThisFrame(MouseButton button)
 		{
 			if (button == MouseButton.Right) return false;
 			if (button != MouseButton.Left) return hardware.IsMouseUpThisFrame(button);
-			if (cancelPrimaryFrame == Time.frameCount) return true;
-			if (primaryBlockedUntilRelease || Input.touchCount != 1) return false;
-
-			Touch touch = Input.GetTouch(0);
-			if (MobileInputBridge.IsPointOverKeyboard(touch.position)) return false;
-			return touch.phase is TouchPhase.Ended or TouchPhase.Canceled;
+			bool pressReported = pressActive && Time.frameCount > pressFrame;
+			// A cancelled press ends like a release, so whatever it started (a drag, a wire) finishes.
+			if (cancelPrimaryFrame == Time.frameCount) return pressReported;
+			if (primaryBlockedUntilRelease) return false;
+			return pressReported && Time.frameCount == releaseFrame && !MobileInputBridge.IsPointOverKeyboard(MousePosition);
 		}
 
 		public bool IsMouseHeld(MouseButton button)
 		{
 			if (button == MouseButton.Right) return false;
 			if (button != MouseButton.Left) return hardware.IsMouseHeld(button);
-			if (cancelPrimaryFrame == Time.frameCount || primaryBlockedUntilRelease || Input.touchCount != 1) return false;
-
-			Touch touch = Input.GetTouch(0);
-			if (MobileInputBridge.IsPointOverKeyboard(touch.position)) return false;
-			return touch.phase is TouchPhase.Began or TouchPhase.Moved or TouchPhase.Stationary;
+			if (cancelPrimaryFrame == Time.frameCount || primaryBlockedUntilRelease || !pressActive) return false;
+			int frame = Time.frameCount;
+			return frame >= pressFrame && (releaseFrame < 0 || frame < releaseFrame) && !MobileInputBridge.IsPointOverKeyboard(MousePosition);
 		}
 
 		bool HasVirtualKeyDownThisFrame()

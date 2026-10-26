@@ -4,6 +4,7 @@ using DLS.Description;
 using DLS.Graphics;
 using DLS.SaveSystem;
 using Seb.Helpers;
+using Seb.Types;
 using UnityEngine;
 
 namespace DLS.Game
@@ -432,6 +433,78 @@ namespace DLS.Game
 			DuplicateElements(SelectedElements);
 		}
 
+		// ---- Actions for the touch interface's buttons ----
+
+		public bool IsEditingWire => wireToEdit != null;
+		public bool IsPlacingCopies => isPlacingNewElements && newElementsAreDuplicatedElements;
+
+		// Copies the selection and puts the copy straight down beside it (on the first free side),
+		// then selects the copy so it can be dragged into place. A touch screen has no pointer
+		// for a copy to follow, unlike Ctrl+D on desktop.
+		public void DuplicateSelection()
+		{
+			if (!HasControl || SelectedElements.Count == 0 || IsPlacingOrMovingElementOrCreatingWire) return;
+
+			Bounds2D bounds = Bounds2D.CreateEmpty();
+			foreach (IMoveable element in SelectedElements) bounds = Bounds2D.Grow(bounds, element.SelectionBoundingBox);
+			IMoveable[] obstacles = ActiveDevChip.Elements.ToArray();
+
+			float gap = DrawSettings.GridSize * 4;
+			float dx = Mathf.Ceil((bounds.Width + gap) / DrawSettings.GridSize) * DrawSettings.GridSize;
+			float dy = Mathf.Ceil((bounds.Height + gap) / DrawSettings.GridSize) * DrawSettings.GridSize;
+			Vector2[] offsets = { new(dx, 0), new(0, -dy), new(-dx, 0), new(0, dy), new(dx, -dy), new(dx * 2, 0) };
+
+			DuplicateElements(SelectedElements);
+			List<IMoveable> copies = new(SelectedElements);
+
+			Vector2 offset = offsets[0];
+			bool free = false;
+			foreach (Vector2 candidate in offsets)
+			{
+				offset = candidate;
+				free = true;
+				foreach (IMoveable copy in copies)
+				{
+					copy.Position = copy.MoveStartPosition + offset;
+					if (obstacles.Any(o => copy.BoundingBox.Overlaps(o.BoundingBox))) free = false;
+				}
+
+				if (free) break;
+			}
+
+			foreach (IMoveable copy in copies) copy.IsValidMovePos = free;
+			foreach (WireInstance wire in DuplicatedWires) wire.MoveOffset = offset;
+
+			// With no free side the copy stays attached, to be placed with the next tap.
+			if (!free) return;
+
+			FinishPlacingNewElements();
+			for (int i = 0; i < copies.Count; i++) Select(copies[i], i > 0);
+		}
+
+		public void DeleteSelection()
+		{
+			if (!HasControl || SelectedElements.Count == 0 || IsPlacingOrMovingElementOrCreatingWire) return;
+			DeleteElements(SelectedElements);
+		}
+
+		// Places the elements being placed where they are now (they follow the finger);
+		// returns false if they overlap something and stay unplaced.
+		public bool TryFinishPlacing()
+		{
+			if (!isPlacingNewElements) return false;
+			FinishPlacingNewElements();
+			return !isPlacingNewElements;
+		}
+
+		// Removes the last bend of the wire being drawn; cancels the wire if it has none.
+		public void RemoveLastWirePoint()
+		{
+			if (IsCreatingWire && !WireToPlace.RemoveLastPoint()) CancelEverything();
+		}
+
+		public void FinishWireEdit() => ExitWireEditMode();
+
 		public void Select(IMoveable element, bool addToCurrentSelection = true)
 		{
 			ExitWireEditMode();
@@ -540,7 +613,11 @@ namespace DLS.Game
 				else if (InteractionState.ElementUnderMouse == null && !IsPlacingElementOrCreatingWire)
 				{
 					if (!KeyboardShortcuts.MultiModeHeld) ClearSelection(); // don't clear if in 'multi-mode' (to allow box selecting multiple times)
-					IsCreatingSelectionBox = true;
+
+					// On a touch screen a finger on empty space moves the view, unless area
+					// selection is switched on.
+					if (MobileUI.IsActive && !MobileUI.AreaSelectMode) CameraController.StartDragPan();
+					else IsCreatingSelectionBox = true;
 				}
 
 				if (wireToEdit != null && wireEditPointIndex != -1)
