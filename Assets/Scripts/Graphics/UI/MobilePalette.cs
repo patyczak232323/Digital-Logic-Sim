@@ -31,6 +31,8 @@ namespace DLS.Graphics
 		}
 
 		static readonly List<string> items = new();
+		// Chips listed but not placeable here: the open chip itself, and chips that use it.
+		static readonly HashSet<string> blocked = new();
 		static readonly List<string> categories = new();
 		static string selectedCategory;
 		static float railScroll;
@@ -110,14 +112,23 @@ namespace DLS.Graphics
 		static void DrawItems(Project project, Rect list)
 		{
 			MobileTheme.Text(DisplayName(selectedCategory), new Vector2(list.xMin + 0.2f, list.yMax - 1f), 0.62f, MobileTheme.SecondaryTextCol, Anchor.TextCentreLeft, true);
-			Rect area = Rect.MinMaxRect(list.xMin, list.yMin, list.xMax, list.yMax - 2.2f);
+			Rect area = ItemArea(list);
+
+			// Chips are saved one at a time; a new one is where saved chips get used.
+			if (IsMyChipsCategory(selectedCategory))
+			{
+				if (MobileTheme.Button("NEW CHIP", MobileTheme.Neutral, new Vector2(list.xMin, list.yMin), new Vector2(list.width, RowHeight), true, Anchor.BottomLeft))
+				{
+					MobileUI.CreateNewChip(project);
+				}
+			}
 
 			float contentHeight = items.Count * (ItemHeight + ItemGap);
 			itemScroll = Mathf.Clamp(itemScroll, 0, Mathf.Max(0, contentHeight - area.height));
 
 			if (items.Count == 0)
 			{
-				string hint = IsMyChipsCategory(selectedCategory) ? "Chips you save appear here." : "Nothing to add here.";
+				string hint = IsMyChipsCategory(selectedCategory) ? "Chips you save with SAVE appear here." : "Nothing to add here.";
 				UI.DrawText(UI.LineBreakByCharCount(hint, 16), DrawSettings.ActiveUITheme.FontRegular, DrawSettings.ActiveUITheme.FontSizeRegular * 0.6f,
 					new Vector2(area.xMin + 0.2f, area.yMax - 1.2f), Anchor.TopLeft, MobileTheme.DimTextCol);
 				return;
@@ -143,8 +154,9 @@ namespace DLS.Graphics
 		static void DrawItem(Project project, string name, Vector2 topLeft, float width)
 		{
 			bool armed = name == ArmedChip;
+			bool isBlocked = blocked.Contains(name);
 			bool pressed = pressRegion == Region.Items && name == pressedName && !pressScrolling && InputHelper.IsMouseHeld(MouseButton.Left);
-			Color bg = armed ? MobileTheme.Accent : pressed ? ColHelper.MakeCol255(58, 61, 70) : MobileTheme.CardCol;
+			Color bg = armed ? MobileTheme.Accent : isBlocked ? MobileTheme.PanelCol : pressed ? ColHelper.MakeCol255(58, 61, 70) : MobileTheme.CardCol;
 			UI.DrawPanel(topLeft, new Vector2(width, ItemHeight), bg, Anchor.TopLeft);
 			Bounds2D card = UI.PrevBounds;
 
@@ -155,9 +167,10 @@ namespace DLS.Graphics
 			}
 
 			string label = MobileTheme.Fit(name, width - 1.6f, 0.68f, true);
-			MobileTheme.Text(label, new Vector2(card.Left + 1.1f, card.Centre.y + 0.75f), 0.68f, Color.white, Anchor.TextCentreLeft, true);
-			string detail = MobileTheme.Fit(Describe(project, name), width - 1.6f, 0.5f);
-			MobileTheme.Text(detail, new Vector2(card.Left + 1.1f, card.Centre.y - 0.95f), 0.5f, armed ? Color.white : MobileTheme.SecondaryTextCol);
+			MobileTheme.Text(label, new Vector2(card.Left + 1.1f, card.Centre.y + 0.75f), 0.68f, isBlocked ? MobileTheme.DimTextCol : Color.white, Anchor.TextCentreLeft, true);
+			string description = isBlocked ? BlockedReason(project, name) : Describe(project, name);
+			string detail = MobileTheme.Fit(description, width - 1.6f, 0.5f);
+			MobileTheme.Text(detail, new Vector2(card.Left + 1.1f, card.Centre.y - 0.95f), 0.5f, armed ? Color.white : isBlocked ? MobileTheme.DimTextCol : MobileTheme.SecondaryTextCol);
 		}
 
 		static void HandleInput(Project project, Rect panel, Rect rail, Rect list)
@@ -166,7 +179,7 @@ namespace DLS.Graphics
 
 			if (InputHelper.IsMouseDownThisFrame(MouseButton.Left) && UIDrawer.ActiveMenu == UIDrawer.MenuType.None)
 			{
-				pressRegion = rail.Contains(mouse) ? Region.Rail : list.Contains(mouse) ? Region.Items : Region.None;
+				pressRegion = rail.Contains(mouse) ? Region.Rail : ItemArea(list).Contains(mouse) ? Region.Items : Region.None;
 				pressStart = mouse;
 				pressScrolling = false;
 				dragPlacing = false;
@@ -183,7 +196,7 @@ namespace DLS.Graphics
 				{
 					// Dragging out sideways picks the chip up; dragging along the list scrolls it.
 					bool sideways = delta.x > DragThreshold * 1.5f && delta.x > Mathf.Abs(delta.y);
-					if (pressRegion == Region.Items && pressedName != null && (sideways || !panel.Contains(mouse)))
+					if (pressRegion == Region.Items && pressedName != null && !blocked.Contains(pressedName) && (sideways || !panel.Contains(mouse)))
 					{
 						project.controller.CancelEverything();
 						project.controller.StartPlacing(pressedName);
@@ -219,6 +232,10 @@ namespace DLS.Graphics
 						if (selectedCategory != pressedName) itemScroll = 0;
 						selectedCategory = pressedName;
 					}
+					else if (pressRegion == Region.Items && ItemAt(list, mouse) == pressedName && blocked.Contains(pressedName))
+					{
+						MobileUI.ShowNotice($"{pressedName} can't go inside itself. Start a NEW CHIP to use it.");
+					}
 					else if (pressRegion == Region.Items && ItemAt(list, mouse) == pressedName)
 					{
 						// Tap: the chip waits for a tap on the board; tapping it again puts it back.
@@ -247,10 +264,18 @@ namespace DLS.Graphics
 			return point.y >= rowTop - RowHeight ? categories[index] : null;
 		}
 
+		// The scrolling list of chips: below the category title, above MY CHIPS' NEW CHIP button.
+		static Rect ItemArea(Rect list)
+		{
+			float bottom = IsMyChipsCategory(selectedCategory) ? list.yMin + RowHeight + RowGap * 2 : list.yMin;
+			return Rect.MinMaxRect(list.xMin, bottom, list.xMax, list.yMax - 2.2f);
+		}
+
 		static string ItemAt(Rect list, Vector2 point)
 		{
-			float top = list.yMax - 2.2f;
-			if (!list.Contains(point) || point.y > top) return null;
+			Rect area = ItemArea(list);
+			float top = area.yMax;
+			if (!area.Contains(point)) return null;
 			int index = Mathf.FloorToInt((top + itemScroll - point.y) / (ItemHeight + ItemGap));
 			if (index < 0 || index >= items.Count) return null;
 			float itemTop = top + itemScroll - index * (ItemHeight + ItemGap);
@@ -287,11 +312,14 @@ namespace DLS.Graphics
 		static void CollectItems(Project project)
 		{
 			items.Clear();
+			blocked.Clear();
 			if (selectedCategory == MyChipsCategory)
 			{
 				foreach (ChipDescription chip in project.chipLibrary.allChips)
 				{
-					if (chip.ChipType == ChipType.Custom && project.ViewedChip.CanAddSubchip(chip.Name)) items.Add(chip.Name);
+					if (chip.ChipType != ChipType.Custom) continue;
+					items.Add(chip.Name);
+					if (!project.ViewedChip.CanAddSubchip(chip.Name)) blocked.Add(chip.Name);
 				}
 
 				items.Sort(System.StringComparer.OrdinalIgnoreCase);
@@ -315,6 +343,9 @@ namespace DLS.Graphics
 		static bool IsMyChipsCategory(string name) => name == MyChipsCategory;
 
 		static string DisplayName(string category) => IsMyChipsCategory(category) ? "MY CHIPS" : category ?? string.Empty;
+
+		static string BlockedReason(Project project, string name) =>
+			ChipDescription.NameMatch(name, project.ActiveDevChipName) ? "open now: can't go inside itself" : "uses the open chip";
 
 		// A few words on what each chip is for, so names like 1-4BIT explain themselves.
 		static string Describe(Project project, string name)

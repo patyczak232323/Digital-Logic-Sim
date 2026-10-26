@@ -30,7 +30,11 @@ namespace DLS.Graphics
 		const string PrefPaletteOpen = "rewired.mobile.paletteOpen";
 
 		static string notice;
+		static bool noticeIsGood;
 		static float noticeUntil;
+		static UIDrawer.MenuType lastMenu;
+		static string chipNameWhenSaveOpened;
+		static bool unsavedWhenSaveOpened;
 		static bool unsavedChanges;
 		static float unsavedCheckTime = -1;
 
@@ -136,10 +140,11 @@ namespace DLS.Graphics
 		}
 
 		// A short message shown at the top of the board for a few seconds.
-		public static void ShowNotice(string text)
+		public static void ShowNotice(string text, bool good = false)
 		{
 			notice = text;
-			noticeUntil = Time.unscaledTime + 3.5f;
+			noticeIsGood = good;
+			noticeUntil = Time.unscaledTime + 4f;
 		}
 
 		// Called before the world handles input, so a touch on the top bar or the parts panel
@@ -177,6 +182,19 @@ namespace DLS.Graphics
 		static void DrawProjectMenus(Project project)
 		{
 			UIDrawer.MenuType menu = UIDrawer.ActiveMenu;
+
+			// Saving is a moment to say where the chip went and how it gets used.
+			if (menu == UIDrawer.MenuType.ChipSave && lastMenu == UIDrawer.MenuType.None)
+			{
+				chipNameWhenSaveOpened = project.ActiveDevChipName;
+				unsavedWhenSaveOpened = project.ActiveChipHasUnsavedChanges();
+			}
+			else if (lastMenu == UIDrawer.MenuType.ChipSave && menu == UIDrawer.MenuType.None && !project.ActiveChipHasUnsavedChanges() &&
+			         (unsavedWhenSaveOpened || project.ActiveDevChipName != chipNameWhenSaveOpened))
+			{
+				ShowNotice("Saved to MY CHIPS. Start a NEW CHIP to use it.", true);
+			}
+			lastMenu = menu;
 
 			if (menu is UIDrawer.MenuType.None or UIDrawer.MenuType.BottomBarMenuPopup)
 			{
@@ -443,7 +461,16 @@ namespace DLS.Graphics
 			else if (notice != null && Time.unscaledTime < noticeUntil)
 			{
 				text = notice.ToUpperInvariant();
-				textCol = MobileTheme.WarningCol;
+				textCol = noticeIsGood ? Color.white : MobileTheme.WarningCol;
+				if (noticeIsGood && project.CanEditViewedChip)
+				{
+					buttonB = "NEW CHIP";
+					actionB = () =>
+					{
+						notice = null;
+						CreateNewChip(project);
+					};
+				}
 			}
 			else if (project.simPaused)
 			{
@@ -632,7 +659,7 @@ namespace DLS.Graphics
 			}
 		}
 
-		static void CreateNewChip(Project project)
+		public static void CreateNewChip(Project project)
 		{
 			if (project.ActiveChipHasUnsavedChanges()) UnsavedChangesPopup.OpenPopup(Confirm);
 			else Confirm(true);
