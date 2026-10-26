@@ -21,6 +21,10 @@ Documentation for **Rewired**, the digital logic simulator, circuit editor and R
 
 The latest downloadable binaries are published under the repository's GitHub Releases page.
 
+## Contributing
+
+- **[Contributing guide](../CONTRIBUTING.md)** — building, testing, conventions and the release checklist.
+
 ## Project scope
 
 Rewired is an independent digital logic simulator derived from Sebastian Lague's Digital Logic Sim. It targets digital electronics education, logic-gate experimentation, CPU design, computer architecture and larger nested digital circuits.

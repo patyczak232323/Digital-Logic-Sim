@@ -280,6 +280,36 @@ end", library);
 			}
 		}
 
+		// "connect A -> gate.A" names the NAND pin "IN A" by its friendly alias. The alias used to
+		// pass validation but reach the netlist builder unresolved, so the build failed.
+		[Test]
+		public void StructuralConnectAcceptsPinAliases()
+		{
+			RhdlCompileResult result = RhdlCompiler.Compile(@"
+circuit StructuralNand
+    input A
+    input B
+    output Y
+
+    component gate : NAND
+
+    connect A -> gate.A
+    connect B -> gate.B
+    connect gate.OUT -> Y
+end", library);
+			Assert.IsTrue(result.Success, string.Join("\n", result.Diagnostics.Select(d => d.ToString())));
+			library.NotifyChipSaved(result.Description, false);
+
+			TestCircuit c = new(result.Description, library);
+			for (uint i = 0; i < 4; i++)
+			{
+				c.Set("A", i & 1);
+				c.Set("B", i >> 1);
+				c.Step();
+				Assert.AreEqual(i == 3 ? 0u : 1u, c.Get("Y"), $"A={i & 1} B={i >> 1}");
+			}
+		}
+
 		[Test]
 		public void InvalidSourceReportsDiagnosticsWithLine()
 		{

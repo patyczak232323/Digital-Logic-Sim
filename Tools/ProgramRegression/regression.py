@@ -232,6 +232,19 @@ def test_csharp_integration_guards() -> None:
     assert not (ROOT / "Assets/Scripts/Graphics/UI/Menus/SimulationFacade.cs").exists()
 
 
+def test_version_consistency() -> None:
+    # VERSION is what release tags are checked against; the app, the player settings,
+    # the README and the release notes must all name the same version.
+    version = source("VERSION").strip()
+    assert version.count(".") == 2 and all(part.isdigit() for part in version.split(".")), version
+    assert f'public const string RewiredVersion = "{version}";' in source("Assets/Scripts/Game/Main/Main.cs")
+    player_settings = source("ProjectSettings/ProjectSettings.asset").splitlines()
+    assert f"  bundleVersion: {version}" in player_settings
+    assert f"Current version: **Rewired v{version}**" in source("README.md")
+    assert (ROOT / f"Docs/RELEASE_{version}.md").exists()
+    assert f"(RELEASE_{version}.md)" in source("Docs/README.md")
+
+
 TESTS = (
     test_portable_file_names,
     test_cycle_model,
@@ -242,6 +255,7 @@ TESTS = (
     test_interrupted_save_model,
     test_contained_save_paths,
     test_csharp_integration_guards,
+    test_version_consistency,
 )
 
 

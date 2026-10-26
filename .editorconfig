@@ -1,0 +1,20 @@
+# Basic editor settings matching the existing code. See https://editorconfig.org
+root = true
+
+[*]
+trim_trailing_whitespace = true
+
+[*.cs]
+indent_style = tab
+indent_size = 4
+
+[*.{py,sh}]
+indent_style = space
+indent_size = 4
+
+[*.{yml,yaml,json,asmdef,csproj}]
+indent_style = space
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false

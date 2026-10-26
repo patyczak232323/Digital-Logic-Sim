@@ -59,12 +59,44 @@ Supported logic words are `and`, `or`, `xor`, and `not`.
 ## Arithmetic and comparisons
 
 ```text
-sum   = A + B
-diff  = A - B
-same  = A == B
-less  = A < B
-shift = A << 1
+circuit MathExample
+    input A: 8
+    input B: 8
+
+    output sum: 8
+    output diff: 8
+    output same
+    output less
+    output shift: 8
+
+    sum   = A + B
+    diff  = A - B
+    same  = A == B
+    less  = A < B
+    shift = A << 1
+end
 ```
+
+- `+` and `-` wrap around at the result width: with 8-bit values, `200 + 100` is `44`.
+- Comparisons `==`, `!=`, `<`, `>`, `<=` and `>=` are unsigned and give a 1-bit result.
+- `<<` and `>>` shift by a compile-time constant; bits shifted in are low.
+
+### Operator precedence
+
+From loosest to tightest binding:
+
+| Level | Operators |
+| --- | --- |
+| 1 | `==` `!=` `<` `>` `<=` `>=` |
+| 2 | `or` |
+| 3 | `xor` |
+| 4 | `and` |
+| 5 | `<<` `>>` |
+| 6 | `+` `-` |
+| 7 | `not` |
+| 8 | bit selection `A[3]`, `A[7:4]` |
+
+Comparisons bind more loosely than the logic words, so `A == B or C` means `A == (B or C)`. Use parentheses whenever a comparison is combined with other operators: `(A == B) or C`.
 
 ## Choosing a value
 

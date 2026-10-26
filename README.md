@@ -45,7 +45,7 @@ The repository includes a compact example progression ending with a **4-bit CPU*
 - truth table for any combinational chip, recordable as a regression test
 - breakpoints: pause when a pin changes, rises, falls or reaches a value
 - export to structural Verilog, SVG schematics and PNG screenshots
-- guided challenges from a NAND gate to a 4-bit adder
+- guided challenges from a NOT gate built from NAND to a 4-bit adder
 - Windows x64, Linux x86_64, WebGL (browser) and Android ARM64 (experimental) release builds
 - touch interface for Android tablets and phones, with undo/redo, run/pause/step and a gesture guide
 
@@ -190,6 +190,7 @@ Start here:
 - **[Native JIT](Docs/NATIVE_JIT.md)**
 - **[Persistent FULL LUT Cache](Docs/PERSISTENT_FULL_LUT_CACHE.md)**
 - **[Rewired v0.4.0 release notes](Docs/RELEASE_0.4.0.md)**
+- **[Contributing](CONTRIBUTING.md)**
 
 ## Development
 
@@ -206,8 +207,8 @@ cd Digital-Logic-Sim
 
 Tests:
 
-- **Unity EditMode tests** in `Assets/Tests/EditMode` run the real C# engine and compile and simulate every example in `Examples/RHDL`. Run them from *Window → General → Test Runner* in the Unity editor; CI runs them in `unity-tests.yml`.
-- **Engine harness** (`Tools/EngineHarness`) runs the same EditMode tests with plain .NET in under two minutes, simulates exported Verilog with Icarus Verilog, and benchmarks the engine. See its README. Run it with `dotnet test Tools/EngineHarness`.
+- **Unity EditMode tests** in `Assets/Tests/EditMode` run the real C# engine, compile and simulate every example in `Examples/RHDL`, and compile every RHDL circuit shown in the documentation. Run them from *Window → General → Test Runner* in the Unity editor; CI runs them in `unity-tests.yml`.
+- **Engine harness** (`Tools/EngineHarness`) runs the same EditMode tests with plain .NET in under two minutes, simulates exported Verilog with Icarus Verilog, and benchmarks the engine. See its README. Run the tests with `dotnet test Tools/EngineHarness --filter "Category!=Benchmark"` (the .NET 8 SDK is enough; Unity is not needed).
 - **Python regression suites** in `Tools/` check solver rules and source-level invariants without Unity:
 
 ```bash
@@ -216,7 +217,9 @@ python3 Tools/ComputerRegression/regression.py
 python3 Tools/ProgramRegression/regression.py
 ```
 
-Release builds for Windows, Linux, WebGL and Android are produced automatically by GitHub Actions when a version tag such as `v0.4.0` is pushed. The release text comes from `Docs/RELEASE_<version>.md` when that file exists. Every change to `main` also refreshes the `android-unofficial` pre-release with development builds for all platforms.
+Release builds for Windows, Linux, WebGL and Android are produced automatically by GitHub Actions when a version tag such as `v0.4.0` is pushed; the tests run first and the tag must match `VERSION`. The release text comes from `Docs/RELEASE_<version>.md` when that file exists. Every change to `main` also refreshes the `android-unofficial` pre-release with development builds for all platforms.
+
+See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the repository layout, coding conventions and the release checklist.
 
 ## Project status
 

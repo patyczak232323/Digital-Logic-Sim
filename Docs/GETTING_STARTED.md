@@ -12,9 +12,20 @@ Available packages:
 
 - `DLSRewired-Windows-x64.zip`
 - `DLSRewired-Linux-x86_64.zip`
+- `DLSRewired-WebGL.zip` (runs in a browser)
 - `DLSRewired-Android-arm64.apk` (experimental)
 
 Extract the archive before running it. On Android, open the APK and allow installing apps from that source if asked.
+
+### Browser (WebGL)
+
+Unzip `DLSRewired-WebGL.zip` and serve the folder that contains `index.html` from any static web host. To try it locally, run this inside that folder:
+
+```bash
+python3 -m http.server 8000
+```
+
+Then open `http://localhost:8000`. Opening `index.html` straight from disk usually fails, because browsers block loading the game files from `file://`. Projects are kept in the browser's own storage; the native JIT and FULL LUT accelerators are not available there, so large circuits run slower.
 
 ### Linux
 
@@ -107,7 +118,7 @@ For difficult circuits, use the simulation diagnostics and profiling tools descr
 
 - **Truth table**: right-click (long-press on Android) a custom chip and pick *TRUTH TABLE* to see every input combination. *RECORD TEST* saves the table; the test re-runs whenever the window opens, so a later change that breaks the chip shows up in red.
 - **Breakpoints**: right-click a pin and pick *BREAKPOINT* to pause the simulation when it changes, rises, falls or reaches a value. *SPACE* (or *STEP* on Android) then advances one tick at a time.
-- **Export**: *EXPORT* in a chip's menu or the bottom-bar menu writes structural Verilog (also copied to the clipboard), an SVG schematic or a PNG screenshot to the project's `Exports` folder.
+- **Export**: *EXPORT* in a chip's menu or the bottom-bar menu writes structural Verilog (also copied to the clipboard), an SVG schematic or a PNG screenshot to the project's `Exports` folder. On Android 10 and later each export is also copied to `Download/Rewired`, and *SHARE LAST EXPORT* sends it to another app.
 
 ## 8. Learn with challenges
 

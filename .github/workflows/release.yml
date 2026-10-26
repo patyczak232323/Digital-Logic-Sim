@@ -13,8 +13,34 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  version:
+    name: Check the tag matches VERSION
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compare tag and VERSION
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          if [ "${TAG#v}" != "$version" ]; then
+            echo "::error::Tag $TAG does not match VERSION ($version). Update VERSION, Main.RewiredVersion and bundleVersion first."
+            exit 1
+          fi
+
+  engine_tests:
+    name: Engine tests
+    uses: ./.github/workflows/engine-harness.yml
+
+  regression:
+    name: Regression suites
+    uses: ./.github/workflows/simulation-regression.yml
+
   build:
     name: Build ${{ matrix.label }}
+    needs: [version, engine_tests, regression]
     runs-on: [self-hosted, trusted]
     strategy:
       fail-fast: false
@@ -107,6 +133,7 @@ jobs:
 
   build_android:
     name: Build Android ARM64 APK
+    needs: [version, engine_tests, regression]
     runs-on: [self-hosted, trusted]
     timeout-minutes: 60
 
@@ -192,6 +219,7 @@ jobs:
   # disk and killed the other Unity jobs there, so WebGL builds on a GitHub-hosted runner.
   build_webgl:
     name: WebGL (browser)
+    needs: [version, engine_tests, regression]
     runs-on: ubuntu-latest
     timeout-minutes: 90
 

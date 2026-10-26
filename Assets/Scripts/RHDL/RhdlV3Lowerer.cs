@@ -1631,7 +1631,8 @@ namespace DLS.RHDL
 					return false;
 				}
 
-				endpoint = instance.Name + "." + pin;
+				// Use the canonical pin name after resolving a friendly alias.
+				endpoint = instance.Name + "." + found.Value.Name;
 				width = (int)found.Value.BitCount;
 				return true;
 			}
