@@ -1,0 +1,5 @@
+# Configuration for actionlint (https://github.com/rhysd/actionlint).
+self-hosted-runner:
+  # Label of the self-hosted Unity runners set up by Tools/SelfHostedRunners.
+  labels:
+    - trusted

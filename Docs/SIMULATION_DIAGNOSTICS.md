@@ -1,10 +1,8 @@
 # Simulation Diagnostics
 
-The development version on `main` includes an integrated diagnostics panel for the Rewired simulation engine.
+Rewired includes an integrated diagnostics panel for its simulation engine.
 
-Open:
-
-`MENU -> SIM DIAGNOSTICS`
+Open it from the bottom bar with `MENU -> SIM DIAGNOSTICS`, or on Android with `TOOLS -> DIAGNOSTICS`.
 
 ## Performance
 
@@ -31,7 +29,7 @@ The benchmark intentionally excludes the project's target-rate sleep/limiter. It
 
 ## Logic analyzer
 
-Right-click an observable pin and select:
+Right-click (long-press on Android) an observable pin and select:
 
 `TOGGLE PROBE`
 
@@ -76,17 +74,13 @@ Important behavior:
 
 Entering a compiled chip for inspection, probing an internal signal, or structurally editing the circuit safely hands state back to the live gate tree.
 
-## CI coverage
+## Test coverage
 
-Every push to `main` runs:
+The engine behaviour described here is covered by automated tests that run in GitHub Actions on pull requests and on `main`:
 
-- engine regression guards
-- semantic compilation of the simulation runtime
-- executable native runtime tests
-- whole-repository C# syntax parsing
-- the full simulation stress suite
-- 8-bit computer behavioral regression
-- generated 8-bit computer netlist execution
-- whole-program regression checks
+- **Unity EditMode tests** (`Assets/Tests/EditMode`) run the shipped C# engine through `RewiredEngine`: NAND and SR-latch behaviour, nested Custom Chips, the oscillator guard, determinism after reset, every curated RHDL example and the CPU4 program.
+- **Acceleration equivalence tests** run a 4-bit ALU (every input) and a 4-bit register sequence through the plain reference simulator, the native JIT, the FULL LUT and the feedback JIT and require identical outputs on every step. They also check that persistent LUT files are reused, and rebuilt when they are corrupt or stale.
+- **Engine harness** (`Tools/EngineHarness`) runs those tests with plain .NET on a GitHub-hosted runner and benchmarks the engine. Speed is reported; gate evaluations and signal propagations per step are checked against `benchmark-baseline.json`, which catches an accelerator that stops engaging.
+- **Python regression suites** (`Tools/SimulationRegression`, `Tools/ComputerRegression`, `Tools/ProgramRegression`) check a model of the solver rules (delta cycles, latches, counters, multi-driver resolution, oscillator bounding), an 8-bit computer and save-system invariants.
 
-The executable runtime suite includes NAND feedback storage, zero-sweep feedback reuse, state materialization, waveform transition compression, deterministic replay, parallel 8-bit latch-bank isolation, and feedback-JIT ownership/deoptimization tests.
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for how to run them locally.

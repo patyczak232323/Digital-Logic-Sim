@@ -73,8 +73,9 @@ crashlytics-build.properties
 /.idea
 /.vsconfig
 
-# Generated persistent full-LUT simulation caches (Unity editor test projects)
-/TestData/Projects/*/Cache/
+# Save data written by the Unity editor and the engine harness tests (SavePaths uses
+# <project>/TestData in the editor)
+/[Tt]est[Dd]ata/
 
 # Repository hygiene
 .DS_Store

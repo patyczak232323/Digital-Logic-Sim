@@ -1,0 +1,44 @@
+name: Bug report
+description: Something in Rewired does not work as expected.
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown in the main menu, or the release you downloaded (for example v0.4.0 or android-unofficial).
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows x64
+        - Linux x86_64
+        - WebGL (browser)
+        - Android
+        - Unity editor
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the attached project
+        2. Toggle input A
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Project, RHDL file or log
+      description: Drag in a zipped project folder or an .rhdl file that shows the problem. The smaller the circuit, the faster it can be fixed.

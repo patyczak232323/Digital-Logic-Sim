@@ -74,6 +74,7 @@ namespace DLS.RHDL
 			public Endpoint Target;
 			public string SourceInstance;
 			public string TargetInstance;
+			public bool Resolved;
 		}
 
 		sealed class AssignmentDecl
@@ -340,6 +341,7 @@ namespace DLS.RHDL
 				connection.Target = targetEndpoint;
 				connection.SourceInstance = sourceInstance;
 				connection.TargetInstance = targetInstance;
+				connection.Resolved = true;
 			}
 
 			ValidateDrivenTargets(connections, diagnostics);
@@ -834,6 +836,8 @@ namespace DLS.RHDL
 			HashSet<string> targets = new(StringComparer.Ordinal);
 			foreach (ConnectionDecl connection in connections)
 			{
+				// An unresolved connection already has its own diagnostic and no real target.
+				if (!connection.Resolved) continue;
 				string target = connection.Target.Address.PinOwnerID + ":" + connection.Target.Address.PinID;
 				if (!targets.Add(target))
 					diagnostics.Add(new RhdlDiagnostic(connection.Line, $"Target '{connection.TargetText}' is driven more than once."));
