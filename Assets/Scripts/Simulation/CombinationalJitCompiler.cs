@@ -74,6 +74,24 @@ namespace DLS.Simulation
 			simChip.CompiledExecutor = new CompiledChipExecutor(program);
 		}
 
+		// Compiles a private program for code that evaluates one chip over many input
+		// combinations (FULL LUT builds, truth tables), where it replaces the much slower
+		// recursive gate evaluation. The chip must already have passed the LUT cache analysis.
+		// Null when the chip or platform is not supported; callers then evaluate the gates.
+		internal static CompiledCombinationalProgram TryCompileStandalone(SimChip root, string chipName)
+		{
+			if (!DynamicCodeAvailable) return null;
+
+			try
+			{
+				return CompileProgram(root, chipName);
+			}
+			catch (Exception)
+			{
+				return null;
+			}
+		}
+
 		static CompiledCombinationalProgram GetOrCompileProgram(SimChip representative, ChipDescription description)
 		{
 			lock (programCacheLock)

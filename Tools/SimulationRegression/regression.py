@@ -566,14 +566,14 @@ def test_source_integration_static() -> None:
         "AdvanceSequentialComponents",
         "RegisterDiagnosticPaths",
         "TraceNonConvergence",
-        "Queue<int> targetQueue",
+        "PinQueue targetQueue",
+        "targetIsPassThrough",
         "bool[] queuedTargets",
         "int[] targetOffsetsBySource",
         "int[] targetIndicesBySource",
         "int[] sourceOffsetsByTarget",
         "BuildAdjacency",
         "sourceCount == 1",
-        "target.numInputsReceivedThisFrame = sourceCount;",
         "if (inputPins == null) inputPins = Array.Empty<DevPinInstance>();",
         "MaxEvaluationsPerChipPerSettle",
         "TryBeginChipEvaluation",
@@ -585,6 +585,10 @@ def test_source_integration_static() -> None:
         assert token in solver, f"missing deterministic solver mechanism: {token}"
 
     assert "sourceIndices.Length" not in solver, "stale jagged-adjacency reference breaks the CSR build"
+    # The single-driver hot path writes only the pin state; per-pin bookkeeping the
+    # editor never reads would cost a store per resolution.
+    assert "target.numInputsReceivedThisFrame" not in solver
+    assert "target.lastUpdatedFrameIndex" not in solver
 
     # RandomBool is allowed only in the multi-driver resolution path.
     # Single-driver propagation (the hot path) must remain free of RNG work.

@@ -116,6 +116,56 @@ end";
 			AssertSameOutputs(reference, lut, AluInputs, AluOutputs, stimulus);
 		}
 
+		// Three 4-bit operands and two select bits give 16384 LUT entries, enough for the
+		// build to be split across threads on a machine with four or more cores.
+		const string Mix3Source = @"
+circuit Mix3
+    input A: 4
+    input B: 4
+    input C: 4
+    input OP0, OP1
+    output Y: 4
+    output EQ, LT
+
+    Y = choose(OP1, choose(OP0, A xor B, A and C), choose(OP0, A - B, B + C))
+    EQ = A == C
+    LT = B < C
+end";
+
+		const string Mix3HarnessSource = @"
+circuit Mix3Harness
+    input A: 4
+    input B: 4
+    input C: 4
+    input OP0, OP1
+    output Y: 4
+    output EQ, LT
+
+    component mix : Mix3(A=A, B=B, C=C, OP0=OP0, OP1=OP1, Y=Y, EQ=EQ, LT=LT)
+end";
+
+		[Test]
+		public void LargeFullLutBuiltOnSeveralThreadsMatchesReference()
+		{
+			Compile(Mix3Source);
+			ChipDescription harness = Compile(Mix3HarnessSource);
+			string[] inputs = { "A", "B", "C", "OP0", "OP1" };
+
+			System.Random random = new(4321);
+			uint[][] stimulus = new uint[3000][];
+			for (int i = 0; i < stimulus.Length; i++)
+			{
+				stimulus[i] = new[] { (uint)random.Next(16), (uint)random.Next(16), (uint)random.Next(16), (uint)random.Next(2), (uint)random.Next(2) };
+			}
+
+			Trace reference = Run(harness, EnginePath.Reference, inputs, AluOutputs, stimulus);
+			Trace lut = Run(harness, EnginePath.FullLut, inputs, AluOutputs, stimulus);
+
+			Assert.Greater(lut.CacheHits, 0, "FULL LUT never evaluated the chip");
+			Assert.AreEqual(0, lut.CacheMisses, "binary inputs fell outside the LUT");
+			AssertSameOutputs(reference, lut, inputs, AluOutputs, stimulus);
+		}
+
 		[Test]
 		public void FeedbackJitMatchesReferenceOnRegisterSequence()
 		{

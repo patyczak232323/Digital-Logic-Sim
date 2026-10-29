@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using DLS.Description;
 using DLS.Game;
 
@@ -267,7 +268,8 @@ namespace DLS.Simulation
 
 		internal static void CaptureStepEnd(SimChip root)
 		{
-			if (root == null) return;
+			// Runs after every simulation step: skip the lock unless a frame is being recorded.
+			if (root == null || Volatile.Read(ref pendingFrame) == null) return;
 
 			lock (sync)
 			{

@@ -22,7 +22,9 @@ The fingerprint includes the chip's functional topology and recursively includes
 
 ## Non-blocking build/load
 
-LUT file loading, exhaustive LUT generation and disk writes are serialized on a background worker. The live simulator continues to use its normal flattened deterministic topology until a LUT is ready. When the LUT finishes, the deterministic simulator notices the cache generation change and rebuilds its compiled topology so the ready LUT can be used.
+LUT file loading, exhaustive LUT generation and disk writes are serialized on a background worker: one LUT is loaded or built at a time. The live simulator continues to use its normal flattened deterministic topology until a LUT is ready. When the LUT finishes, the deterministic simulator notices the cache generation change and rebuilds its compiled topology so the ready LUT can be used.
+
+Generating a LUT evaluates the chip once for every input combination. Each evaluation runs the chip's native JIT program (see `NATIVE_JIT.md`), which takes nanoseconds instead of the roughly a millisecond a full gate-by-gate evaluation of a large chip takes, so an 18-bit LUT is built in well under a second. Where dynamic code is not available, the gates are evaluated directly. Large LUTs are also split across threads: every core except two (left for the main and simulation threads), up to eight, each with its own copy of the chip.
 
 This avoids the old behaviour where opening/saving a chip could block the whole program while all input combinations were evaluated or a large LUT was read/written.
 
