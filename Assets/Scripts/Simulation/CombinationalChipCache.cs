@@ -1232,9 +1232,7 @@ namespace DLS.Simulation
 					return;
 				}
 
-				SimChip isolatedChip = BuildIsolatedSimChip(snapshot);
-				token.ThrowIfCancellationRequested();
-				BuildFullLut(isolatedChip, token);
+				BuildFullLut(snapshot, token);
 
 				if (Ready)
 				{
@@ -1311,7 +1309,19 @@ namespace DLS.Simulation
 			}
 		}
 
-		void BuildFullLut(SimChip chip, CancellationToken token)
+		// Keys are handed out in chunks of this size to the build threads.
+		const int BuildChunkSize = 4096;
+
+		// One LUT is built at a time (see QueueBackgroundCacheWork), but that one uses all
+		// cores except two, which stay free for the main and simulation threads.
+		static int GetBuildThreadCount(int entryCount)
+		{
+			if (entryCount < BuildChunkSize * 2) return 1;
+			int spare = Environment.ProcessorCount - 2;
+			return Math.Clamp(spare, 1, Math.Min(8, entryCount / BuildChunkSize));
+		}
+
+		void BuildFullLut(CombinationalChipCacheManager.CacheBuildSnapshot snapshot, CancellationToken token)
 		{
 			Stopwatch sw = Stopwatch.StartNew();
 			Interlocked.Exchange(ref completedEntries, 0);
@@ -1330,36 +1340,99 @@ namespace DLS.Simulation
 
 				CombinationalChipCacheManager.LogFullLut($"Allocation started: chip={chipName} values={valueCount}");
 				uint[] built = new uint[(int)valueCount];
-				CombinationalChipCacheManager.LogFullLut($"Build started: chip={chipName} entries={targetEntryCount}");
 
-				int progressMask = targetEntryCount <= 65536 ? 0 : 0xFFF;
-				long nextProgressLog = 100000;
-
-				for (int key = 0; key < targetEntryCount; key++)
+				// Every thread evaluates its own copy of the chip, so they share nothing but
+				// the output array, and each key is written by exactly one of them.
+				int threadCount = GetBuildThreadCount(targetEntryCount);
+				SimChip[] chips = new SimChip[threadCount];
+				for (int i = 0; i < threadCount; i++)
 				{
-					if ((key & 0x3FF) == 0) token.ThrowIfCancellationRequested();
+					chips[i] = BuildIsolatedSimChip(snapshot);
+					token.ThrowIfCancellationRequested();
+				}
 
-					SetBinaryInputs(chip, key);
-					Simulator.EvaluatePureCombinationalForMemo(chip);
+				// The native program computes the same outputs as the gates, thousands of times
+				// faster; each thread runs it with its own scratch buffers.
+				CompiledCombinationalProgram program = CombinationalJitCompiler.TryCompileStandalone(chips[0], chipName);
 
-					for (int output = 0; output < outputCount; output++)
+				CombinationalChipCacheManager.LogFullLut(
+					$"Build started: chip={chipName} entries={targetEntryCount} threads={threadCount} native={(program != null ? "yes" : "no")}");
+
+				int nextChunkStart = 0;
+				long nextProgressLog = 100000;
+				Exception workerError = null;
+
+				void BuildChunks(SimChip chip)
+				{
+					CompiledChipExecutor executor = program != null ? new CompiledChipExecutor(program) : null;
+
+					try
 					{
-						built[key * stride + output] = chip.OutputPins[output].State;
-					}
-
-					if ((key & progressMask) == 0 || key == targetEntryCount - 1)
-					{
-						long completed = key + 1L;
-						Interlocked.Exchange(ref completedEntries, completed);
-
-						if (completed == 1 || completed >= nextProgressLog)
+						while (true)
 						{
-							CombinationalChipCacheManager.LogFullLut($"Progress {completed}/{targetEntryCount}: chip={chipName}");
-							while (nextProgressLog <= completed) nextProgressLog += 100000;
+							int start = Interlocked.Add(ref nextChunkStart, BuildChunkSize) - BuildChunkSize;
+							if (start >= targetEntryCount || Volatile.Read(ref workerError) != null) return;
+							token.ThrowIfCancellationRequested();
+
+							int end = Math.Min(targetEntryCount, start + BuildChunkSize);
+							for (int key = start; key < end; key++)
+							{
+								SetBinaryInputs(chip, key);
+
+								if (executor != null)
+								{
+									uint[] outputs = executor.Evaluate(chip);
+									for (int output = 0; output < outputCount; output++)
+									{
+										built[key * stride + output] = outputs[output];
+									}
+								}
+								else
+								{
+									Simulator.EvaluatePureCombinationalForMemo(chip);
+									for (int output = 0; output < outputCount; output++)
+									{
+										built[key * stride + output] = chip.OutputPins[output].State;
+									}
+								}
+							}
+
+							long completed = Interlocked.Add(ref completedEntries, end - start);
+							if (completed >= Interlocked.Read(ref nextProgressLog) || completed == targetEntryCount)
+							{
+								CombinationalChipCacheManager.LogFullLut($"Progress {completed}/{targetEntryCount}: chip={chipName}");
+								Interlocked.Exchange(ref nextProgressLog, (completed / 100000 + 1) * 100000);
+							}
+
+							if (threadCount == 1) Thread.Yield();
 						}
 					}
+					catch (Exception ex)
+					{
+						Interlocked.CompareExchange(ref workerError, ex, null);
+					}
+				}
 
-					if ((key & 0x3FFF) == 0) Thread.Yield();
+				Thread[] helpers = new Thread[threadCount - 1];
+				for (int i = 0; i < helpers.Length; i++)
+				{
+					SimChip helperChip = chips[i + 1];
+					helpers[i] = new Thread(() => BuildChunks(helperChip))
+					{
+						IsBackground = true,
+						Name = "DLS_FullLutBuild_" + (i + 1),
+						Priority = ThreadPriority.BelowNormal
+					};
+					helpers[i].Start();
+				}
+
+				BuildChunks(chips[0]);
+				foreach (Thread helper in helpers) helper.Join();
+
+				if (workerError != null)
+				{
+					if (workerError is OperationCanceledException canceled) throw canceled;
+					throw new InvalidOperationException("FULL LUT build thread failed: " + workerError.Message, workerError);
 				}
 
 				token.ThrowIfCancellationRequested();
@@ -1368,7 +1441,7 @@ namespace DLS.Simulation
 				lut = built;
 				persistenceMessage = "BUILT";
 				CombinationalChipCacheManager.NotifyCacheReady();
-				CombinationalChipCacheManager.LogFullLut($"RAM build complete: chip={chipName} entries={targetEntryCount}");
+				CombinationalChipCacheManager.LogFullLut($"RAM build complete: chip={chipName} entries={targetEntryCount} ms={sw.ElapsedMilliseconds}");
 			}
 			finally
 			{

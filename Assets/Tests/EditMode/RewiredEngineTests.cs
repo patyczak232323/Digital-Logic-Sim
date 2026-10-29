@@ -126,6 +126,50 @@ namespace DLS.Tests
 				circuit.Step();
 				Assert.AreEqual(value, circuit.Get("Y"), $"depth {depth}, input {value}");
 			}
+
+			// On the plain gate path every inverter takes one delta cycle and the chip
+			// boundaries in between add none, however deep they are nested.
+			int inverters = 1 << depth;
+			TestCircuit reference = new(rb.Build(), TestLibrary.Create(chips), EnginePaths.Force(EnginePath.Reference));
+			foreach (uint value in new uint[] { 1, 0, 1 })
+			{
+				reference.Set("X", value);
+				reference.Step();
+				Assert.AreEqual(value, reference.Get("Y"), $"reference depth {depth}, input {value}");
+				Assert.AreEqual(inverters, reference.Diagnostics.DeltaCycles, $"delta cycles at depth {depth}");
+			}
+		}
+
+		[Test]
+		public void LongChainOfWireOnlyChipsPropagatesWithinOneStep()
+		{
+			// Chips that are nothing but a wire, chained far deeper than the engine resolves
+			// pass-through pins recursively, then an inverter so the chain does some work.
+			ChipBuilder wireBuilder = new("WireOnly");
+			wireBuilder.Wire(wireBuilder.Input("IN"), wireBuilder.Output("OUT"));
+			ChipDescription wireOnly = wireBuilder.Build();
+
+			const int chainLength = 300;
+			ChipBuilder rb = new("WireChain");
+			PinAddress previous = rb.Input("X");
+			for (int i = 0; i < chainLength; i++)
+			{
+				int link = rb.Chip(wireOnly.Name);
+				rb.Wire(previous, Pin(link, wireOnly.InputPins[0].ID));
+				previous = Pin(link, wireOnly.OutputPins[0].ID);
+			}
+
+			PinAddress y = rb.Output("Y");
+			rb.Wire(NandOutput(rb.Nand(previous, previous)), y);
+
+			TestCircuit circuit = new(rb.Build(), TestLibrary.Create(wireOnly), EnginePaths.Force(EnginePath.Reference));
+			foreach (uint value in new uint[] { 1, 0, 0, 1, 0 })
+			{
+				circuit.Set("X", value);
+				circuit.Step();
+				Assert.AreEqual(value ^ 1, circuit.Get("Y"), $"input {value}");
+				Assert.IsTrue(circuit.Diagnostics.SettleConverged);
+			}
 		}
 
 		[Test]

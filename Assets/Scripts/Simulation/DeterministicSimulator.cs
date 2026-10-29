@@ -48,20 +48,38 @@ namespace DLS.Simulation
 		static int[] sourceIndicesByTarget = Array.Empty<int>();
 		static int[] targetOwnerCombinationalIndex = Array.Empty<int>();
 		static bool[] targetIsCustomBoundary = Array.Empty<bool>();
+		// Custom chip boundary pins with a single driver only pass a signal on, so they are
+		// resolved as soon as their driver changes instead of taking a trip through the
+		// target queue. Hand-built circuits nest deeply and most of their pins are like this.
+		// Wires have no delay, so the result and the delta cycle it happens in are the same.
+		static bool[] targetIsPassThrough = Array.Empty<bool>();
+		// Pass-through pins are resolved recursively; past this depth (only reached by long
+		// chains of chips that are nothing but wires) they go through the queue instead.
+		const int MaxPassThroughDepth = 64;
+		static int passThroughDepth;
 
 		static readonly Dictionary<SimChip, string> registeredDiagnosticPaths = new();
 		static readonly Dictionary<SimChip, string> runtimeDiagnosticPaths = new();
 
-		static Queue<int> targetQueue = new();
+		// FIFO of target pins waiting to be resolved. Each pin is queued at most once
+		// (queuedTargets), so a ring buffer sized to the pin count never overflows.
+		static PinQueue targetQueue = new(0);
+		// allPins as an array for the propagation hot path.
+		static SimPin[] pins = Array.Empty<SimPin>();
+		// Plain NAND gates make up most of a circuit, so their pins are looked up once per
+		// topology instead of through chip.InputPins on every evaluation. Null for other chips.
+		static SimPin[] nandInputA = Array.Empty<SimPin>();
+		static SimPin[] nandInputB = Array.Empty<SimPin>();
+		static int[] nandOutputIndex = Array.Empty<int>();
 		static bool[] queuedTargets = Array.Empty<bool>();
 		static int[] triggeringSourceByTarget = Array.Empty<int>();
 
-		static readonly List<int> dirtyChips = new();
+		static List<int> dirtyChips = new();
 		static bool[] dirtyChipFlags = Array.Empty<bool>();
 		static int[] evaluationEpochByChip = Array.Empty<int>();
 		static ushort[] evaluationsInEpoch = Array.Empty<ushort>();
 		static int evaluationEpoch;
-		static readonly List<int> evaluationBatch = new();
+		static List<int> evaluationBatch = new();
 		static readonly List<int> initializationOrder = new();
 		static readonly List<PendingPinState> pendingPinStates = new();
 		static DevPinInstance[] boundInputPins;
@@ -96,6 +114,46 @@ namespace DLS.Simulation
 				OutputStart = outputStart;
 				CombinationalIndex = combinationalIndex;
 			}
+		}
+
+		sealed class PinQueue : IEnumerable<int>
+		{
+			readonly int[] items;
+			int head;
+
+			public int Count { get; private set; }
+
+			public PinQueue(int capacity) => items = new int[Math.Max(1, capacity)];
+
+			public void Enqueue(int value)
+			{
+				int tail = head + Count;
+				if (tail >= items.Length) tail -= items.Length;
+				items[tail] = value;
+				Count++;
+			}
+
+			public int Dequeue()
+			{
+				int value = items[head];
+				head++;
+				if (head == items.Length) head = 0;
+				Count--;
+				return value;
+			}
+
+			public void Clear()
+			{
+				head = 0;
+				Count = 0;
+			}
+
+			public IEnumerator<int> GetEnumerator()
+			{
+				for (int i = 0; i < Count; i++) yield return items[(head + i) % items.Length];
+			}
+
+			System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
 		}
 
 		readonly struct PendingPinState
@@ -297,12 +355,18 @@ namespace DLS.Simulation
 			sourceIndicesByTarget = Array.Empty<int>();
 			targetOwnerCombinationalIndex = Array.Empty<int>();
 			targetIsCustomBoundary = Array.Empty<bool>();
+			targetIsPassThrough = Array.Empty<bool>();
 			queuedTargets = Array.Empty<bool>();
 			triggeringSourceByTarget = Array.Empty<int>();
 			dirtyChipFlags = Array.Empty<bool>();
 			evaluationEpochByChip = Array.Empty<int>();
 			evaluationsInEpoch = Array.Empty<ushort>();
 			evaluationEpoch = 0;
+			pins = Array.Empty<SimPin>();
+			nandInputA = Array.Empty<SimPin>();
+			nandInputB = Array.Empty<SimPin>();
+			nandOutputIndex = Array.Empty<int>();
+			targetQueue = new PinQueue(0);
 			stateChangeSerial = 0;
 			initializationOrder.Clear();
 			boundInputPins = null;
@@ -458,15 +522,40 @@ namespace DLS.Simulation
 			BuildAdjacency(sourceBuild, out sourceOffsetsByTarget, out sourceIndicesByTarget);
 			targetOwnerCombinationalIndex = pinOwnerCombinationalIndexBuild.ToArray();
 			targetIsCustomBoundary = new bool[allPins.Count];
+			targetIsPassThrough = new bool[allPins.Count];
 
 			for (int i = 0; i < allPins.Count; i++)
 			{
+				// A pin with a single driver always takes its state from that driver, so the
+				// source the editor colours it by is known now and never changes while running.
+				if (sourceOffsetsByTarget[i + 1] - sourceOffsetsByTarget[i] == 1)
+				{
+					SimPin onlySource = allPins[sourceIndicesByTarget[sourceOffsetsByTarget[i]]];
+					allPins[i].latestSourceID = onlySource.ID;
+					allPins[i].latestSourceParentChipID = onlySource.parentChip.ID;
+				}
+
 				targetIsCustomBoundary[i] =
 					allPins[i].parentChip.ChipType == ChipType.Custom &&
 					targetOwnerCombinationalIndex[i] < 0;
+				targetIsPassThrough[i] =
+					targetIsCustomBoundary[i] &&
+					sourceOffsetsByTarget[i + 1] - sourceOffsetsByTarget[i] == 1;
 			}
 
-			targetQueue = new Queue<int>(Math.Max(64, allPins.Count));
+			pins = allPins.ToArray();
+			targetQueue = new PinQueue(allPins.Count);
+			nandInputA = new SimPin[combinationalChips.Count];
+			nandInputB = new SimPin[combinationalChips.Count];
+			nandOutputIndex = new int[combinationalChips.Count];
+			for (int i = 0; i < combinationalChips.Count; i++)
+			{
+				RuntimeChip runtimeChip = combinationalChips[i];
+				if (runtimeChip.Chip.ChipType != ChipType.Nand) continue;
+				nandInputA[i] = runtimeChip.Chip.InputPins[0];
+				nandInputB[i] = runtimeChip.Chip.InputPins[1];
+				nandOutputIndex[i] = runtimeChip.OutputStart;
+			}
 			queuedTargets = new bool[allPins.Count];
 			triggeringSourceByTarget = new int[allPins.Count];
 			dirtyChipFlags = new bool[combinationalChips.Count];
@@ -518,13 +607,18 @@ namespace DLS.Simulation
 			sourceIndicesByTarget = Array.Empty<int>();
 			targetOwnerCombinationalIndex = Array.Empty<int>();
 			targetIsCustomBoundary = Array.Empty<bool>();
+			targetIsPassThrough = Array.Empty<bool>();
 			queuedTargets = Array.Empty<bool>();
 			triggeringSourceByTarget = Array.Empty<int>();
 			dirtyChipFlags = Array.Empty<bool>();
 			evaluationEpochByChip = Array.Empty<int>();
 			evaluationsInEpoch = Array.Empty<ushort>();
 			evaluationEpoch = 0;
-			targetQueue = new Queue<int>();
+			pins = Array.Empty<SimPin>();
+			nandInputA = Array.Empty<SimPin>();
+			nandInputB = Array.Empty<SimPin>();
+			nandOutputIndex = Array.Empty<int>();
+			targetQueue = new PinQueue(0);
 		}
 
 		static bool FindInspectionPath(SimChip chip, SimChip target)
@@ -942,10 +1036,12 @@ namespace DLS.Simulation
 					return (false, deltaCycles);
 				}
 
-				evaluationBatch.Clear();
-				evaluationBatch.AddRange(dirtyChips);
-				for (int i = 0; i < dirtyChips.Count; i++) dirtyChipFlags[dirtyChips[i]] = false;
+				bool profilerEnabled = SimulationProfiler.Enabled;
+				// The dirty list becomes this delta's batch and the emptied batch list collects
+				// the chips dirtied by it, so no chip indices are copied.
+				(evaluationBatch, dirtyChips) = (dirtyChips, evaluationBatch);
 				dirtyChips.Clear();
+				for (int i = 0; i < evaluationBatch.Count; i++) dirtyChipFlags[evaluationBatch[i]] = false;
 
 				pendingPinStates.Clear();
 
@@ -959,7 +1055,12 @@ namespace DLS.Simulation
 						return (false, deltaCycles);
 					}
 
-					if (SimulationProfiler.Enabled)
+					SimPin nandA = nandInputA[chipIndex];
+					if (nandA != null && !profilerEnabled)
+					{
+						StageOutput(nandOutputIndex[chipIndex], 1 ^ (nandA.State & nandInputB[chipIndex].State & 1));
+					}
+					else if (profilerEnabled)
 					{
 						SimChip profiledChip = combinationalChips[chipIndex].Chip;
 						SimulationExecutionPath executionPath = GetExecutionPath(profiledChip);
@@ -1073,24 +1174,23 @@ namespace DLS.Simulation
 			int sourceCount = sourceEnd - sourceStart;
 			if (sourceCount == 0) return;
 
-			SimPin target = allPins[targetIndex];
+			SimPin target = pins[targetIndex];
 			uint newState;
 			ushort contentionMask;
 			int resolvedSourceIndex = triggeringSourceIndex;
 
 			if (sourceCount == 1)
 			{
+				// Single-driver hot path. The editor colour source of such a pin is fixed
+				// when the topology is built, so nothing but the state is written here.
 				resolvedSourceIndex = sourceIndicesByTarget[sourceStart];
-				newState = allPins[resolvedSourceIndex].State;
+				newState = pins[resolvedSourceIndex].State;
 				contentionMask = 0;
 			}
 			else
 			{
 				newState = ResolveDrivenState(sourceStart, sourceEnd, out contentionMask, out resolvedSourceIndex);
 			}
-
-			target.lastUpdatedFrameIndex = Simulator.simulationFrame;
-			target.numInputsReceivedThisFrame = sourceCount;
 
 			if (target.State == newState)
 			{
@@ -1101,13 +1201,17 @@ namespace DLS.Simulation
 			uint oldState = target.State;
 			target.State = newState;
 			stateChangeSerial++;
-			SimPin triggeringSource = allPins[resolvedSourceIndex];
-			target.latestSourceID = triggeringSource.ID;
-			target.latestSourceParentChipID = triggeringSource.parentChip.ID;
+
+			if (sourceCount != 1)
+			{
+				SimPin triggeringSource = pins[resolvedSourceIndex];
+				target.latestSourceID = triggeringSource.ID;
+				target.latestSourceParentChipID = triggeringSource.parentChip.ID;
+			}
 
 			if (DiagnosticsEnabled && DiagnosticSink != null)
 			{
-				TracePropagation(triggeringSource, target, oldState, newState, sourceCount);
+				TracePropagation(pins[resolvedSourceIndex], target, oldState, newState, sourceCount);
 			}
 			if (contentionMask != 0) TraceContention(target, contentionMask);
 
@@ -1131,7 +1235,7 @@ namespace DLS.Simulation
 			// uncommon, so keep the single-driver hot path above branch-free and pay
 			// this extra work only for actual shared nets/buses.
 			int firstSourceIndex = sourceIndicesByTarget[sourceStart];
-			uint resolvedState = allPins[firstSourceIndex].State;
+			uint resolvedState = pins[firstSourceIndex].State;
 			acceptedSourceIndex = firstSourceIndex;
 
 			ushort highMask = 0;
@@ -1142,7 +1246,7 @@ namespace DLS.Simulation
 			for (int i = sourceStart + 1; i < sourceEnd; i++)
 			{
 				int sourceIndex = sourceIndicesByTarget[i];
-				uint sourceState = allPins[sourceIndex].State;
+				uint sourceState = pins[sourceIndex].State;
 				AccumulateDriverMasks(sourceState, ref highMask, ref lowMask);
 
 				// Match SimPin.ReceiveInput(): combine the already-resolved state with
@@ -1381,7 +1485,7 @@ namespace DLS.Simulation
 
 		static void StageOutput(int pinIndex, uint state)
 		{
-			if (allPins[pinIndex].State == state) return;
+			if (pins[pinIndex].State == state) return;
 			pendingPinStates.Add(new PendingPinState(pinIndex, state));
 		}
 
@@ -1390,7 +1494,7 @@ namespace DLS.Simulation
 			for (int i = 0; i < pendingPinStates.Count; i++)
 			{
 				PendingPinState pending = pendingPinStates[i];
-				SimPin pin = allPins[pending.PinIndex];
+				SimPin pin = pins[pending.PinIndex];
 				if (pin.State == pending.State) continue;
 
 				pin.State = pending.State;
@@ -1409,6 +1513,16 @@ namespace DLS.Simulation
 			{
 				int targetIndex = targetIndicesBySource[i];
 				LastSignalPropagations++;
+
+				if (targetIsPassThrough[targetIndex] && passThroughDepth < MaxPassThroughDepth)
+				{
+					LastTargetResolutions++;
+					passThroughDepth++;
+					ResolveTargetPin(targetIndex, sourceIndex);
+					passThroughDepth--;
+					continue;
+				}
+
 				triggeringSourceByTarget[targetIndex] = sourceIndex;
 
 				if (queuedTargets[targetIndex]) continue;
@@ -1585,6 +1699,7 @@ namespace DLS.Simulation
 		static void ClearWorkQueues()
 		{
 			targetQueue.Clear();
+			passThroughDepth = 0;
 			if (queuedTargets.Length > 0) Array.Clear(queuedTargets, 0, queuedTargets.Length);
 			dirtyChips.Clear();
 			if (dirtyChipFlags.Length > 0) Array.Clear(dirtyChipFlags, 0, dirtyChipFlags.Length);

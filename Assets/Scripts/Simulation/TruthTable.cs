@@ -146,14 +146,32 @@ namespace DLS.Simulation
 				return null;
 			}
 
+			// Pure combinational chips run as native code, which is far faster than stepping
+			// the gates for each of up to 4096 rows. Anything else is stepped gate by gate.
+			CompiledChipExecutor executor = null;
+			if (CombinationalChipCacheManager.Analyze(description, library).CanCache)
+			{
+				CompiledCombinationalProgram program = CombinationalJitCompiler.TryCompileStandalone(chip, description.Name);
+				if (program != null && program.OutputCount == chip.OutputPins.Length) executor = new CompiledChipExecutor(program);
+			}
+
 			uint[][] outputs = new uint[inputs.Length][];
 			for (int row = 0; row < inputs.Length; row++)
 			{
 				for (int i = 0; i < chip.InputPins.Length; i++) chip.InputPins[i].State = inputs[row][i];
-				Simulator.EvaluatePureCombinationalForMemo(chip);
 
 				uint[] values = new uint[chip.OutputPins.Length];
-				for (int o = 0; o < values.Length; o++) values[o] = chip.OutputPins[o].State;
+				if (executor != null)
+				{
+					uint[] native = executor.Evaluate(chip);
+					Array.Copy(native, values, values.Length);
+				}
+				else
+				{
+					Simulator.EvaluatePureCombinationalForMemo(chip);
+					for (int o = 0; o < values.Length; o++) values[o] = chip.OutputPins[o].State;
+				}
+
 				outputs[row] = values;
 			}
 

@@ -124,6 +124,27 @@ end";
 		}
 
 		[Test]
+		public void NativeRowsMatchGateEvaluationExactly()
+		{
+			// Truth tables of pure chips are computed by native code; every row, including
+			// the tri-state flag bits, must equal stepping the gates themselves.
+			ChipDescription add8 = Compile(Add8Source);
+			TruthTable table = TruthTableGenerator.Generate(add8, library);
+			Assert.IsTrue(table.Supported, table.UnsupportedReason);
+
+			SimChip chip = CombinationalChipTestRunner.BuildIsolatedChip(add8, library);
+			for (int row = 0; row < table.RowCount; row++)
+			{
+				for (int i = 0; i < chip.InputPins.Length; i++) chip.InputPins[i].State = table.Inputs[row][i];
+				Simulator.EvaluatePureCombinationalForMemo(chip);
+				for (int o = 0; o < chip.OutputPins.Length; o++)
+				{
+					Assert.AreEqual(chip.OutputPins[o].State, table.Outputs[row][o], $"row {row} output {o}");
+				}
+			}
+		}
+
+		[Test]
 		public void StatefulChipHasNoTruthTable()
 		{
 			TruthTable table = TruthTableGenerator.Generate(Compile(LatchSource), library);
