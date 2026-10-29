@@ -1,0 +1,142 @@
+name: Register NEA runner
+
+# Installs (or removes) a second self-hosted runner for patyczak232323/nea-trace on the
+# same machine as the Rewired runner that picks up this job. The new runner gets the
+# `trusted` label, lives in ~/actions-runner-nea-trace and runs as a systemd service.
+#
+# Requires the secret NEA_TRACE_RUNNER_ADMIN_TOKEN: a fine-grained personal access token
+# limited to the nea-trace repository with "Administration: Read and write". It is only
+# used to request short-lived registration/removal tokens from the GitHub API.
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Register or remove the nea-trace runner on this machine
+        type: choice
+        options: [register, remove]
+        default: register
+
+permissions:
+  contents: read
+
+concurrency:
+  group: register-nea-runner
+  cancel-in-progress: false
+
+env:
+  TARGET_REPO: patyczak232323/nea-trace
+  RUNNER_VERSION: 2.338.2
+  # Checksums published with the actions/runner v2.338.2 release. The download is
+  # rejected if they do not match, so a wrong value fails safely.
+  SHA256_X64: baebf204307bac6193480852732f0aba2ae97b6c5597c244f4d5558390147c40
+  SHA256_ARM64: 670adb2f268fe21dcbb58b3db0e0aa9d5b3bddfe2c651481336e561ff86de945
+
+jobs:
+  runner:
+    name: ${{ inputs.action }} nea-trace runner
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, trusted]
+    timeout-minutes: 15
+    steps:
+      - name: Check prerequisites
+        shell: bash
+        env:
+          ADMIN_TOKEN: ${{ secrets.NEA_TRACE_RUNNER_ADMIN_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$ADMIN_TOKEN" ]; then
+            echo "::error::Missing secret NEA_TRACE_RUNNER_ADMIN_TOKEN (fine-grained PAT for $TARGET_REPO, Administration: Read and write)"
+            exit 1
+          fi
+          if [ "$(id -u)" = "0" ]; then
+            echo "::error::This runner runs as root; the GitHub runner refuses to be configured as root."
+            exit 1
+          fi
+          sudo -n true || { echo "::error::Passwordless sudo is required to install the systemd service."; exit 1; }
+          for tool in curl tar sha256sum python3 systemctl; do
+            command -v "$tool" >/dev/null || { echo "::error::Missing tool: $tool"; exit 1; }
+          done
+          # Keep the runner outside this runner's work directory.
+          dir="$HOME/actions-runner-nea-trace"
+          echo "RUNNER_DIR=$dir" >> "$GITHUB_ENV"
+          echo "Runner directory: $dir, user: $(id -un), host: $(hostname)"
+
+      - name: Request a short-lived token from GitHub
+        shell: bash
+        env:
+          ADMIN_TOKEN: ${{ secrets.NEA_TRACE_RUNNER_ADMIN_TOKEN }}
+          ACTION: ${{ inputs.action }}
+        run: |
+          set -euo pipefail
+          kind=$([ "$ACTION" = "remove" ] && echo remove-token || echo registration-token)
+          response=$(curl -fsS -X POST \
+            -H "Authorization: Bearer $ADMIN_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$TARGET_REPO/actions/runners/$kind")
+          token=$(printf '%s' "$response" | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
+          echo "::add-mask::$token"
+          echo "RUNNER_TOKEN=$token" >> "$GITHUB_ENV"
+
+      - name: Download and verify the runner
+        if: inputs.action == 'register'
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$(uname -m)" in
+            x86_64) arch=x64; sum="$SHA256_X64" ;;
+            aarch64|arm64) arch=arm64; sum="$SHA256_ARM64" ;;
+            *) echo "::error::Unsupported architecture $(uname -m)"; exit 1 ;;
+          esac
+          mkdir -p "$RUNNER_DIR"
+          if [ -f "$RUNNER_DIR/.runner" ]; then
+            echo "Runner already configured in $RUNNER_DIR; it will be re-registered (--replace)."
+          fi
+          archive="$RUNNER_TEMP/actions-runner-linux-$arch-$RUNNER_VERSION.tar.gz"
+          curl -fsSL -o "$archive" \
+            "https://github.com/actions/runner/releases/download/v$RUNNER_VERSION/actions-runner-linux-$arch-$RUNNER_VERSION.tar.gz"
+          echo "$sum  $archive" | sha256sum -c -
+          tar xzf "$archive" -C "$RUNNER_DIR"
+          rm -f "$archive"
+
+      - name: Register and start as a service
+        if: inputs.action == 'register'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_DIR"
+          if [ -f .service ]; then
+            sudo ./svc.sh stop || true
+            sudo ./svc.sh uninstall || true
+          fi
+          # A clean environment: the parent runner's variables must not leak into the new one.
+          env -i HOME="$HOME" USER="$(id -un)" PATH="/usr/local/bin:/usr/bin:/bin" \
+            ./config.sh --unattended --replace \
+              --url "https://github.com/$TARGET_REPO" \
+              --token "$RUNNER_TOKEN" \
+              --name "$(hostname)-nea-trace" \
+              --labels trusted \
+              --work _work
+          sudo ./svc.sh install "$(id -un)"
+          sudo ./svc.sh start
+          sudo ./svc.sh status || true
+
+      - name: Stop and unregister
+        if: inputs.action == 'remove'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -d "$RUNNER_DIR" ]; then
+            echo "No runner in $RUNNER_DIR, nothing to remove."
+            exit 0
+          fi
+          cd "$RUNNER_DIR"
+          if [ -f .service ]; then
+            sudo ./svc.sh stop || true
+            sudo ./svc.sh uninstall || true
+          fi
+          if [ -f .runner ]; then
+            env -i HOME="$HOME" USER="$(id -un)" PATH="/usr/local/bin:/usr/bin:/bin" \
+              ./config.sh remove --token "$RUNNER_TOKEN"
+          fi
