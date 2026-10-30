@@ -1,4 +1,4 @@
-<p align="center"><img src="Docs/logo.png" width="128" alt="Rewired logo: a NAND gate with two input wires and an output wire"></p>
+<p align="center"><img src="Docs/logo.png" width="128" alt="Rewired logo: a chip with a gold R"></p>
 
 # Rewired — Digital Logic Simulator
 
