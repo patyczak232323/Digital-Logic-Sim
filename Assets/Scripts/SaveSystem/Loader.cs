@@ -75,12 +75,36 @@ namespace DLS.SaveSystem
 				desc.StarredList[i] = starred;
 			}
 
+			AddNewBuiltinChipsToCollections(desc);
+
 			foreach (ChipCollection collection in desc.ChipCollections)
 			{
 				collection.UpdateDisplayStrings();
 			}
 
 			return desc;
+		}
+
+		// Built-in chips added after a project was created are not in its saved collections.
+		// Put each into the default collection it belongs to, if the project still has that
+		// collection and neither the chip nor a chip of the project with the same name is
+		// listed anywhere yet.
+		public static void AddNewBuiltinChipsToCollections(ProjectDescription desc)
+		{
+			(ChipType type, string collection)[] added =
+			{
+				(ChipType.DisplayRGB64, "DISPLAY")
+			};
+
+			foreach ((ChipType type, string collectionName) in added)
+			{
+				string chipName = ChipTypeHelper.GetName(type);
+				if (desc.AllCustomChipNames.Any(n => ChipDescription.NameMatch(n, chipName))) continue;
+				if (desc.ChipCollections.Any(c => c.Chips != null && c.Chips.Any(n => ChipDescription.NameMatch(n, chipName)))) continue;
+
+				ChipCollection target = desc.ChipCollections.FirstOrDefault(c => string.Equals(c.Name, collectionName, StringComparison.OrdinalIgnoreCase));
+				target?.Chips?.Add(chipName);
+			}
 		}
 
 		// Get list of saved project descriptions (ordered by last save time)

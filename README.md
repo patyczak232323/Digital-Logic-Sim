@@ -45,6 +45,7 @@ The repository includes a compact example progression ending with a **4-bit CPU*
 - truth table for any combinational chip, recordable as a regression test
 - breakpoints: pause when a pin changes, rises, falls or reaches a value
 - export to structural Verilog, SVG schematics and PNG screenshots
+- 64 x 64 colour screen (4 bits per channel, double-buffered) for games and graphics demos
 - guided challenges from a NOT gate built from NAND to a 4-bit adder
 - Windows x64, Linux x86_64, WebGL (browser) and Android ARM64 (experimental) release builds
 - touch interface for Android tablets and phones: drag parts from a categorised panel, tap a part for its actions, one-finger panning and a step-by-step guide

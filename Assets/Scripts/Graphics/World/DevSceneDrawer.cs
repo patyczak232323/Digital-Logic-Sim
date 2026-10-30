@@ -480,6 +480,10 @@ namespace DLS.Graphics
 			{
 				bounds = DrawDisplay_Dot(posWorld, scaleWorld, sim);
 			}
+			else if (display.DisplayType == ChipType.DisplayRGB64)
+			{
+				bounds = DrawDisplay_RGB64(posWorld, scaleWorld, sim);
+			}
 			else if (display.DisplayType == ChipType.DisplayLED)
 			{
 				bool simActive = sim != null;
@@ -542,6 +546,44 @@ namespace DLS.Graphics
 			{
 				return (raw & 0b1111) / 15f;
 			}
+		}
+
+		// 4096 pixels would be 4096 quads a frame. Instead each row is drawn as runs of equal
+		// colour on a black background, so a typical picture takes a few dozen quads. Pixels
+		// touch (no grid gaps) so that runs and single pixels look the same.
+		public static Bounds2D DrawDisplay_RGB64(Vector2 centre, float scale, SimChip simSource)
+		{
+			const float borderFrac = 0.97f;
+			Draw.Quad(centre, Vector2.one * scale, Color.black);
+
+			if (simSource != null && simSource.InternalState != null && simSource.InternalState.Length >= DisplayRgb64.StateLength)
+			{
+				uint[] pixels = simSource.InternalState;
+				float size = scale * borderFrac;
+				float pixelSize = size / DisplayRgb64.Width;
+				Vector2 bottomLeft = centre - Vector2.one * size / 2;
+
+				for (int y = 0; y < DisplayRgb64.Height; y++)
+				{
+					int row = DisplayRgb64.FrontOffset + y * DisplayRgb64.Width;
+					float rowCentreY = bottomLeft.y + pixelSize * (y + 0.5f);
+					int x = 0;
+					while (x < DisplayRgb64.Width)
+					{
+						uint colour = pixels[row + x] & 0xFFF;
+						int runStart = x;
+						x++;
+						while (x < DisplayRgb64.Width && (pixels[row + x] & 0xFFF) == colour) x++;
+						if (colour == 0) continue;
+
+						float runCentreX = bottomLeft.x + pixelSize * ((runStart + x) * 0.5f);
+						Color col = new((colour & 0xF) / 15f, ((colour >> 4) & 0xF) / 15f, ((colour >> 8) & 0xF) / 15f);
+						Draw.Quad(new Vector2(runCentreX, rowCentreY), new Vector2(pixelSize * (x - runStart), pixelSize), col);
+					}
+				}
+			}
+
+			return Bounds2D.CreateFromCentreAndSize(centre, Vector2.one * scale);
 		}
 
 		public static Bounds2D DrawDisplay_Dot(Vector2 centre, float scale, SimChip simSource)

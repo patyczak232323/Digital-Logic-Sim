@@ -50,6 +50,7 @@ namespace DLS.Game
 					ChipType.SevenSegmentDisplay,
 					ChipType.DisplayDot,
 					ChipType.DisplayRGB,
+					ChipType.DisplayRGB64,
 					ChipType.DisplayLED
 				),
 				CreateChipCollection("MEMORY",

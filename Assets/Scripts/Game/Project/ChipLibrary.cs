@@ -17,9 +17,18 @@ namespace DLS.Game
 
 		public ChipLibrary(ChipDescription[] localChips, ChipDescription[] globalChips, ChipDescription[] builtinChips)
 		{
+			// A project saved before a built-in chip existed may have a chip of its own with the
+			// same name. That chip keeps the name (its circuits refer to it), and the built-in
+			// is not offered in that project, rather than the project failing to open.
+			HashSet<string> userChipNames = new(ChipDescription.NameComparer);
+			foreach (ChipDescription chip in localChips) userChipNames.Add(chip.Name);
+			foreach (ChipDescription chip in globalChips) userChipNames.Add(chip.Name);
+
 			// Add built-in chips to list of all chips
 			foreach (ChipDescription chip in builtinChips)
 			{
+				if (userChipNames.Contains(chip.Name)) continue;
+
 				// Bus terminus chip should not be shown to the user (it is created automatically upon placement of a bus start point)
 				bool hidden = ChipTypeHelper.IsBusTerminusType(chip.ChipType);
 
