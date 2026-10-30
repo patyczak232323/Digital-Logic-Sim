@@ -12,15 +12,15 @@ using UnityEngine;
 namespace DLS.Graphics
 {
 	/// <summary>
-	/// Touch interface for phones and tablets (landscape). Desktop keeps the original UI.
+	/// Touch interface for phones and tablets, held sideways or upright. Desktop keeps the original UI.
 	/// Layout: a top bar (menu, parts, chip name, undo/redo, run/step, save), the parts panel on
-	/// the left and the board filling the rest. The board shows what to do next (banners), the
+	/// the left (at the bottom when upright) and the board filling the rest. The board shows what to do next (banners), the
 	/// selected part's actions, and view buttons. Specialised screens (save, library, truth
 	/// table...) keep their own content inside a phone-sized canvas with a BACK button.
 	/// </summary>
 	public static class MobileUI
 	{
-		public const float TopBarHeight = 5.4f;
+		const float LandscapeTopBarHeight = 5.4f;
 		const float TopButtonHeight = 4.2f;
 		const float BannerHeight = 4.6f;
 		const float ToolSize = 4.8f;
@@ -28,6 +28,7 @@ namespace DLS.Graphics
 		const string PrefTargetFps = "rewired.mobile.targetFps";
 		const string PrefGuideShown = "rewired.mobile.guideShown.v2";
 		const string PrefPaletteOpen = "rewired.mobile.paletteOpen";
+		const string PrefOrientation = "rewired.mobile.orientation";
 
 		static string notice;
 		static bool noticeIsGood;
@@ -59,6 +60,34 @@ namespace DLS.Graphics
 
 		public static int TargetFrameRate => Mathf.Clamp(PlayerPrefs.GetInt(PrefTargetFps, 60), 30, 120);
 
+		public enum Orientation
+		{
+			Auto,
+			Landscape,
+			Portrait
+		}
+
+		public static Orientation PreferredOrientation => (Orientation)Mathf.Clamp(PlayerPrefs.GetInt(PrefOrientation, (int)Orientation.Auto), 0, 2);
+
+		// The phone is held upright: the screen is taller than it is wide.
+		public static bool Portrait => Screen.height > Screen.width;
+
+		// Units across the screen. Sideways this is UI.DefaultWidth; upright the screen's short side
+		// is across, so fewer units fit and each keeps most of its size (80 % of the sideways size,
+		// which leaves room for the board).
+		public static float UIWidth
+		{
+			get
+			{
+				if (!Portrait || Screen.height <= 0) return UI.DefaultWidth;
+				return Mathf.Min(UI.DefaultWidth, UI.DefaultWidth * Screen.width / Screen.height / 0.8f);
+			}
+		}
+
+		// Upright, the top bar has two rows: menu, parts and the chip's name, then the
+		// undo/redo, run, step and save buttons.
+		public static float TopBarHeight => Portrait ? LandscapeTopBarHeight + TopButtonHeight + 0.6f : LandscapeTopBarHeight;
+
 		public static void ReadCommandLine()
 		{
 			PreviewOnDesktop = Array.Exists(Environment.GetCommandLineArgs(), a => string.Equals(a, "-mobile-ui", StringComparison.OrdinalIgnoreCase));
@@ -68,9 +97,9 @@ namespace DLS.Graphics
 		{
 			get
 			{
-				if (Screen.width <= 0) return new Rect(0, 0, UI.Width, UI.Width * 9 / 16f);
+				if (Screen.width <= 0) return new Rect(0, 0, UI.DefaultWidth, UI.DefaultWidth * 9 / 16f);
 				Rect safe = Screen.safeArea;
-				float s = UI.Width / Screen.width;
+				float s = UIWidth / Screen.width;
 				return new Rect(safe.xMin * s, safe.yMin * s, safe.width * s, safe.height * s);
 			}
 		}
@@ -87,7 +116,7 @@ namespace DLS.Graphics
 					return safe;
 				}
 
-				float s = UI.Width / Screen.width;
+				float s = UIWidth / Screen.width;
 				float keyboardTop = MobileInputBridge.KeyboardScreenRect.yMax * s;
 				float visibleBottom = Mathf.Clamp(keyboardTop + 0.6f, safe.yMin, safe.yMax);
 				return Rect.MinMaxRect(safe.xMin, visibleBottom, safe.xMax, safe.yMax);
@@ -104,14 +133,18 @@ namespace DLS.Graphics
 		}
 
 		// The part of the screen where the circuit can be seen: below the top bar, right of the
-		// parts panel.
+		// parts panel (above it when upright).
 		public static Rect CanvasRectUI
 		{
 			get
 			{
 				Rect safe = SafeRectUI;
-				float left = PaletteShown ? safe.xMin + MobilePalette.Width : safe.xMin;
-				return Rect.MinMaxRect(left, safe.yMin, safe.xMax, safe.yMax - TopBarHeight);
+				if (!PaletteShown) return Rect.MinMaxRect(safe.xMin, safe.yMin, safe.xMax, safe.yMax - TopBarHeight);
+
+				Rect palette = MobilePalette.PanelRect(safe);
+				return Portrait
+					? Rect.MinMaxRect(safe.xMin, palette.yMax, safe.xMax, safe.yMax - TopBarHeight)
+					: Rect.MinMaxRect(palette.xMax, safe.yMin, safe.xMax, safe.yMax - TopBarHeight);
 			}
 		}
 
@@ -129,6 +162,28 @@ namespace DLS.Graphics
 		public static void ApplyRuntimePreferences()
 		{
 			Application.targetFrameRate = TargetFrameRate;
+			ApplyOrientation();
+		}
+
+		public static void SetOrientation(Orientation orientation)
+		{
+			PlayerPrefs.SetInt(PrefOrientation, (int)orientation);
+			PlayerPrefs.Save();
+			ApplyOrientation();
+		}
+
+		// Which ways the screen may turn. Upside-down portrait stays off: the front camera and
+		// the navigation bar end up in the way on most phones.
+		static void ApplyOrientation()
+		{
+			if (!Application.isMobilePlatform) return;
+
+			Orientation orientation = PreferredOrientation;
+			Screen.autorotateToLandscapeLeft = orientation != Orientation.Portrait;
+			Screen.autorotateToLandscapeRight = orientation != Orientation.Portrait;
+			Screen.autorotateToPortrait = orientation != Orientation.Landscape;
+			Screen.autorotateToPortraitUpsideDown = false;
+			Screen.orientation = ScreenOrientation.AutoRotation;
 		}
 
 		public static void SetTargetFrameRate(int fps)
@@ -155,10 +210,10 @@ namespace DLS.Graphics
 			if (UIDrawer.ActiveMenu == UIDrawer.MenuType.BottomBarMenuPopup) return true;
 			if (UIDrawer.ActiveMenu != UIDrawer.MenuType.None) return false;
 
-			Vector2 point = screenPosition * (UI.Width / Screen.width);
+			Vector2 point = screenPosition * (UIWidth / Screen.width);
 			Rect safe = SafeRectUI;
 			if (point.y >= safe.yMax - TopBarHeight) return true;
-			return PaletteShown && point.x <= safe.xMin + MobilePalette.Width;
+			return PaletteShown && MobilePalette.PanelRect(safe).Contains(point);
 		}
 
 		public static void Draw()
@@ -265,8 +320,12 @@ namespace DLS.Graphics
 		static void DrawTopBar(Project project, Rect safe)
 		{
 			UI.DrawPanel(new Vector2(safe.xMin, safe.yMax), new Vector2(safe.width, TopBarHeight), MobileTheme.BarCol, Anchor.TopLeft);
-			Bounds2D bar = UI.PrevBounds;
-			UI.DrawLine(bar.BottomLeft, bar.BottomRight, 0.07f, MobileTheme.LineCol);
+			Bounds2D fullBar = UI.PrevBounds;
+			UI.DrawLine(fullBar.BottomLeft, fullBar.BottomRight, 0.07f, MobileTheme.LineCol);
+
+			// The first row; upright, the buttons on the right get a second row below it.
+			Bounds2D bar = Bounds2D.CreateFromTopLeftAndSize(fullBar.TopLeft, new Vector2(fullBar.Width, LandscapeTopBarHeight));
+			bool portrait = Portrait;
 
 			const float gap = 0.4f;
 			float y = bar.Centre.y + TopButtonHeight / 2;
@@ -300,46 +359,57 @@ namespace DLS.Graphics
 			}
 
 			// ---- Right, from the edge: save, step, run/pause, redo, undo ----
-			float right = bar.Right - 0.5f;
+			// Upright they fill the second row, spread over its width.
 			bool canEdit = project.CanEditViewedChip;
 			bool paused = project.simPaused;
+			float titleRight = bar.Right - 0.5f;
+			float right = bar.Right - 0.5f;
+			float stretch = 1;
+			if (portrait)
+			{
+				const float rowWidth = 9f + 9.5f + 11f + 5.6f + 5.6f + 0.4f * 7;
+				stretch = Mathf.Max(1, (fullBar.Width - 1f) / rowWidth);
+				y = fullBar.Bottom + 0.4f + TopButtonHeight;
+				right = fullBar.Right - 0.5f;
+			}
 
-			right -= 9f;
+			right -= 9f * stretch;
 			ButtonTheme saveTheme = canEdit && HasUnsavedChanges(project) ? MobileTheme.Primary : MobileTheme.Neutral;
-			if (MobileTheme.Button("SAVE", saveTheme, new Vector2(right, y), new Vector2(9f, TopButtonHeight), canEdit, Anchor.TopLeft))
+			if (MobileTheme.Button("SAVE", saveTheme, new Vector2(right, y), new Vector2(9f * stretch, TopButtonHeight), canEdit, Anchor.TopLeft))
 			{
 				project.controller.CancelEverything();
 				UIDrawer.SetActiveMenu(UIDrawer.MenuType.ChipSave);
 			}
 
-			right -= 9.5f + gap * 2.5f;
-			if (MobileTheme.IconButton("STEP", MobileIcon.Step, MobileTheme.Neutral, new Vector2(right, y), new Vector2(9.5f, TopButtonHeight), paused))
+			right -= (9.5f + gap * 2.5f) * stretch;
+			if (MobileTheme.IconButton("STEP", MobileIcon.Step, MobileTheme.Neutral, new Vector2(right, y), new Vector2(9.5f * stretch, TopButtonHeight), paused))
 			{
 				project.advanceSingleSimStep = true;
 			}
 
-			right -= 11f + gap;
-			if (MobileTheme.IconButton(paused ? "RUN" : "PAUSE", paused ? MobileIcon.Play : MobileIcon.Pause, MobileTheme.Toggle(paused), new Vector2(right, y), new Vector2(11f, TopButtonHeight)))
+			right -= (11f + gap) * stretch;
+			if (MobileTheme.IconButton(paused ? "RUN" : "PAUSE", paused ? MobileIcon.Play : MobileIcon.Pause, MobileTheme.Toggle(paused), new Vector2(right, y), new Vector2(11f * stretch, TopButtonHeight)))
 			{
 				project.description.Prefs_SimPaused = !paused;
 				project.SaveCurrentProjectDescription();
 			}
 
-			right -= 5.6f + gap * 2.5f;
+			right -= (5.6f + gap * 2.5f) * stretch;
 			UndoController undo = project.ViewedChip.UndoController;
-			if (MobileTheme.IconButton(null, MobileIcon.Redo, MobileTheme.Neutral, new Vector2(right, y), new Vector2(5.6f, TopButtonHeight), canEdit && undo.CanRedo))
+			if (MobileTheme.IconButton(null, MobileIcon.Redo, MobileTheme.Neutral, new Vector2(right, y), new Vector2(5.6f * stretch, TopButtonHeight), canEdit && undo.CanRedo))
 			{
 				undo.TryRedo();
 			}
 
-			right -= 5.6f + gap;
-			if (MobileTheme.IconButton(null, MobileIcon.Undo, MobileTheme.Neutral, new Vector2(right, y), new Vector2(5.6f, TopButtonHeight), canEdit && undo.CanUndo))
+			right -= (5.6f + gap) * stretch;
+			if (MobileTheme.IconButton(null, MobileIcon.Undo, MobileTheme.Neutral, new Vector2(right, y), new Vector2(5.6f * stretch, TopButtonHeight), canEdit && undo.CanUndo))
 			{
 				undo.TryUndo();
 			}
+			if (!portrait) titleRight = right;
 
 			// ---- Middle: what is being edited ----
-			float titleWidth = right - x - 1.5f;
+			float titleWidth = titleRight - x - 1.5f;
 			string chipName = string.IsNullOrWhiteSpace(project.ActiveDevChipName) ? "NEW CHIP" : project.ActiveDevChipName.ToUpperInvariant();
 			string title = viewingInside ? "INSIDE " + chipName : chipName;
 			string subtitle = viewingInside ? "view only" : project.description.ProjectName + (canEdit && HasUnsavedChanges(project) ? "  •  not saved" : string.Empty);
@@ -565,7 +635,7 @@ namespace DLS.Graphics
 			UI.StartNewLayer();
 
 			// Dim the board; tapping it closes the drawer.
-			UI.DrawPanel(new Vector2(safe.xMin, safe.yMin), new Vector2(UI.Width, safe.height - TopBarHeight), new Color(0, 0, 0, 0.55f), Anchor.BottomLeft);
+			UI.DrawPanel(new Vector2(safe.xMin, safe.yMin), new Vector2(safe.width, safe.height - TopBarHeight), new Color(0, 0, 0, 0.55f), Anchor.BottomLeft);
 			bool tappedOutside = InputHelper.IsMouseDownThisFrame(MouseButton.Left);
 
 			const float columnWidth = 17.5f;
@@ -604,25 +674,48 @@ namespace DLS.Graphics
 				})
 			};
 
-			int maxRows = 0;
-			foreach (var column in columns) maxRows = Mathf.Max(maxRows, column.rows.Length);
-			float width = pad * 2 + columns.Length * columnWidth + (columns.Length - 1) * 0.8f;
-			float height = pad + 2.6f + maxRows * (rowHeight + rowGap) + pad;
+			// Sideways the groups stand side by side; upright they are stacked in one column, with
+			// two buttons per row.
+			bool portrait = Portrait;
+			int perRow = portrait ? 2 : 1;
+			float buttonWidth = columnWidth;
+			float width, height;
+			if (portrait)
+			{
+				width = safe.width - 1f;
+				buttonWidth = (width - pad * 2 - 0.8f) / 2;
+				height = pad;
+				foreach (var column in columns) height += 2.6f + Mathf.CeilToInt(column.rows.Length / 2f) * (rowHeight + rowGap) + 0.6f;
+				height += pad - 0.6f;
+			}
+			else
+			{
+				int maxRows = 0;
+				foreach (var column in columns) maxRows = Mathf.Max(maxRows, column.rows.Length);
+				width = pad * 2 + columns.Length * columnWidth + (columns.Length - 1) * 0.8f;
+				height = pad + 2.6f + maxRows * (rowHeight + rowGap) + pad;
+			}
+
 			Vector2 topLeft = new(safe.xMin + 0.5f, safe.yMax - TopBarHeight - 0.5f);
 			Bounds2D sheet = MobileTheme.Card(topLeft, new Vector2(width, height), Anchor.TopLeft);
 
 			Action pressed = null;
+			float groupTop = sheet.Top - pad;
 			for (int c = 0; c < columns.Length; c++)
 			{
-				float x = sheet.Left + pad + c * (columnWidth + 0.8f);
-				MobileTheme.Text(columns[c].header, new Vector2(x + 0.2f, sheet.Top - pad - 1f), 0.58f, MobileTheme.SecondaryTextCol, Anchor.TextCentreLeft, true);
-				float y = sheet.Top - pad - 2.6f;
-				foreach ((string label, bool enabled, Action action) in columns[c].rows)
+				float x = portrait ? sheet.Left + pad : sheet.Left + pad + c * (columnWidth + 0.8f);
+				MobileTheme.Text(columns[c].header, new Vector2(x + 0.2f, groupTop - 1f), 0.58f, MobileTheme.SecondaryTextCol, Anchor.TextCentreLeft, true);
+				float y = groupTop - 2.6f;
+				for (int i = 0; i < columns[c].rows.Length; i++)
 				{
+					(string label, bool enabled, Action action) = columns[c].rows[i];
 					ButtonTheme theme = label == "MAIN MENU" ? MobileTheme.Quiet : MobileTheme.Neutral;
-					if (MobileTheme.Button(label, theme, new Vector2(x, y), new Vector2(columnWidth, rowHeight), enabled, Anchor.TopLeft)) pressed = action;
-					y -= rowHeight + rowGap;
+					float bx = x + i % perRow * (buttonWidth + 0.8f);
+					if (MobileTheme.Button(label, theme, new Vector2(bx, y), new Vector2(buttonWidth, rowHeight), enabled, Anchor.TopLeft)) pressed = action;
+					if (i % perRow == perRow - 1 || i == columns[c].rows.Length - 1) y -= rowHeight + rowGap;
 				}
+
+				if (portrait) groupTop = y - 0.6f;
 			}
 
 			bool insideSheet = UI.MouseInsideBounds(sheet);

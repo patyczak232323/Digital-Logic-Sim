@@ -18,8 +18,11 @@ namespace Seb.Vis.UI
 
 		const string MString = "M";
 
-		public const float Width = 100;
-		public const float HalfWidth = Width / 2;
+		// The canvas is DefaultWidth units wide unless the scope says otherwise (a phone held
+		// upright uses fewer units across, so a unit keeps roughly its size on screen).
+		public const float DefaultWidth = 100;
+		public static float Width => uiScopes.IsInsideScope ? currUIScope.width : DefaultWidth;
+		public static float HalfWidth => Width / 2;
 
 		static readonly Scope<BoundsScope> boundsScopes = new();
 		static readonly Scope<UIScope> uiScopes = new();
@@ -111,15 +114,19 @@ namespace Seb.Vis.UI
 			return CreateUIScope(Vector2.zero, screenSize, false);
 		}
 
+		// Begin drawing full-screen UI that is the given number of units wide
+		public static UIScope CreateUIScope(float width) => CreateUIScope(Vector2.zero, new Vector2(Screen.width, Screen.height), false, width);
+
 		// Begin drawing UI with custom size and position on the screen
-		public static UIScope CreateUIScope(Vector2 bottomLeft, Vector2 size, bool drawLetterboxes)
+		public static UIScope CreateUIScope(Vector2 bottomLeft, Vector2 size, bool drawLetterboxes, float width = DefaultWidth)
 		{
 			TrackPointer();
 			UIScope scope = uiScopes.CreateScope();
+			scope.width = width;
 			scope.canvasBottomLeft = bottomLeft;
 			scope.canvasSize = size;
 			scope.screenSize = new Vector2(Screen.width, Screen.height);
-			scope.scale = size.x / 100f;
+			scope.scale = size.x / width;
 			scope.invScale = 1f / scope.scale;
 			scope.drawLetterboxes = drawLetterboxes;
 			scope.aspect = size.y / size.x;
@@ -1300,6 +1307,7 @@ namespace Seb.Vis.UI
 
 		public class UIScope : IDisposable
 		{
+			public float width = DefaultWidth;
 			public float aspect;
 			public Vector2 canvasBottomLeft;
 			public Vector2 canvasSize;
