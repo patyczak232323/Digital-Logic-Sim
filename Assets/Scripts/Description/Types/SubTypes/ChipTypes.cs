@@ -48,7 +48,10 @@ namespace DLS.Description
 		BusTerminus_8Bit,
 		
 		// ---- Audio ----
-		Buzzer
+		Buzzer,
+
+		// ---- Displays (added later; new values go at the end to keep saved numbers) ----
+		DisplayRGB64
 
 	}
 }

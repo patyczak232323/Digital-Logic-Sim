@@ -784,6 +784,7 @@ namespace DLS.RHDL
 			["LED"] = ChipType.DisplayLED,
 			["SEVEN_SEGMENT"] = ChipType.SevenSegmentDisplay,
 			["RGB_DISPLAY"] = ChipType.DisplayRGB,
+			["RGB_DISPLAY_64"] = ChipType.DisplayRGB64,
 			["DOT_DISPLAY"] = ChipType.DisplayDot,
 			["BUZZER"] = ChipType.Buzzer
 		};

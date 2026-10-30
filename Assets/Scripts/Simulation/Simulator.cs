@@ -471,6 +471,15 @@ namespace DLS.Simulation
 
 					break;
 				}
+				case ChipType.DisplayRGB64:
+				{
+					DisplayRgb64.Advance(chip);
+					uint colour = DisplayRgb64.ShownColour(chip);
+					chip.OutputPins[0].State = (ushort)(colour & 0b1111);
+					chip.OutputPins[1].State = (ushort)((colour >> 4) & 0b1111);
+					chip.OutputPins[2].State = (ushort)((colour >> 8) & 0b1111);
+					break;
+				}
 				case ChipType.DisplayDot:
 				{
 					const int addressSpace = 256;

@@ -375,6 +375,7 @@ namespace DLS.Graphics
 				ChipType.SevenSegmentDisplay => "shows a digit",
 				ChipType.DisplayDot => "dot screen",
 				ChipType.DisplayRGB => "colour screen",
+				ChipType.DisplayRGB64 => "64 x 64 colour screen",
 				ChipType.DisplayLED => "a light",
 				ChipType.Rom_256x16 => "program memory",
 				ChipType.Buzzer => "makes a sound",

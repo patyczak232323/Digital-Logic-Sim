@@ -41,6 +41,7 @@ namespace DLS.Game
 				CreateDisplay7Seg(),
 				CreateDisplayRGB(),
 				CreateDisplayDot(),
+				CreateDisplayRGB64(),
 				CreateDisplayLED(),
 				// ---- Bus ----
 				CreateBus(PinBitCount.Bit1),
@@ -240,6 +241,47 @@ namespace DLS.Game
 			};
 
 			return CreateBuiltinChipDescription(ChipType.DisplayRGB, size, col, inputPins, outputPins, displays, NameDisplayLocation.Hidden);
+		}
+
+		static ChipDescription CreateDisplayRGB64()
+		{
+			// Pins in the order DisplayRgb64 reads them.
+			PinDescription[] inputPins =
+			{
+				CreatePinDescription("X", 0, PinBitCount.Bit8),
+				CreatePinDescription("Y", 1, PinBitCount.Bit8),
+				CreatePinDescription("RED", 2, PinBitCount.Bit4),
+				CreatePinDescription("GREEN", 3, PinBitCount.Bit4),
+				CreatePinDescription("BLUE", 4, PinBitCount.Bit4),
+				CreatePinDescription("RESET", 5),
+				CreatePinDescription("WRITE", 6),
+				CreatePinDescription("REFRESH", 7),
+				CreatePinDescription("CLOCK", 8)
+			};
+
+			PinDescription[] outputPins =
+			{
+				CreatePinDescription("R OUT", 9, PinBitCount.Bit4),
+				CreatePinDescription("G OUT", 10, PinBitCount.Bit4),
+				CreatePinDescription("B OUT", 11, PinBitCount.Bit4)
+			};
+
+			// Large enough that each of the 64 x 64 pixels stays visible.
+			float height = GridSize * 41;
+			Vector2 size = new(height, height);
+			Color col = new(0.1f, 0.1f, 0.1f);
+
+			DisplayDescription[] displays =
+			{
+				new()
+				{
+					Position = Vector2.zero,
+					Scale = height - GridSize * 2,
+					SubChipID = -1
+				}
+			};
+
+			return CreateBuiltinChipDescription(ChipType.DisplayRGB64, size, col, inputPins, outputPins, displays, NameDisplayLocation.Hidden);
 		}
 
 		static ChipDescription CreateDisplayDot()

@@ -155,7 +155,9 @@ circuit TwoNands(A, B, C) -> Y:
 - Name a chip to reach its pins later: `h = HalfAdder(A, B)` then `h.SUM` and `h.CARRY`. Its inputs can also be connected afterwards with `h.A = x`.
 - Pin names are written without spaces: the NAND pins `IN A` and `IN B` are `IN_A` and `IN_B` (or just `A` and `B`).
 
-Built-in chips are called `NAND`, `TRISTATE`, `CLOCK`, `PULSE`, `ROM`, `KEY`, `LED`, `SEVEN_SEGMENT`, `RGB_DISPLAY`, `DOT_DISPLAY` and `BUZZER`.
+Built-in chips are called `NAND`, `TRISTATE`, `CLOCK`, `PULSE`, `ROM`, `KEY`, `LED`, `SEVEN_SEGMENT`, `RGB_DISPLAY`, `RGB_DISPLAY_64`, `DOT_DISPLAY` and `BUZZER`.
+
+`RGB_DISPLAY_64` is a 64 x 64 screen with 4 bits per colour. Its inputs are `X`, `Y` (8 bits, the low 6 are used; `(0, 0)` is the bottom-left pixel), `RED`, `GREEN`, `BLUE` (4 bits each), `RESET`, `WRITE`, `REFRESH` and `CLOCK`. On a rising clock edge `RESET` clears the hidden picture, otherwise `WRITE` draws the colour at `(X, Y)` into it; `REFRESH` then shows the hidden picture. Its outputs `R_OUT`, `G_OUT` and `B_OUT` give the colour shown at `(X, Y)`.
 
 Several `TRISTATE` buffers may drive the same signal, which is how a shared bus is made:
 
@@ -233,4 +235,4 @@ RHDL 1.0 replaces the earlier syntax:
 
 ## Examples
 
-The curated `Examples/RHDL/` set progresses through `And2 -> HalfAdder -> FullAdder -> Mux4 -> DffBit -> Reg4`, then adds a separate `Ram4x4` memory example and `CPU4`, a 4-bit accumulator processor.
+The curated `Examples/RHDL/` set progresses through `And2 -> HalfAdder -> FullAdder -> Mux4 -> DffBit -> Reg4`, then adds a separate `Ram4x4` memory example, `CPU4`, a 4-bit accumulator processor, and `PIX6`, a small computer that draws on the 64 x 64 screen.

@@ -745,6 +745,7 @@ namespace DLS.Simulation
 
 				case ChipType.Pulse:
 				case ChipType.DisplayRGB:
+				case ChipType.DisplayRGB64:
 				case ChipType.DisplayDot:
 					sequentialChips.Add(runtimeChip);
 					break;
@@ -769,6 +770,7 @@ namespace DLS.Simulation
 				ChipType.Rom_256x16 or
 				ChipType.DisplayRGB or
 				ChipType.DisplayDot or
+				ChipType.DisplayRGB64 or
 				ChipType.Bus_1Bit or
 				ChipType.Bus_4Bit or
 				ChipType.Bus_8Bit;
@@ -895,6 +897,10 @@ namespace DLS.Simulation
 
 					case ChipType.DisplayDot:
 						if (AdvanceDisplayDot(chip)) MarkDirty(runtimeChip.CombinationalIndex);
+						break;
+
+					case ChipType.DisplayRGB64:
+						if (DisplayRgb64.Advance(chip)) MarkDirty(runtimeChip.CombinationalIndex);
 						break;
 				}
 			}
@@ -1461,6 +1467,15 @@ namespace DLS.Simulation
 				{
 					int address = GetAddress8Bit(chip.InputPins[0].State);
 					StageOutput(outputStart, chip.InternalState[address]);
+					break;
+				}
+
+				case ChipType.DisplayRGB64:
+				{
+					uint colour = DisplayRgb64.ShownColour(chip);
+					StageOutput(outputStart, colour & 0b1111);
+					StageOutput(outputStart + 1, (colour >> 4) & 0b1111);
+					StageOutput(outputStart + 2, (colour >> 8) & 0b1111);
 					break;
 				}
 
