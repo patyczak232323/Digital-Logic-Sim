@@ -89,7 +89,7 @@ namespace DLS.Graphics
 			titleX += logoSize + 0.8f;
 			UI.DrawText("REWIRED", FontType.Born2bSporty, 4.7f,
 				new Vector2(titleX, bar.Centre.y + 0.15f), Anchor.TextCentreLeft, Color.white);
-			if (screen == ScreenKind.Home)
+			if (screen == ScreenKind.Home && !MobileUI.Portrait)
 			{
 				UI.DrawText("DIGITAL LOGIC SIMULATOR", theme.FontBold, theme.FontSizeRegular * 0.8f,
 					new Vector2(UI.PrevBounds.Right + 2f, bar.Centre.y), Anchor.TextCentreLeft, RewiredUI.SecondaryText);
@@ -109,13 +109,15 @@ namespace DLS.Graphics
 		}
 
 		// Home: start a new project on the left, open an existing one on the right with one tap.
+		// Upright, the actions sit above the projects.
 		static void DrawHome(Rect safe)
 		{
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
 			const float pad = 1.4f;
 			float top = safe.yMax - 6.4f - pad;
 			float bottom = safe.yMin + pad;
-			float leftWidth = Mathf.Min(30f, safe.width * 0.34f);
+			bool portrait = MobileUI.Portrait;
+			float leftWidth = portrait ? safe.width - pad * 2 : Mathf.Min(30f, safe.width * 0.34f);
 			float x = safe.xMin + pad;
 
 			// ---- Left: actions ----
@@ -136,6 +138,18 @@ namespace DLS.Graphics
 				screen = ScreenKind.About;
 			}
 			y -= 5f + 1.6f;
+
+			if (portrait)
+			{
+				DrawProjectList(theme, x, leftWidth, y, bottom + 4.4f + 1.2f);
+				if (MobileTheme.Button("QUIT", MobileTheme.Quiet, new Vector2(x, bottom), new Vector2(half, 4.4f), true, Anchor.BottomLeft))
+				{
+					Application.Quit();
+				}
+
+				DrawStatus(safe, theme);
+				return;
+			}
 
 			string[] tips =
 			{
@@ -159,22 +173,25 @@ namespace DLS.Graphics
 
 			// ---- Right: projects ----
 			float listX = x + leftWidth + 2f;
-			float listWidth = safe.xMax - pad - listX;
-			UI.DrawText("YOUR PROJECTS", theme.FontBold, theme.FontSizeRegular * 0.72f, new Vector2(listX, top - 1f), Anchor.TextCentreLeft, MobileTheme.SecondaryTextCol);
+			DrawProjectList(theme, listX, safe.xMax - pad - listX, top, bottom);
+			DrawStatus(safe, theme);
+		}
+
+		static void DrawProjectList(DrawSettings.UIThemeDLS theme, float x, float width, float top, float bottom)
+		{
+			UI.DrawText("YOUR PROJECTS", theme.FontBold, theme.FontSizeRegular * 0.72f, new Vector2(x, top - 1f), Anchor.TextCentreLeft, MobileTheme.SecondaryTextCol);
 			float listTop = top - 2.6f;
 
 			if (projects.Length == 0)
 			{
-				UI.DrawText("No projects yet: tap NEW PROJECT to start one.", theme.FontRegular, theme.FontSizeRegular * 0.66f,
-					new Vector2(listX, listTop - 2f), Anchor.TextCentreLeft, MobileTheme.DimTextCol);
+				UI.DrawText(MobileTheme.Fit("No projects yet: tap NEW PROJECT to start one.", width, 0.66f), theme.FontRegular, theme.FontSizeRegular * 0.66f,
+					new Vector2(x, listTop - 2f), Anchor.TextCentreLeft, MobileTheme.DimTextCol);
 			}
 			else
 			{
-				UI.DrawScrollView(ID_ProjectScroll, new Vector2(listX, listTop), new Vector2(listWidth, listTop - bottom), 0.45f,
+				UI.DrawScrollView(ID_ProjectScroll, new Vector2(x, listTop), new Vector2(width, listTop - bottom), 0.45f,
 					Anchor.TopLeft, theme.ScrollTheme, DrawProjectElementFunc, projects.Length);
 			}
-
-			DrawStatus(safe, theme);
 		}
 
 		static void DrawProjectElement(Vector2 topLeft, float width, int index, bool isLayoutOnly)
@@ -408,14 +425,33 @@ namespace DLS.Graphics
 			UI.DrawText("SETTINGS", theme.FontBold, theme.FontSizeRegular * 1.15f,
 				new Vector2(x, y + 2f), Anchor.TextCentreLeft, Color.white);
 
+			const float gap = 0.45f;
+			float third = (width - gap * 2f) / 3f;
+
 			y -= 1.5f;
+			UI.DrawText("SCREEN", theme.FontBold, theme.FontSizeRegular * 0.72f,
+				new Vector2(x, y), Anchor.TextCentreLeft, RewiredUI.SecondaryText);
+			y -= 1.6f;
+			(string label, MobileUI.Orientation value)[] orientations =
+			{
+				("TURN WITH PHONE", MobileUI.Orientation.Auto),
+				("SIDEWAYS", MobileUI.Orientation.Landscape),
+				("UPRIGHT", MobileUI.Orientation.Portrait)
+			};
+			for (int i = 0; i < orientations.Length; i++)
+			{
+				(string label, MobileUI.Orientation value) = orientations[i];
+				if (MobileTheme.Button(MobileTheme.Fit(label, third - 1f, 0.7f, true), MobileTheme.Toggle(MobileUI.PreferredOrientation == value),
+					    new Vector2(x + i * (third + gap), y), new Vector2(third, h), true, Anchor.TopLeft))
+					MobileUI.SetOrientation(value);
+			}
+
+			y -= h + 2.6f;
 			UI.DrawText("FRAME RATE", theme.FontBold, theme.FontSizeRegular * 0.72f,
 				new Vector2(x, y), Anchor.TextCentreLeft, RewiredUI.SecondaryText);
 			y -= 1.6f;
 
 			int[] rates = { 60, 90, 120 };
-			const float gap = 0.45f;
-			float third = (width - gap * 2f) / 3f;
 			for (int i = 0; i < rates.Length; i++)
 			{
 				int fps = rates[i];

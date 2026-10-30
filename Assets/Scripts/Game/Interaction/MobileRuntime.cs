@@ -69,11 +69,7 @@ namespace DLS.Game
 				Input.multiTouchEnabled = true;
 				Input.simulateMouseWithTouches = false;
 				TouchScreenKeyboard.hideInput = false;
-				Screen.autorotateToPortrait = false;
-				Screen.autorotateToPortraitUpsideDown = false;
-				Screen.autorotateToLandscapeLeft = true;
-				Screen.autorotateToLandscapeRight = true;
-				Screen.orientation = ScreenOrientation.AutoRotation;
+				// Which ways the screen turns is a setting (MobileUI.ApplyRuntimePreferences below).
 				Screen.fullScreen = true;
 				Screen.sleepTimeout = SleepTimeout.NeverSleep;
 			}

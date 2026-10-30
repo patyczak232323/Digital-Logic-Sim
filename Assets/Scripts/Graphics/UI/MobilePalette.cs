@@ -59,13 +59,22 @@ namespace DLS.Graphics
 			ArmedChip = null;
 		}
 
-		public static Rect PanelRect(Rect safe) => Rect.MinMaxRect(safe.xMin, safe.yMin, safe.xMin + Width, safe.yMax - MobileUI.TopBarHeight);
+		// Sideways the panel is a column on the left; upright it is a strip along the bottom, as wide
+		// as the screen, with the same rail and list inside.
+		public static Rect PanelRect(Rect safe)
+		{
+			if (!MobileUI.Portrait) return Rect.MinMaxRect(safe.xMin, safe.yMin, safe.xMin + Width, safe.yMax - MobileUI.TopBarHeight);
+
+			float height = Mathf.Clamp(safe.height * 0.36f, 30f, 48f);
+			return Rect.MinMaxRect(safe.xMin, safe.yMin, safe.xMax, safe.yMin + height);
+		}
 
 		public static void Draw(Project project, Rect safe)
 		{
 			Rect panel = PanelRect(safe);
 			UI.DrawPanel(new Vector2(panel.xMin, panel.yMax), panel.size, MobileTheme.PanelCol, Anchor.TopLeft);
-			UI.DrawLine(new Vector2(panel.xMax, panel.yMin), new Vector2(panel.xMax, panel.yMax), 0.06f, MobileTheme.LineCol);
+			if (MobileUI.Portrait) UI.DrawLine(new Vector2(panel.xMin, panel.yMax), new Vector2(panel.xMax, panel.yMax), 0.06f, MobileTheme.LineCol);
+			else UI.DrawLine(new Vector2(panel.xMax, panel.yMin), new Vector2(panel.xMax, panel.yMax), 0.06f, MobileTheme.LineCol);
 
 			CollectCategories(project);
 			CollectItems(project);

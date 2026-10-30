@@ -308,14 +308,15 @@ namespace DLS.Game
 			{
 				// Fit the chip into the part of the screen the top bar, the parts panel and the
 				// board's own buttons leave free, and centre it there.
-				float uiHeight = UI.Width * Screen.height / Mathf.Max(1f, Screen.width);
+				float uiWidth = MobileUI.UIWidth;
+				float uiHeight = uiWidth * Screen.height / Mathf.Max(1f, Screen.width);
 				Rect canvas = MobileUI.FitRectUI;
 				float fitHeight = bounds.Height * uiHeight / Mathf.Max(1f, canvas.height);
 				float fitWidth = bounds.Width * uiHeight / Mathf.Max(1f, canvas.width);
 				view.OrthoSize = Mathf.Max(fitHeight, fitWidth) * 0.5f * 1.08f;
 				view.OrthoSize = Mathf.Clamp(view.OrthoSize, zoomRange.x, zoomRange.y);
 				float worldPerUI = view.OrthoSize * 2 / uiHeight;
-				Vector2 canvasOffsetUI = canvas.center - new Vector2(UI.Width / 2f, uiHeight / 2f);
+				Vector2 canvasOffsetUI = canvas.center - new Vector2(uiWidth / 2f, uiHeight / 2f);
 				view.Pos = bounds.Centre - canvasOffsetUI * worldPerUI;
 				return view;
 			}
@@ -323,7 +324,7 @@ namespace DLS.Game
 			view.OrthoSize = Mathf.Clamp(view.OrthoSize, zoomRange.x, zoomRange.y);
 
 			// Move cam down slightly from bounds centre to account for bottom region of screen blocked by chip bar
-			const float uiScreenHeight = UI.Width * 9 / 16f;
+			const float uiScreenHeight = UI.DefaultWidth * 9 / 16f;
 			float bottomBarWorldHeight = BottomBarUI.barHeight / uiScreenHeight * view.OrthoSize * 2;
 			view.Pos = bounds.Centre + Vector2.down * bottomBarWorldHeight / 2;
 			return view;

@@ -42,7 +42,7 @@ namespace DLS.Graphics
 			UI.TouchScrolling = MobileUI.IsActive;
 			if (MobileUI.IsActive)
 			{
-				using (UI.CreateUIScope())
+				using (UI.CreateUIScope(MobileUI.UIWidth))
 				{
 					MobileUI.Draw();
 				}
