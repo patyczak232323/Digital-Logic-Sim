@@ -4,52 +4,60 @@ using UnityEngine;
 
 namespace DLS.Graphics
 {
-	// The Rewired logo: a NAND gate, the one gate everything in Rewired is built from, with two
-	// input wires and an output wire. The app icon (Assets/Build/Icon.png) is the same drawing
-	// on a rounded square, drawn by Tools/Logo/make_logo.py with the same geometry.
+	// The Rewired logo: a chip with a gold R on it, drawn with UI shapes. The app icon
+	// (Assets/Build/Icon.png) is the same drawing on a rounded square, drawn by
+	// Tools/Logo/make_logo.py with the same geometry (unit square -1..1, y up).
 	public static class RewiredLogo
 	{
-		static readonly Color GateColour = ColHelper.MakeCol255(87, 94, 230);
-		static readonly Color OutlineColour = ColHelper.MakeCol255(242, 243, 255);
-		static readonly Color InputA = ColHelper.MakeCol255(255, 90, 95);
-		static readonly Color InputB = ColHelper.MakeCol255(62, 166, 255);
-		static readonly Color Output = ColHelper.MakeCol255(255, 210, 63);
-		static readonly Color BubbleHole = ColHelper.MakeCol255(14, 15, 32);
+		static readonly Color Body = ColHelper.MakeCol255(30, 33, 50);
+		static readonly Color Border = ColHelper.MakeCol255(72, 108, 233);
+		static readonly Color Pin = ColHelper.MakeCol255(168, 175, 198);
+		static readonly Color Dot = ColHelper.MakeCol255(74, 79, 104);
+		static readonly Color Letter = ColHelper.MakeCol255(255, 196, 0);
 
-		const float WireThickness = 0.075f;
-		const float PinRadius = 0.075f;
+		const float BodyHalf = 0.55f;
+		const float BorderWidth = 0.035f;
+		const float PinWidth = 0.12f;
+		const float PinLength = 0.12f;
+		static readonly float[] PinOffsets = { -0.39f, -0.13f, 0.13f, 0.39f };
+
+		// The R: boxes (x0, y0, x1, y1) and the leg as a thick line.
+		static readonly Vector4[] LetterBoxes =
+		{
+			new(-0.25f, -0.33f, -0.12f, 0.34f), // stem
+			new(-0.25f, 0.21f, 0.17f, 0.34f), // top
+			new(0.12f, 0.05f, 0.25f, 0.29f), // right of the bowl
+			new(-0.25f, 0.01f, 0.17f, 0.14f) // middle
+		};
+		static readonly Vector2 LegStart = new(0.06f, 0.06f);
+		static readonly Vector2 LegEnd = new(0.22f, -0.30f);
+		const float LegThickness = 0.14f;
 
 		// Draws the logo in a square of the given size.
 		public static void Draw(Vector2 centre, float size)
 		{
 			float s = size / 2;
-			Vector2 P(float x, float y) => centre + new Vector2(x, y) * s;
 
-			Wire(P(-0.80f, 0.20f), P(-0.42f, 0.20f), InputA, s);
-			Wire(P(-0.80f, -0.20f), P(-0.42f, -0.20f), InputB, s);
-			Wire(P(0.58f, 0), P(0.80f, 0), Output, s);
+			void Box(float x0, float y0, float x1, float y1, Color col) =>
+				UI.DrawPanel(centre + new Vector2(x0 + x1, y0 + y1) / 2 * s, new Vector2(x1 - x0, y1 - y0) * s, col);
 
-			Gate(centre, s, 0, OutlineColour);
-			Gate(centre, s, 0.055f, GateColour);
-			UI.DrawCircle(P(0.505f, 0), 0.085f * s, OutlineColour);
-			UI.DrawCircle(P(0.505f, 0), 0.035f * s, BubbleHole);
-		}
+			const float h = BodyHalf;
+			const float w = PinWidth / 2;
+			foreach (float t in PinOffsets)
+			{
+				Box(-h - PinLength, t - w, -h, t + w, Pin);
+				Box(h, t - w, h + PinLength, t + w, Pin);
+				Box(t - w, h, t + w, h + PinLength, Pin);
+				Box(t - w, -h - PinLength, t + w, -h, Pin);
+			}
 
-		static void Wire(Vector2 a, Vector2 b, Color col, float s)
-		{
-			UI.DrawLine(a, b, WireThickness * s, col);
-			UI.DrawCircle(a, PinRadius * s, col);
-			UI.DrawCircle(b, WireThickness / 2 * s, col);
-		}
+			Box(-h, -h, h, h, Border);
+			const float inner = h - BorderWidth;
+			Box(-inner, -inner, inner, inner, Body);
+			UI.DrawCircle(centre + new Vector2(-0.38f, 0.38f) * s, 0.045f * s, Dot);
 
-		// D shape: a box from x0 to xm and a half disc of radius h centred on xm.
-		static void Gate(Vector2 centre, float s, float inset, Color col)
-		{
-			const float xm = 0.02f;
-			float x0 = -0.42f + inset;
-			float h = 0.40f - inset;
-			UI.DrawPanel(centre + new Vector2((x0 + xm) / 2, 0) * s, new Vector2(xm - x0, 2 * h) * s, col);
-			UI.DrawCircle(centre + new Vector2(xm, 0) * s, h * s, col);
+			foreach (Vector4 b in LetterBoxes) Box(b.x, b.y, b.z, b.w, Letter);
+			UI.DrawLine(centre + LegStart * s, centre + LegEnd * s, LegThickness * s, Letter);
 		}
 	}
 }

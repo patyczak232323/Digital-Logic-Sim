@@ -1,24 +1,40 @@
-# Draws the Rewired logo: a NAND gate with two input wires and an output wire.
+# Draws the Rewired logo: a chip with a gold R on it.
 # The geometry matches Assets/Scripts/Graphics/UI/RewiredLogo.cs (unit square -1..1, y up).
 #
 #   python3 Tools/Logo/make_logo.py Assets/Build/Icon.png 512
 #   python3 Tools/Logo/make_logo.py Docs/logo.png 160
+import math
 import sys
 from PIL import Image, ImageDraw, ImageFilter
 
-BG_TOP = (30, 33, 66)
-BG_BOTTOM = (14, 15, 32)
-GATE = (87, 94, 230)
-OUTLINE = (242, 243, 255)
-IN_A = (255, 90, 95)
-IN_B = (62, 166, 255)
-OUT = (255, 210, 63)
+BG_TOP = (236, 239, 249)
+BG_BOTTOM = (196, 203, 226)
+BODY = (30, 33, 50)
+BORDER = (72, 108, 233)
+PIN = (168, 175, 198)
+DOT = (74, 79, 104)
+LETTER = (255, 196, 0)
+
+BODY_HALF = 0.55
+BORDER_WIDTH = 0.035
+PIN_OFFSETS = (-0.39, -0.13, 0.13, 0.39)
+PIN_WIDTH = 0.12
+PIN_LENGTH = 0.12
+
+# The R, as boxes (x0, y0, x1, y1) and the leg as a thick line (a, b, thickness).
+R_BOXES = [
+    (-0.25, -0.33, -0.12, 0.34),  # stem
+    (-0.25, 0.21, 0.17, 0.34),  # top
+    (0.12, 0.05, 0.25, 0.29),  # right of the bowl
+    (-0.25, 0.01, 0.17, 0.14),  # middle
+]
+R_LEG = ((0.06, 0.06), (0.22, -0.30), 0.14)
+
 
 def render(size, background=True):
     ss = 4
     S = size * ss
     img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
 
     def P(x, y):
         return ((x + 1) / 2 * S, (1 - (y + 1) / 2) * S)
@@ -26,63 +42,53 @@ def render(size, background=True):
     def u(v):
         return v / 2 * S
 
+    def box(d, x0, y0, x1, y1, col):
+        (a, b), (c, e) = P(x0, y1), P(x1, y0)
+        d.rectangle([a, b, c, e], fill=col)
+
+    def disc(d, c, r, col):
+        x, y = P(*c)
+        d.ellipse([x - u(r), y - u(r), x + u(r), y + u(r)], fill=col)
+
     if background:
         grad = Image.new("RGBA", (S, S))
         gd = ImageDraw.Draw(grad)
         for i in range(S):
             t = i / (S - 1)
-            c = tuple(int(BG_TOP[k] * (1 - t) + BG_BOTTOM[k] * t) for k in range(3)) + (255,)
-            gd.line([(0, i), (S, i)], fill=c)
+            gd.line([(0, i), (S, i)], fill=tuple(int(BG_TOP[k] * (1 - t) + BG_BOTTOM[k] * t) for k in range(3)) + (255,))
         mask = Image.new("L", (S, S), 0)
         ImageDraw.Draw(mask).rounded_rectangle([0, 0, S - 1, S - 1], radius=int(S * 0.22), fill=255)
         img.paste(grad, (0, 0), mask)
-        # faint grid like the editor's
-        grid = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-        g = ImageDraw.Draw(grid)
-        step = S / 16
-        for i in range(1, 16):
-            g.line([(i * step, 0), (i * step, S)], fill=(255, 255, 255, 14), width=max(1, S // 512))
-            g.line([(0, i * step), (S, i * step)], fill=(255, 255, 255, 14), width=max(1, S // 512))
-        img.alpha_composite(Image.composite(grid, Image.new("RGBA", (S, S), (0, 0, 0, 0)), mask))
 
-    wire = 0.075
-    def line(a, b, col, w=wire):
-        d.line([P(*a), P(*b)], fill=col, width=int(u(w)))
-        for p in (a, b):
-            r = u(w) / 2
-            x, y = P(*p)
-            d.ellipse([x - r, y - r, x + r, y + r], fill=col)
+        shadow = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+        box(ImageDraw.Draw(shadow), -0.6, -0.66, 0.6, 0.54, (20, 24, 50, 110))
+        img.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(S * 0.03)))
 
-    def disc(c, r, col):
-        x, y = P(*c)
-        d.ellipse([x - u(r), y - u(r), x + u(r), y + u(r)], fill=col)
+    d = ImageDraw.Draw(img)
+    h = BODY_HALF
+    for t in PIN_OFFSETS:
+        w = PIN_WIDTH / 2
+        box(d, -h - PIN_LENGTH, t - w, -h, t + w, PIN)
+        box(d, h, t - w, h + PIN_LENGTH, t + w, PIN)
+        box(d, t - w, h, t + w, h + PIN_LENGTH, PIN)
+        box(d, t - w, -h - PIN_LENGTH, t + w, -h, PIN)
 
-    def gate(inset, col):
-        # D shape: box from x0 to xm, half disc of radius h at xm.
-        x0, xm, h = -0.42, 0.02, 0.40
-        x0 += inset; h -= inset
-        d.rectangle([P(x0, h), P(xm, -h)], fill=col)
-        disc((xm, 0), h, col)
+    box(d, -h, -h, h, h, BORDER)
+    i = h - BORDER_WIDTH
+    box(d, -i, -i, i, i, BODY)
+    disc(d, (-0.38, 0.38), 0.045, DOT)
 
-    # glow under the wires and gate
-    glow = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    gl = ImageDraw.Draw(glow)
-    gl.ellipse([P(-0.6, 0.6), P(0.6, -0.6)], fill=(87, 94, 230, 90))
-    img.alpha_composite(glow.filter(ImageFilter.GaussianBlur(S * 0.08)))
-
-    line((-0.80, 0.20), (-0.42, 0.20), IN_A)
-    line((-0.80, -0.20), (-0.42, -0.20), IN_B)
-    line((0.58, 0.0), (0.80, 0.0), OUT)
-    disc((-0.80, 0.20), 0.075, IN_A)
-    disc((-0.80, -0.20), 0.075, IN_B)
-    disc((0.80, 0.0), 0.075, OUT)
-
-    gate(0.0, OUTLINE)
-    gate(0.055, GATE)
-    disc((0.505, 0.0), 0.085, OUTLINE)
-    disc((0.505, 0.0), 0.035, BG_BOTTOM)
+    for b in R_BOXES:
+        box(d, *b, LETTER)
+    # Leg: a thick line with square ends.
+    (ax, ay), (bx, by), th = R_LEG
+    dx, dy = bx - ax, by - ay
+    n = math.hypot(dx, dy)
+    px, py = -dy / n * th / 2, dx / n * th / 2
+    d.polygon([P(ax + px, ay + py), P(bx + px, by + py), P(bx - px, by - py), P(ax - px, ay - py)], fill=LETTER)
 
     return img.resize((size, size), Image.LANCZOS)
+
 
 if __name__ == "__main__":
     out = sys.argv[1]
