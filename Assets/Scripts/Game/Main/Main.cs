@@ -30,7 +30,43 @@ namespace DLS.Game
 			SavePaths.MigrateLegacyDataIfNeeded();
 			SavePaths.EnsureDirectoryExists(SavePaths.ProjectsPath);
 			SaveAndApplyAppSettings(Loader.LoadAppSettings());
+			InstallBundledProjects();
 			Main.audioState = audioState;
+		}
+
+		// Copies the example projects that come with Rewired (Assets/Resources/BundledProjects)
+		// into the projects folder the first time this version runs.
+		static void InstallBundledProjects()
+		{
+			List<string> installed = new(ActiveAppSettings.InstalledBundledProjects ?? Array.Empty<string>());
+			bool changed = false;
+
+			foreach (string name in BundledProjectInstaller.ProjectNames)
+			{
+				if (installed.Contains(name)) continue;
+
+				try
+				{
+					string folder = $"{BundledProjectInstaller.ResourcesFolder}/{name}";
+					TextAsset project = Resources.Load<TextAsset>($"{folder}/ProjectDescription");
+					if (project == null) continue;
+
+					TextAsset[] chips = Resources.LoadAll<TextAsset>($"{folder}/Chips");
+					BundledProjectInstaller.Install(name, project.text, chips.Select(c => c.text));
+					installed.Add(name);
+					changed = true;
+				}
+				catch (Exception e)
+				{
+					Debug.LogWarning($"Could not install the example project '{name}': {e.Message}");
+				}
+			}
+
+			if (!changed) return;
+			AppSettings settings = ActiveAppSettings;
+			settings.InstalledBundledProjects = installed.ToArray();
+			ActiveAppSettings = settings;
+			Saver.SaveAppSettings(settings);
 		}
 
 		public static void Update()
@@ -73,6 +109,7 @@ namespace DLS.Game
 			if (Loader.ProjectExists(projectName)) ActiveProject = LoadProject(projectName);
 			else ActiveProject = CreateProject(projectName);
 
+			if (string.IsNullOrEmpty(startupChipName)) startupChipName = ActiveProject.description.StartupChipName ?? string.Empty;
 			ActiveProject.LoadDevChipOrCreateNewIfDoesntExist(startupChipName);
 			ActiveProject.StartSimulation();
 			ActiveProject.audioState = audioState;

@@ -134,8 +134,9 @@ See **[CPU4 documentation](Examples/RHDL/CPU4/README.md)**.
 PIX6 is a small computer that draws on the 64 × 64 colour screen:
 
 - X and Y pen registers, a 12-bit colour register and an 8-bit program counter
-- 16-bit instructions: set and move the pen, set or generate a colour, plot, clear, show, jumps on X and Y, halt
+- 16-bit instructions: set and move the pen, set or generate a colour, plot, clear, show, read the screen, keys, random numbers, jumps, halt
 - a 12-instruction program that fills the screen with a colour pattern and draws a diagonal, and a moving-dot animation
+- **Snake** in 70 instructions, installed as the first project when Rewired starts: open it and play with W A S D
 
 See **[PIX6 documentation](Examples/RHDL/PIX6/README.md)**.
 

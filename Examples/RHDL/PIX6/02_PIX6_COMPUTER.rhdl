@@ -2,8 +2,10 @@
 #
 # The screen takes the pen position and colour from the processor and draws
 # on the same rising CLK edge on which the processor executes PLOT, SHOW or CLS.
-circuit Pix6Computer(CLK, RESET) -> (PC: u8, HALTED):
-    cpu = Pix6(CLK, RESET)
-    RGB_DISPLAY_64(cpu.X, cpu.Y, cpu.R, cpu.G, cpu.B, cpu.CLS, cpu.PLOT, cpu.SHOW, CLK)
+# The colour it shows at the pen goes back to the processor for READ.
+# KEYS bits: 0 right, 1 up, 2 left, 3 down.
+circuit Pix6Computer(CLK, RESET, KEYS: u4) -> (PC: u8, HALTED):
+    cpu = Pix6(CLK, RESET, KEYS, screen.R_OUT, screen.G_OUT, screen.B_OUT)
+    screen = RGB_DISPLAY_64(cpu.X, cpu.Y, cpu.R, cpu.G, cpu.B, cpu.CLS, cpu.PLOT, cpu.SHOW, CLK)
     PC = cpu.PC
     HALTED = cpu.HALTED

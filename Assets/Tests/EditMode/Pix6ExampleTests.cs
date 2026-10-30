@@ -44,7 +44,7 @@ namespace DLS.Tests
 			return result.Description;
 		}
 
-		TestCircuit Run(uint[] program, int maxTicks)
+		TestCircuit Start(uint[] program)
 		{
 			uint[] rom = new uint[256];
 			Array.Copy(program, rom, program.Length);
@@ -57,7 +57,12 @@ namespace DLS.Tests
 			c.Set("RESET", 1);
 			c.Tick();
 			c.Set("RESET", 0);
+			return c;
+		}
 
+		TestCircuit Run(uint[] program, int maxTicks)
+		{
+			TestCircuit c = Start(program);
 			Stopwatch watch = Stopwatch.StartNew();
 			int ticks = 0;
 			while (c.Get("HALTED") == 0 && ticks < maxTicks)
@@ -146,6 +151,155 @@ namespace DLS.Tests
 			uint[] picture = ShownPicture(c.Root);
 			Assert.AreEqual(Rgb(15, 8, 0), picture[2 * 64 + 2], "dot at (2, 2)");
 			Assert.AreEqual(1, picture.Count(p => p != 0), "only the current dot is shown");
+		}
+
+		// ---- Snake (Examples/RHDL/PIX6/snake.pix6) ----
+
+		const uint Right = 1, Up = 2, Left = 4, Down = 8;
+		static readonly uint Head = Rgb(15, 15, 0);
+		static readonly uint Food = Rgb(15, 0, 0);
+		static readonly uint Wall = Rgb(4, 4, 4);
+		static readonly uint Crash = Rgb(15, 0, 15);
+
+		sealed class SnakeGame
+		{
+			public readonly TestCircuit Circuit;
+			readonly int frameAddress;
+
+			public SnakeGame(Pix6ExampleTests owner)
+			{
+				uint[] program = Pix6Assembler.Assemble(File.ReadAllText(Path.Combine(ExamplesRoot, "PIX6/snake.pix6")), out var labels);
+				frameAddress = labels["frame"];
+				// Shortest delay, so the test needs few instructions per frame.
+				Assert.AreEqual(0x0C00u, program[frameAddress] & 0xFF00u, "the frame should start with SETT");
+				program[frameAddress] = 0x0C01;
+				Circuit = owner.Start(program);
+			}
+
+			public uint[] Picture => ShownPicture(Circuit.Root);
+
+			// Runs until the next frame starts (the game shows the previous one just before).
+			public void NextFrame(uint keys = 0, int maxTicks = 20000)
+			{
+				Circuit.Set("KEYS", keys);
+				for (int i = 0; i < maxTicks; i++)
+				{
+					Circuit.Tick();
+					if (Circuit.Get("PC") == frameAddress) return;
+				}
+				Assert.Fail("no new frame started");
+			}
+
+			public (int x, int y) Find(uint colour)
+			{
+				uint[] picture = Picture;
+				int index = Array.IndexOf(picture, colour);
+				return index < 0 ? (-1, -1) : (index % 64, index / 64);
+			}
+
+			public int Length => Picture.Count(p => p == Head || (p & 0xCFFu) == Rgb(0, 15, 0));
+		}
+
+		[Test]
+		public void SnakeAssemblesIntoTheRom()
+		{
+			uint[] program = Pix6Assembler.Assemble(File.ReadAllText(Path.Combine(ExamplesRoot, "PIX6/snake.pix6")));
+			Assert.LessOrEqual(program.Length, 256);
+			TestContext.WriteLine($"{program.Length} words");
+		}
+
+		[Test]
+		public void SnakeStartsInTheMiddleAndMovesRight()
+		{
+			SnakeGame game = new(this);
+			game.NextFrame();
+
+			uint[] picture = game.Picture;
+			for (int i = 0; i < 64; i++)
+			{
+				Assert.AreEqual(Wall, picture[i], "bottom wall");
+				Assert.AreEqual(Wall, picture[63 * 64 + i], "top wall");
+				Assert.AreEqual(Wall, picture[i * 64], $"left wall at y={i}");
+				Assert.AreEqual(Wall, picture[i * 64 + 63], "right wall");
+			}
+			Assert.AreEqual((16, 32), game.Find(Head));
+			Assert.AreNotEqual((-1, -1), game.Find(Food), "food is placed");
+
+			for (int i = 1; i <= 6; i++)
+			{
+				game.NextFrame();
+				Assert.AreEqual((16 + i, 32), game.Find(Head), $"head after {i} moves");
+			}
+			Assert.AreEqual(5, game.Length, "the snake grows to 5 at the start");
+		}
+
+		[Test]
+		public void SnakeTurnsButCannotReverse()
+		{
+			SnakeGame game = new(this);
+			game.NextFrame();
+			game.NextFrame();
+			game.NextFrame(Up);
+			Assert.AreEqual((17, 33), game.Find(Head), "turned up");
+			game.NextFrame(Down);
+			Assert.AreEqual((17, 34), game.Find(Head), "down would reverse, so it keeps going up");
+			game.NextFrame(Left);
+			Assert.AreEqual((16, 34), game.Find(Head), "turned left");
+		}
+
+		[Test]
+		public void SnakeCrashesIntoTheWallAndRestartsOnAKey()
+		{
+			SnakeGame game = new(this);
+			int ticks = 0;
+			game.Circuit.Set("KEYS", 0);
+			while (game.Find(Crash).x < 0)
+			{
+				Assert.Less(ticks++, 100000, "the snake should reach the wall");
+				game.Circuit.Tick();
+			}
+			Assert.AreEqual((63, 32), game.Find(Crash), "crash shown where the head hit the wall");
+
+			game.NextFrame(Right, 100000);
+			Assert.AreEqual(-1, game.Find(Crash).x, "a new game started");
+			Assert.AreEqual((16, 32), game.Find(Head));
+		}
+
+		[Test]
+		public void SnakeBotEatsAndGrows()
+		{
+			SnakeGame game = new(this);
+			game.NextFrame();
+			for (int i = 0; i < 6; i++) game.NextFrame();
+			Assert.AreEqual(5, game.Length);
+
+			int eaten = 0;
+			(int x, int y) lastFood = game.Find(Food);
+			uint heading = Right;
+			for (int frame = 0; frame < 2000 && eaten < 4; frame++)
+			{
+				(int hx, int hy) = game.Find(Head);
+				(int fx, int fy) = game.Find(Food);
+				Assert.AreEqual(-1, game.Find(Crash).x, "the bot should not crash");
+
+				// Head for the food without reversing.
+				uint want = fx > hx ? Right : fx < hx ? Left : fy > hy ? Up : Down;
+				bool reverse = (want | heading) is (Right | Left) or (Up | Down);
+				if (reverse) want = fy > hy ? Up : fy < hy ? Down : (heading is Up or Down ? Right : Up);
+				heading = want;
+				game.NextFrame(want);
+
+				(int x, int y) food = game.Find(Food);
+				if (food != lastFood)
+				{
+					eaten++;
+					lastFood = food;
+				}
+			}
+
+			Assert.AreEqual(4, eaten, "food eaten");
+			for (int i = 0; i < 4; i++) game.NextFrame(heading);
+			Assert.AreEqual(5 + 3 * eaten, game.Length, "each food adds three segments");
 		}
 	}
 }

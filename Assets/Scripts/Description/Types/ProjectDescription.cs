@@ -28,6 +28,9 @@ namespace DLS.Description
 		public List<StarredItem> StarredList;
 		public List<ChipCollection> ChipCollections;
 
+		// Chip opened when the project is opened (empty: a new blank chip).
+		public string StartupChipName;
+
 		// ---- Helper functions ----
 		public bool IsStarred(string chipName, bool isCollection)
 		{
