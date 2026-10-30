@@ -235,4 +235,4 @@ RHDL 1.0 replaces the earlier syntax:
 
 ## Examples
 
-The curated `Examples/RHDL/` set progresses through `And2 -> HalfAdder -> FullAdder -> Mux4 -> DffBit -> Reg4`, then adds a separate `Ram4x4` memory example and `CPU4`, a 4-bit accumulator processor.
+The curated `Examples/RHDL/` set progresses through `And2 -> HalfAdder -> FullAdder -> Mux4 -> DffBit -> Reg4`, then adds a separate `Ram4x4` memory example, `CPU4`, a 4-bit accumulator processor, and `PIX6`, a small computer that draws on the 64 x 64 screen.

@@ -109,7 +109,9 @@ AND
              └─ D Flip-Flop
                  └─ 4-bit Register
                      ├─ RAM 4×4
-                     └─ CPU4
+                     ├─ CPU4
+                     └─ 8-bit Register
+                         └─ PIX6 computer + 64×64 screen
 ```
 
 Files are under **[Examples/RHDL](Examples/RHDL/)**.
@@ -126,6 +128,16 @@ CPU4 is a simple educational processor example with:
 - arithmetic, logic, jumps, output and halt
 
 See **[CPU4 documentation](Examples/RHDL/CPU4/README.md)**.
+
+### PIX6
+
+PIX6 is a small computer that draws on the 64 × 64 colour screen:
+
+- X and Y pen registers, a 12-bit colour register and an 8-bit program counter
+- 16-bit instructions: set and move the pen, set or generate a colour, plot, clear, show, jumps on X and Y, halt
+- a 12-instruction program that fills the screen with a colour pattern and draws a diagonal, and a moving-dot animation
+
+See **[PIX6 documentation](Examples/RHDL/PIX6/README.md)**.
 
 ### RAM4x4
 

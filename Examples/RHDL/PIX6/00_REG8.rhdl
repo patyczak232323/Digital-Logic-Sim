@@ -1,0 +1,6 @@
+# 8-bit rising-edge register built from eight DffBit instances.
+# RESET is synchronous: it clears the register on the next rising CLK edge.
+circuit Reg8(D: u8, WE, CLK, RESET) -> Q: u8:
+    for i in range(8):
+        d = 0 if RESET else (D[i] if WE else Q[i])
+        Q[i], _ = DffBit(d, CLK)

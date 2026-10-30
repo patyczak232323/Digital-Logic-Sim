@@ -1,0 +1,92 @@
+# PIX6: a small processor that draws on the 64 x 64 screen.
+#
+# Architecture:
+#   - X and Y registers (6 bits used): the pen position
+#   - colour register: 4 bits each of red, green and blue
+#   - 8-bit program counter, so 256 program words
+#   - 16-bit instruction: [ opcode:4 ][ argument:12 ]
+#   - one instruction per rising CLK edge
+#
+# The program lives in the stock 256x16 ROM. The screen is not inside the
+# processor: X, Y, R, G, B, PLOT, SHOW and CLS go to its pins (see 02_PIX6_COMPUTER).
+circuit Pix6(CLK, RESET) -> (
+    X: u8, Y: u8, R: u4, G: u4, B: u4, PLOT, SHOW, CLS,
+    PC: u8, HALTED, OPCODE: u4,
+):
+    # Fetch. pc, xr, yr and the colour registers are further down: using
+    # them here is the feedback loop of the processor.
+    rom = ROM(pc)
+    instruction = cat(rom.OUT_B, rom.OUT_A)
+    opcode = instruction[12:16]
+    arg = instruction[0:12]
+    target = instruction[0:8]
+
+    # Opcodes (word = 0xOAAA):
+    # 0 NOP          8 JMP a
+    # 1 SETX n       9 JXNZ a   jump if X != 0
+    # 2 SETY n       A JYNZ a   jump if Y != 0
+    # 3 SETC rgb     B PAT      colour from X and Y
+    # 4 ADDC rgb     C SHOW     show the drawn picture
+    # 5 PLOT         D CLS      clear the drawing (not the shown picture)
+    # 6 INCX         E PLOTX    PLOT, then INCX
+    # 7 INCY         F HLT
+    setx = opcode == 0x1
+    sety = opcode == 0x2
+    setc = opcode == 0x3
+    addc = opcode == 0x4
+    plot = opcode == 0x5
+    incx = opcode == 0x6
+    incy = opcode == 0x7
+    jmp = opcode == 0x8
+    jxnz = opcode == 0x9
+    jynz = opcode == 0xA
+    pat = opcode == 0xB
+    show = opcode == 0xC
+    cls = opcode == 0xD
+    plotx = opcode == 0xE
+    hlt = opcode == 0xF
+
+    running = not halted
+
+    # Pen position. Both wrap around at 64.
+    x = xr[0:6]
+    y = yr[0:6]
+    x_d = arg[0:6] if setx else (x + 1 if incx or plotx else x)
+    y_d = arg[0:6] if sety else (y + 1 if incy else y)
+    xr = Reg8(u8(x_d), running, CLK, RESET)
+    yr = Reg8(u8(y_d), running, CLK, RESET)
+
+    # Colour, written 0xRGB like the argument of SETC.
+    colour = cat(red, green, blue)
+    xy = x ^ y
+    pattern = cat(x[2:6], y[2:6], xy[2:6])
+    colour_d = (
+        arg if setc else
+        colour + arg if addc else
+        pattern if pat else
+        colour
+    )
+    red = Reg4(colour_d[8:12], running, CLK, RESET)
+    green = Reg4(colour_d[4:8], running, CLK, RESET)
+    blue = Reg4(colour_d[0:4], running, CLK, RESET)
+
+    # Halt flag: set by HLT, cleared by RESET.
+    halt_d = 0 if RESET else (1 if running and hlt else halted)
+    halted, _ = DffBit(halt_d, CLK)
+
+    # Program counter
+    take_jump = jmp or (jxnz and x != 0) or (jynz and y != 0)
+    pc_d = target if take_jump else pc + 1
+    pc = Reg8(pc_d, running and not hlt, CLK, RESET)
+
+    X = xr
+    Y = yr
+    R = red
+    G = green
+    B = blue
+    PLOT = running and (plot or plotx)
+    SHOW = running and show
+    CLS = running and cls
+    PC = pc
+    HALTED = halted
+    OPCODE = opcode
