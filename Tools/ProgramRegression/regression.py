@@ -220,14 +220,14 @@ def test_csharp_integration_guards() -> None:
     assert "PropagateGlobalRename" in global_chips
     assert "TrySaveFromDescription" in project
     assert '"ALL PROJECTS"' in chip_menu
-    assert "float y = totalHeight * 0.5f - i * 1.5f;" in rhdl_compiler
-    assert "result[i] = new PinDescription(" in rhdl_compiler
-    assert "DesiredY" not in rhdl_compiler
-    assert "FindStrongComponents" in rhdl_compiler
-    assert "instance.LayoutGroup = group[instance]" in rhdl_compiler
-    assert "RouteOrthogonal" in rhdl_compiler
-    assert "RouteIsClear" in rhdl_compiler
-    assert "SegmentConflictPenalty" in rhdl_compiler
+    # RHDL: root pins keep their declared order (saved pin IDs stay stable) and the
+    # schematic is drawn by the layered layout with per-channel wire tracks.
+    rhdl_layout = source("Assets/Scripts/RHDL/RhdlLayout.cs")
+    assert "foreach (PortSignal port in netlist.Inputs.Concat(netlist.Outputs))" in rhdl_compiler
+    assert "RhdlLayout.Arrange(nodes, edges);" in rhdl_compiler
+    for mechanism in ("AssignLayers", "BuildRoutes", "OrderLayers", "PlaceVertically", "AssignTracks", "BuildBends"):
+        assert f"static void {mechanism}(" in rhdl_layout or f"static float[] {mechanism}(" in rhdl_layout, mechanism
+    assert not (ROOT / "Assets/Scripts/RHDL/RhdlV3Lowerer.cs").exists()
     assert not (ROOT / "Assets/Scripts/Game/Project/SimulationFacade.cs").exists()
     assert not (ROOT / "Assets/Scripts/Graphics/UI/Menus/SimulationFacade.cs").exists()
 

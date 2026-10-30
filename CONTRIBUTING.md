@@ -14,7 +14,7 @@ Thanks for helping. Bug reports with a small project or RHDL file that reproduce
 | Path | Contents |
 | --- | --- |
 | `Assets/Scripts/Simulation` | Simulation engine: `RewiredEngine` (the single entry point), the deterministic simulator, native JIT, feedback JIT, FULL LUT cache, truth tables, breakpoints, diagnostics |
-| `Assets/Scripts/RHDL` | RHDL frontend: `RhdlV3Lowerer` turns v0.6 source into structural components and wires, `RhdlCompiler` builds and lays out the chip |
+| `Assets/Scripts/RHDL` | RHDL frontend: `RhdlSyntax` parses the source, `RhdlElaborator` builds a NAND netlist from it, `RhdlLayout` draws the schematic and `RhdlCompiler` ties them together |
 | `Assets/Scripts/Description` | Chip and project data types and their JSON serialization |
 | `Assets/Scripts/SaveSystem` | Loading, saving, save paths, global chips, WebGL and Android storage |
 | `Assets/Scripts/Game` | Editor model: projects, chip instances, interaction, undo, challenges |

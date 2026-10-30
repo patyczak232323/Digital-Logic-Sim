@@ -30,10 +30,10 @@ namespace DLS.Graphics
 		const float TextPad = 0.45f;
 		const string Indent = "    ";
 
-		static readonly HashSet<string> SyntaxKeywords = new(StringComparer.OrdinalIgnoreCase)
+		static readonly HashSet<string> SyntaxKeywords = new(StringComparer.Ordinal)
 		{
-			"circuit", "end", "input", "output", "signal", "constant", "component", "connect",
-			"and", "or", "xor", "not", "join", "choose", "high", "low"
+			"circuit", "for", "in", "range", "if", "else", "and", "or", "not", "pass",
+			"cat", "True", "False", "bit", "u1", "u2", "u3", "u4", "u5", "u6", "u7", "u8", "u16"
 		};
 
 		readonly UIHandle scrollID = new("RHDL_DocumentScroll");
@@ -265,10 +265,10 @@ namespace DLS.Graphics
 					while (i < codeEnd && (char.IsLetterOrDigit(line[i]) || line[i] == '_')) i++;
 					colour = new Color(0.92f, 0.76f, 0.43f);
 				}
-				else if ("[]():,=+-<>".IndexOf(line[i]) >= 0)
+				else if ("[]():,=+-<>&|^~".IndexOf(line[i]) >= 0)
 				{
 					i++;
-					while (i < codeEnd && "[]():,=+-<>".IndexOf(line[i]) >= 0) i++;
+					while (i < codeEnd && "[]():,=+-<>&|^~".IndexOf(line[i]) >= 0) i++;
 					colour = RewiredUI.SecondaryText;
 				}
 				else
@@ -838,17 +838,23 @@ namespace DLS.Graphics
 			Touch();
 		}
 
+		// Indentation is part of the syntax, so formatting keeps the block structure and only
+		// rewrites each level as four spaces, turns tabs into spaces and trims line ends.
+		// Lines continued inside brackets keep their indentation relative to the line above.
 		void FormatDocument()
 		{
 			EnsureLineCache();
 			int oldLine = FindLineForIndex(caret);
 			int oldColumn = caret - lineStarts[oldLine];
 			string[] work = new string[lines.Length];
-			bool insideCircuit = false;
+			List<int> levels = new() { 0 };
+			int depth = 0;
+			int lastWidth = 0;
+			int lastLevel = 0;
 
 			for (int i = 0; i < lines.Length; i++)
 			{
-				string raw = lines[i].TrimEnd();
+				string raw = lines[i].Replace("\t", Indent).TrimEnd();
 				string trimmed = raw.TrimStart();
 				if (trimmed.Length == 0)
 				{
@@ -856,23 +862,44 @@ namespace DLS.Graphics
 					continue;
 				}
 
-				string code = StripEditorComment(trimmed).Trim();
-				bool isCircuitHeader = code.StartsWith("circuit ", StringComparison.OrdinalIgnoreCase);
-				bool isEnd = code.Equals("end", StringComparison.OrdinalIgnoreCase);
-
-				if (isCircuitHeader)
+				int width = raw.Length - trimmed.Length;
+				if (depth > 0 && (trimmed[0] is ')' or ']'))
 				{
-					work[i] = trimmed;
-					insideCircuit = true;
+					// A line that closes the bracket lines up with the line that opened it.
+					work[i] = new string(' ', lastLevel * Indent.Length) + trimmed;
 				}
-				else if (isEnd)
+				else if (depth > 0)
 				{
-					work[i] = "end";
-					insideCircuit = false;
+					// Continuation line: keep it indented past the line that opened the bracket.
+					int extra = Math.Max(1, (width - lastWidth + Indent.Length - 1) / Indent.Length);
+					work[i] = new string(' ', (lastLevel + extra) * Indent.Length) + trimmed;
+				}
+				else if (trimmed.StartsWith("#"))
+				{
+					// Comments do not open or close blocks; they take the level they sit at.
+					int commentLevel = -1;
+					foreach (int open in levels)
+					{
+						if (open <= width) commentLevel++;
+					}
+
+					// Deeper than the current block: the first line of a block just opened.
+					if (width > levels[^1]) commentLevel++;
+
+					work[i] = new string(' ', Math.Max(0, commentLevel) * Indent.Length) + trimmed;
 				}
 				else
 				{
-					work[i] = (insideCircuit ? Indent : string.Empty) + trimmed;
+					int level = LevelFor(levels, width);
+					work[i] = new string(' ', level * Indent.Length) + trimmed;
+					lastWidth = width;
+					lastLevel = level;
+				}
+
+				foreach (char c in StripEditorComment(trimmed))
+				{
+					if (c is '(' or '[') depth++;
+					else if (c is ')' or ']') depth = Math.Max(0, depth - 1);
 				}
 			}
 
@@ -890,6 +917,20 @@ namespace DLS.Graphics
 			anchor = caret;
 			preferredColumn = -1;
 			Touch();
+		}
+
+		// The block level of a line indented by width spaces, updating the stack of open
+		// block widths the way the RHDL lexer does.
+		static int LevelFor(List<int> levels, int width)
+		{
+			if (width > levels[^1])
+			{
+				levels.Add(width);
+				return levels.Count - 1;
+			}
+
+			while (levels.Count > 1 && width < levels[^1]) levels.RemoveAt(levels.Count - 1);
+			return levels.Count - 1;
 		}
 
 		static int FindEditorCommentStart(string line)
@@ -966,10 +1007,18 @@ namespace DLS.Graphics
 			string indent = beforeCaret.Substring(0, whitespaceCount);
 			string codeBeforeCaret = StripEditorComment(beforeCaret).Trim();
 
-			if (codeBeforeCaret.StartsWith("circuit ", StringComparison.OrdinalIgnoreCase))
-				indent = Indent;
-			else if (codeBeforeCaret.Equals("end", StringComparison.OrdinalIgnoreCase))
-				indent = string.Empty;
+			// A line ending in ':' opens a block; an unclosed bracket continues the line.
+			int open = 0;
+			foreach (char c in codeBeforeCaret)
+			{
+				if (c is '(' or '[') open++;
+				else if (c is ')' or ']') open--;
+			}
+
+			if (codeBeforeCaret.EndsWith(":") || open > 0)
+				indent += Indent;
+			else if (codeBeforeCaret == "pass")
+				indent = indent.Length >= Indent.Length ? indent.Substring(Indent.Length) : string.Empty;
 
 			ReplaceSelection("\n" + indent);
 		}

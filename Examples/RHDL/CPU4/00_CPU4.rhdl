@@ -10,53 +10,16 @@
 #
 # Program storage uses the stock 256x16 ROM. CPU4 uses only addresses 0..15
 # and the low byte of every ROM word.
-circuit CPU4
-    input CLK, RESET
-
-    output ACC: 4
-    output PC: 4
-    output OUT_PORT: 4
-    output Z
-    output HALTED
-
-    output INSTR: 8
-    output OPCODE: 4
-    output OPERAND: 4
-
-    signal pc_q: 4
-    signal pc_d: 4
-    signal pc_we
-    component pc_reg : Reg4(D=pc_d, WE=pc_we, CLK=CLK, RESET=RESET, Q=pc_q)
-
-    signal acc_q: 4
-    signal acc_d: 4
-    signal acc_we
-    component acc_reg : Reg4(D=acc_d, WE=acc_we, CLK=CLK, RESET=RESET, Q=acc_q)
-
-    signal out_q: 4
-    signal out_we
-    component out_reg : Reg4(D=acc_q, WE=out_we, CLK=CLK, RESET=RESET, Q=out_q)
-
-    signal halted_i
-    signal halt_d
-    signal halt_not
-    signal halt_we
-
-    halt_d = choose(RESET, 0, choose(halt_we, 1, halted_i))
-    component halt_reg : DffBit(D=halt_d, CLK=CLK, Q=halted_i, NOT_Q=halt_not)
-
-    signal rom_addr: 8
-    signal instruction: 8
-    signal rom_high_unused: 8
-
-    rom_addr = join(0x0, pc_q)
-    component program_rom : ROM25616(ADDRESS=rom_addr, OUT_A=instruction, OUT_B=rom_high_unused)
-
-    signal opcode_i: 4
-    signal operand_i: 4
-
-    opcode_i = instruction[7:4]
-    operand_i = instruction[3:0]
+circuit CPU4(CLK, RESET) -> (
+    ACC: u4, PC: u4, OUT_PORT: u4, Z, HALTED,
+    INSTR: u8, OPCODE: u4, OPERAND: u4,
+):
+    # Fetch: pc and acc are registers further down. Using them here is the
+    # feedback loop of the processor.
+    rom = ROM(cat(0b0000, pc))
+    instruction = rom.OUT_A
+    opcode = instruction[4:8]
+    operand = instruction[0:4]
 
     # Opcodes:
     # 0 NOP       8 JZ addr
@@ -67,86 +30,57 @@ circuit CPU4
     # 5 ORI imm   D reserved
     # 6 XORI imm  E OUT
     # 7 JMP addr  F HLT
+    ldi = opcode == 0x1
+    addi = opcode == 0x2
+    subi = opcode == 0x3
+    andi = opcode == 0x4
+    ori = opcode == 0x5
+    xori = opcode == 0x6
+    jmp = opcode == 0x7
+    jz = opcode == 0x8
+    jnz = opcode == 0x9
+    inv = opcode == 0xA
+    inc = opcode == 0xB
+    dec = opcode == 0xC
+    out = opcode == 0xE
+    hlt = opcode == 0xF
 
-    signal i_ldi
-    signal i_addi
-    signal i_subi
-    signal i_andi
-    signal i_ori
-    signal i_xori
-    signal i_jmp
-    signal i_jz
-    signal i_jnz
-    signal i_not
-    signal i_inc
-    signal i_dec
-    signal i_out
-    signal i_hlt
+    running = not halted
+    zero = acc == 0
 
-    i_ldi = opcode_i == 0x1
-    i_addi = opcode_i == 0x2
-    i_subi = opcode_i == 0x3
-    i_andi = opcode_i == 0x4
-    i_ori = opcode_i == 0x5
-    i_xori = opcode_i == 0x6
-    i_jmp = opcode_i == 0x7
-    i_jz = opcode_i == 0x8
-    i_jnz = opcode_i == 0x9
-    i_not = opcode_i == 0xA
-    i_inc = opcode_i == 0xB
-    i_dec = opcode_i == 0xC
-    i_out = opcode_i == 0xE
-    i_hlt = opcode_i == 0xF
+    # Accumulator
+    acc_d = (
+        operand if ldi else
+        acc + operand if addi else
+        acc - operand if subi else
+        acc & operand if andi else
+        acc | operand if ori else
+        acc ^ operand if xori else
+        ~acc if inv else
+        acc + 1 if inc else
+        acc - 1 if dec else
+        acc
+    )
+    writes_acc = ldi or addi or subi or andi or ori or xori or inv or inc or dec
+    acc = Reg4(acc_d, running and writes_acc, CLK, RESET)
 
-    signal add_v: 4
-    signal sub_v: 4
-    signal and_v: 4
-    signal or_v: 4
-    signal xor_v: 4
-    signal not_v: 4
-    signal inc_v: 4
-    signal dec_v: 4
+    # Output port
+    out_port = Reg4(acc, running and out, CLK, RESET)
 
-    add_v = acc_q + operand_i
-    sub_v = acc_q - operand_i
-    and_v = acc_q and operand_i
-    or_v = acc_q or operand_i
-    xor_v = acc_q xor operand_i
-    not_v = not acc_q
-    inc_v = acc_q + 0x1
-    dec_v = acc_q - 0x1
+    # Halt flag: set by HLT, cleared by RESET.
+    halt_d = 0 if RESET else (1 if running and hlt else halted)
+    halted, _ = DffBit(halt_d, CLK)
 
-    acc_d = choose(i_ldi, operand_i, choose(i_addi, add_v, choose(i_subi, sub_v, choose(i_andi, and_v, choose(i_ori, or_v, choose(i_xori, xor_v, choose(i_not, not_v, choose(i_inc, inc_v, choose(i_dec, dec_v, acc_q)))))))))
+    # Program counter
+    take_branch = jmp or (jz and zero) or (jnz and not zero)
+    pc_d = operand if take_branch else pc + 1
+    pc = Reg4(pc_d, running and not hlt, CLK, RESET)
 
-    signal running
-    signal acc_instruction
-    signal zero
-
-    running = not halted_i
-    zero = acc_q == 0x0
-
-    acc_instruction = i_ldi or i_addi or i_subi or i_andi or i_ori or i_xori or i_not or i_inc or i_dec
-
-    acc_we = running and acc_instruction
-    out_we = running and i_out
-    halt_we = running and i_hlt
-
-    signal pc_inc: 4
-    signal take_branch
-
-    pc_inc = pc_q + 0x1
-    take_branch = i_jmp or (i_jz and zero) or (i_jnz and not zero)
-
-    pc_d = choose(take_branch, operand_i, pc_inc)
-    pc_we = running and not i_hlt
-
-    ACC = acc_q
-    PC = pc_q
-    OUT_PORT = out_q
+    ACC = acc
+    PC = pc
+    OUT_PORT = out_port
     Z = zero
-    HALTED = halted_i
-
+    HALTED = halted
     INSTR = instruction
-    OPCODE = opcode_i
-    OPERAND = operand_i
-end
+    OPCODE = opcode
+    OPERAND = operand

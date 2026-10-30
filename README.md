@@ -41,7 +41,7 @@ The repository includes a compact example progression ending with a **4-bit CPU*
 - simulation diagnostics and profiling
 - waveform capture and deterministic replay
 - non-convergence diagnostics
-- **RHDL v0.6** hardware description language
+- **RHDL 1.0** hardware description language with Python syntax
 - truth table for any combinational chip, recordable as a regression test
 - breakpoints: pause when a pin changes, rises, falls or reaches a value
 - export to structural Verilog, SVG schematics and PNG screenshots
@@ -73,33 +73,28 @@ For a first project, see **[Getting Started](Docs/GETTING_STARTED.md)**.
 
 ## RHDL — hardware description language
 
-Rewired includes **RHDL Studio**, a source-driven circuit generator. RHDL describes hardware concurrently and lowers into normal Rewired components and wires; it does not use a separate simulation runtime.
+Rewired includes **RHDL Studio**, a source-driven circuit generator. RHDL uses Python syntax to describe hardware and builds an ordinary Rewired chip from NAND gates and your other chips; it does not use a separate simulation runtime.
 
 Example:
 
-```text
-circuit Adder
-    input A: 8
-    input B: 8
-    output Y: 8
-
-    Y = A + B
-end
+```python
+circuit FullAdder(A, B, CIN) -> (SUM, COUT):
+    ab = A ^ B
+    SUM = ab ^ CIN
+    COUT = (A & B) | (CIN & ab)
 ```
 
 RHDL supports:
 
-- 1, 4 and 8-bit signals
-- Boolean logic: `and`, `or`, `xor`, `not`
-- arithmetic and comparisons
-- bit indexing and slicing
-- `join(...)`
-- `choose(...)` multiplexing
-- reusable component instances
-- explicit structural `connect` wiring
-- feedback/stateful circuits through ordinary Rewired topology
+- Python operators: `& | ^ ~`, `+ -`, comparisons, `<< >>`, and `and`/`or`/`not` on bits
+- `a if select else b` multiplexing
+- bit indexing and Python slices (`A[0:4]`), `cat(...)` and `u8(...)` width changes
+- `for i in range(n):` loops and variables that build chains such as ripple-carry adders
+- calling other chips like functions, with tuple unpacking (`q, nq = DffBit(d, clk)`)
+- feedback and memory: a name can be used above the line that assigns it
+- constant folding, shared gates and readable left-to-right schematics
 
-See the **[RHDL v0.6 Guide](Docs/RHDL_GUIDE.md)**.
+See the **[RHDL Guide](Docs/RHDL_GUIDE.md)**.
 
 ## Examples
 
