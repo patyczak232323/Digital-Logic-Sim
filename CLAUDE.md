@@ -13,8 +13,10 @@
      (`androidKeystoreName`, `androidKeystoreBase64`, `androidKeystorePass`, `androidKeyaliasName`,
      `androidKeyaliasPass`), fail the job with a clear error when they are missing, and set
      `androidVersionCode` so it grows with every release (e.g. from the version number).
-  2. Prepare release v0.5.0: bump `VERSION`, `Main.RewiredVersion` (and its date) and `bundleVersion`,
-     add `Docs/RELEASE_0.5.0.md`, then tag `v0.5.0`.
+  2. Release the next version (v0.5.0 is out, published 30 Oct 2026, its APK still debug-signed):
+     bump `VERSION`, `Main.RewiredVersion` (and its date), `bundleVersion` and the README version,
+     add `Docs/RELEASE_<version>.md`, merge, then run `release.yml` on `main` (workflow_dispatch;
+     this environment cannot push tags, the release creates the tag itself).
   3. Remind the owner that switching from the debug key needs one uninstall on Android, which
      deletes projects stored in the app: export the ones to keep first (they go to Download/Rewired).
   Remove this reminder when it is done.
