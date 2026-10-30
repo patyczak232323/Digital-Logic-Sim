@@ -400,6 +400,7 @@ namespace Seb.Vis
 
 		public static TextRenderer.BoundingBox CalculateTextBounds(ReadOnlySpan<char> text, FontType font, float fontSize, Vector2 pos, Anchor anchor, float lineSpacing = 1)
 		{
+			EnsureDefaultFontsLoaded();
 			FontData fontData = defaultFontsData[(int)font];
 			return TextRenderer.CalculateWorldBounds(text, fontData, new TextRenderer.LayoutSettings(fontSize, lineSpacing, 1, 1), pos, anchor);
 		}
