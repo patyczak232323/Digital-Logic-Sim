@@ -86,6 +86,10 @@ namespace DLS.Description
 		public bool VSyncEnabled;
 		public ShortcutBinding[] KeyBindings;
 
+		// Example projects that came with Rewired and were already copied into the projects
+		// folder, so a deleted example does not come back.
+		public string[] InstalledBundledProjects;
+
 		public static AppSettings Default() =>
 			new()
 			{

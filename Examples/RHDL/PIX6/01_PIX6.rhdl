@@ -2,19 +2,24 @@
 #
 # Architecture:
 #   - X and Y registers (6 bits used): the pen position
+#   - two spare pens, B and F, that SWAP exchanges with the pen
 #   - colour register: 4 bits each of red, green and blue
+#   - direction D and next direction N, set from the KEYS input
+#   - delay counter T, grow counter G and a random number generator
 #   - 8-bit program counter, so 256 program words
 #   - 16-bit instruction: [ opcode:4 ][ argument:12 ]
 #   - one instruction per rising CLK edge
 #
 # The program lives in the stock 256x16 ROM. The screen is not inside the
-# processor: X, Y, R, G, B, PLOT, SHOW and CLS go to its pins (see 02_PIX6_COMPUTER).
-circuit Pix6(CLK, RESET) -> (
+# processor: X, Y, R, G, B, PLOT, SHOW and CLS go to its pins and the colour
+# it shows at (X, Y) comes back on SCREEN_R/G/B (see 02_PIX6_COMPUTER).
+# KEYS bits are the directions: 0 right, 1 up, 2 left, 3 down.
+circuit Pix6(CLK, RESET, KEYS: u4, SCREEN_R: u4, SCREEN_G: u4, SCREEN_B: u4) -> (
     X: u8, Y: u8, R: u4, G: u4, B: u4, PLOT, SHOW, CLS,
     PC: u8, HALTED, OPCODE: u4,
 ):
-    # Fetch. pc, xr, yr and the colour registers are further down: using
-    # them here is the feedback loop of the processor.
+    # Fetch. The registers are further down: using them here is the
+    # feedback loop of the processor.
     rom = ROM(pc)
     instruction = cat(rom.OUT_B, rom.OUT_A)
     opcode = instruction[12:16]
@@ -22,14 +27,14 @@ circuit Pix6(CLK, RESET) -> (
     target = instruction[0:8]
 
     # Opcodes (word = 0xOAAA):
-    # 0 NOP          8 JMP a
-    # 1 SETX n       9 JXNZ a   jump if X != 0
-    # 2 SETY n       A JYNZ a   jump if Y != 0
-    # 3 SETC rgb     B PAT      colour from X and Y
-    # 4 ADDC rgb     C SHOW     show the drawn picture
-    # 5 PLOT         D CLS      clear the drawing (not the shown picture)
-    # 6 INCX         E PLOTX    PLOT, then INCX
-    # 7 INCY         F HLT
+    # 0 extended (below)  8 JMP a
+    # 1 SETX n            9 JXNZ a   jump if X != 0
+    # 2 SETY n            A JYNZ a   jump if Y != 0
+    # 3 SETC rgb          B PAT      colour from X and Y
+    # 4 ADDC rgb          C SHOW     show the drawn picture
+    # 5 PLOT              D CLS      clear the drawing (not the shown picture)
+    # 6 INCX              E PLOTX    PLOT, then INCX
+    # 7 INCY              F HLT
     setx = opcode == 0x1
     sety = opcode == 0x2
     setc = opcode == 0x3
@@ -46,45 +51,139 @@ circuit Pix6(CLK, RESET) -> (
     plotx = opcode == 0xE
     hlt = opcode == 0xF
 
+    # Extended instructions (word = 0x0Saa):
+    # 00 NOP              08 KEYS     N <- pressed direction, unless it reverses D
+    # 01 SWAP B / SWAP F  09 JKEY a   jump if a key is pressed
+    # 02 TURN   D <- N    0A RND      pen <- random position
+    # 03 STEP   move by D 0B JCZ a    jump if colour == 0
+    # 04 STEPC  move by   0C SETT n   T <- n * 16
+    #    colour bits 0-1  0D DJNZ a   T <- T - 1, jump if T != 0
+    # 05 READ   colour <- 0E GROW n   G <- G + n
+    #    shown pixel      0F JGROW a  if G != 0: G <- G - 1 and jump
+    # 06 DCOL   colour bits 0-1 <- D
+    # 07 ERASE  draw black at the pen
+    ext = opcode == 0x0
+    sub = arg[8:12]
+    small = arg[0:8]
+    swap_b = ext and sub == 0x1 and not small[0]
+    swap_f = ext and sub == 0x1 and small[0]
+    turn = ext and sub == 0x2
+    step = ext and sub == 0x3
+    stepc = ext and sub == 0x4
+    read = ext and sub == 0x5
+    dcol = ext and sub == 0x6
+    erase = ext and sub == 0x7
+    keys = ext and sub == 0x8
+    jkey = ext and sub == 0x9
+    rnd = ext and sub == 0xA
+    jcz = ext and sub == 0xB
+    sett = ext and sub == 0xC
+    djnz = ext and sub == 0xD
+    grow = ext and sub == 0xE
+    jgrow = ext and sub == 0xF
+
     running = not halted
+
+    # Directions: 0 right, 1 up, 2 left, 3 down.
+    d = dr[0:2]
+    n = nr[0:2]
+    key_pressed = KEYS != 0
+    key_dir = 0b00 if KEYS[0] else (0b01 if KEYS[1] else (0b10 if KEYS[2] else 0b11))
+    accept_key = keys and key_pressed and (key_dir ^ d) != 0b10
+    n_d = key_dir if accept_key else n
+    d_d = n if turn else d
+    nr = Reg4(u4(n_d), running, CLK, RESET)
+    dr = Reg4(u4(d_d), running, CLK, RESET)
 
     # Pen position. Both wrap around at 64.
     x = xr[0:6]
     y = yr[0:6]
-    x_d = arg[0:6] if setx else (x + 1 if incx or plotx else x)
-    y_d = arg[0:6] if sety else (y + 1 if incy else y)
+    move = step or stepc
+    move_dir = d if step else colour[0:2]
+    x_moved = x + 1 if move_dir == 0 else (x - 1 if move_dir == 2 else x)
+    y_moved = y + 1 if move_dir == 1 else (y - 1 if move_dir == 3 else y)
+    x_d = (
+        arg[0:6] if setx else
+        x + 1 if incx or plotx else
+        x_moved if move else
+        bxr[0:6] if swap_b else
+        fxr[0:6] if swap_f else
+        random[0:6] if rnd else
+        x
+    )
+    y_d = (
+        arg[0:6] if sety else
+        y + 1 if incy else
+        y_moved if move else
+        byr[0:6] if swap_b else
+        fyr[0:6] if swap_f else
+        random[6:12] if rnd else
+        y
+    )
     xr = Reg8(u8(x_d), running, CLK, RESET)
     yr = Reg8(u8(y_d), running, CLK, RESET)
+
+    # Spare pens: SWAP exchanges one of them with the pen.
+    bxr = Reg8(xr, running and swap_b, CLK, RESET)
+    byr = Reg8(yr, running and swap_b, CLK, RESET)
+    fxr = Reg8(xr, running and swap_f, CLK, RESET)
+    fyr = Reg8(yr, running and swap_f, CLK, RESET)
 
     # Colour, written 0xRGB like the argument of SETC.
     colour = cat(red, green, blue)
     xy = x ^ y
     pattern = cat(x[2:6], y[2:6], xy[2:6])
+    screen = cat(SCREEN_R, SCREEN_G, SCREEN_B)
     colour_d = (
         arg if setc else
         colour + arg if addc else
         pattern if pat else
+        screen if read else
+        cat(colour[2:12], d) if dcol else
         colour
     )
     red = Reg4(colour_d[8:12], running, CLK, RESET)
     green = Reg4(colour_d[4:8], running, CLK, RESET)
     blue = Reg4(colour_d[0:4], running, CLK, RESET)
 
+    # Delay counter T (12 bits) and grow counter G.
+    t = cat(t_high, t_low)
+    t_next = t - 1
+    t_d = cat(small, 0b0000) if sett else (t_next if djnz else t)
+    t_low = Reg8(t_d[0:8], running, CLK, RESET)
+    t_high = Reg4(t_d[8:12], running, CLK, RESET)
+    g_nonzero = g != 0
+    g_d = g + small if grow else (g - 1 if jgrow and g_nonzero else g)
+    g = Reg8(g_d, running, CLK, RESET)
+
+    # Random numbers: a 16-bit LFSR that steps every cycle. The registers hold
+    # it XOR a seed, so the all-zero state after RESET is a valid one.
+    lfsr = cat(rand_high, rand_low) ^ 0xACE1
+    lfsr_next = (lfsr >> 1) ^ (0xB400 if lfsr[0] else 0x0000)
+    rand_d = lfsr_next ^ 0xACE1
+    rand_low = Reg8(rand_d[0:8], running, CLK, RESET)
+    rand_high = Reg8(rand_d[8:16], running, CLK, RESET)
+    random = lfsr
+
     # Halt flag: set by HLT, cleared by RESET.
     halt_d = 0 if RESET else (1 if running and hlt else halted)
     halted, _ = DffBit(halt_d, CLK)
 
     # Program counter
-    take_jump = jmp or (jxnz and x != 0) or (jynz and y != 0)
+    take_jump = (
+        jmp or (jxnz and x != 0) or (jynz and y != 0) or
+        (jkey and key_pressed) or (jcz and colour == 0) or
+        (djnz and t_next != 0) or (jgrow and g_nonzero)
+    )
     pc_d = target if take_jump else pc + 1
     pc = Reg8(pc_d, running and not hlt, CLK, RESET)
 
     X = xr
     Y = yr
-    R = red
-    G = green
-    B = blue
-    PLOT = running and (plot or plotx)
+    R = 0 if erase else red
+    G = 0 if erase else green
+    B = 0 if erase else blue
+    PLOT = running and (plot or plotx or erase)
     SHOW = running and show
     CLS = running and cls
     PC = pc

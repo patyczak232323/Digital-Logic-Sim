@@ -1,0 +1,102 @@
+; SNAKE for the PIX6 computer.
+;
+; W A S D (KEYS bits up, left, down, right) steer the snake. Eat the red food to
+; grow; hitting a wall or yourself ends the game. Press any key to play again.
+;
+; The screen is the only memory: every body pixel is green, and the low two bits
+; of its blue channel hold the direction to the next segment (DCOL). The tail
+; reads its pixel (READ), erases it and follows that direction (STEPC).
+; Pen = head, pen B = tail, pen F = food.
+
+start:
+    CLS
+    SETC 0x444          ; walls around the edge
+    SETX 0
+    SETY 0
+wall_bottom:
+    PLOTX
+    JXNZ wall_bottom
+    SETY 63
+wall_top:
+    PLOTX
+    JXNZ wall_top
+    SETY 1
+wall_left:
+    PLOT
+    INCY
+    JYNZ wall_left
+    SETX 63
+wall_right:
+    PLOT
+    INCY
+    JYNZ wall_right
+
+    SETX 16             ; tail in the middle of the left half...
+    SETY 32
+    SWAP B
+    SETX 16             ; ...and the head on top of it
+    SETY 32
+    SETC 0xFF0
+    PLOT
+    GROW 4              ; the tail waits while the snake grows to 5
+    SHOW
+    JMP food
+
+frame:
+    SETT 40             ; game speed: 40 * 16 turns of the loop below
+wait:
+    KEYS
+    DJNZ wait
+
+    TURN
+    SETC 0x0F0          ; the old head becomes body pointing at the new head
+    DCOL
+    PLOT
+    STEP
+    READ                ; what is in front of the snake?
+    JCZ move
+    ADDC 0x100          ; food (0xF00) wraps to 0
+    JCZ eat
+    JMP dead
+
+move:
+    SETC 0xFF0
+    PLOT
+    JGROW shown         ; still growing: the tail stays
+    SWAP B
+    READ
+    ERASE
+    STEPC
+    SWAP B
+shown:
+    SHOW
+    JMP frame
+
+eat:
+    SETC 0xFF0
+    PLOT
+    GROW 2              ; this frame and two more without moving the tail
+food:
+    SWAP F
+food_try:
+    RND
+    READ
+    JCZ food_place
+    JMP food_try
+food_place:
+    SETC 0xF00
+    PLOT
+    SWAP F
+    SHOW
+    JMP frame
+
+dead:
+    SETC 0xF0F
+    PLOT
+    SHOW
+    SETT 255
+dead_pause:
+    DJNZ dead_pause
+dead_wait:
+    JKEY start
+    JMP dead_wait

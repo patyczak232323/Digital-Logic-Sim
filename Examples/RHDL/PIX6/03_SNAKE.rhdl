@@ -1,0 +1,19 @@
+# SNAKE: the PIX6 processor, the 64 x 64 screen, a clock and five keys.
+#
+# Load snake.pix6 into the ROM inside Pix6 (the Snake project that comes with
+# Rewired already has it) and bind the keys to W, A, S, D and R.
+circuit Snake() -> PC: u8:
+    clk = CLOCK()
+    up = KEY()
+    left = KEY()
+    down = KEY()
+    right = KEY()
+    reset_key = KEY()
+
+    # Registers made of NAND gates start in no particular state, so the
+    # processor is reset for a few steps when the simulation starts.
+    power_on = PULSE(1)
+
+    cpu = Pix6(clk, reset_key or power_on, cat(down, left, up, right), screen.R_OUT, screen.G_OUT, screen.B_OUT)
+    screen = RGB_DISPLAY_64(cpu.X, cpu.Y, cpu.R, cpu.G, cpu.B, cpu.CLS, cpu.PLOT, cpu.SHOW, clk)
+    PC = cpu.PC
