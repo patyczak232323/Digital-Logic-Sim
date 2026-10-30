@@ -53,10 +53,22 @@ namespace DLS.RHDL
 			{
 				// A bug in the compiler must not take the editor down with it.
 				diagnostics.Add(new RhdlDiagnostic(elaborator.currentLine, 0,
-					$"Internal RHDL error ({e.GetType().Name}: {e.Message}). Please report this source as a bug."));
+					$"Internal RHDL error ({e.GetType().Name}: {e.Message} at {FirstFrame(e)}). Please report this source as a bug."));
 			}
 
 			return diagnostics.Count == 0 ? elaborator.netlist : null;
+		}
+
+		// Where an unexpected exception was thrown, for bug reports.
+		internal static string FirstFrame(Exception e)
+		{
+			string trace = e.StackTrace ?? string.Empty;
+			foreach (string line in trace.Split('\n'))
+			{
+				if (line.Contains("RHDL")) return line.Trim();
+			}
+
+			return trace.Split('\n')[0].Trim();
 		}
 
 		// ---- Symbols ----

@@ -126,9 +126,21 @@ namespace DLS.RHDL
 			}
 			catch (Exception e)
 			{
-				diagnostics.Add(new RhdlDiagnostic(0, $"Internal RHDL error while drawing the chip ({e.GetType().Name}: {e.Message}). Please report this source as a bug."));
+				diagnostics.Add(new RhdlDiagnostic(0, $"Internal RHDL error while drawing the chip ({e.GetType().Name}: {e.Message} at {FirstFrame(e)}). Please report this source as a bug."));
 				return new RhdlCompileResult(null, diagnostics);
 			}
+		}
+
+		// Where an unexpected exception was thrown, for bug reports.
+		internal static string FirstFrame(Exception e)
+		{
+			string trace = e.StackTrace ?? string.Empty;
+			foreach (string line in trace.Split('\n'))
+			{
+				if (line.Contains("RHDL")) return line.Trim();
+			}
+
+			return trace.Split('\n')[0].Trim();
 		}
 
 		static readonly System.Text.RegularExpressions.Regex Version06Line = new(
