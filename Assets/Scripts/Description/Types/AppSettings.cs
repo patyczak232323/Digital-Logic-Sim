@@ -90,6 +90,9 @@ namespace DLS.Description
 		// folder, so a deleted example does not come back.
 		public string[] InstalledBundledProjects;
 
+		// Rewired asks GitHub for a newer release when it starts, unless this is set.
+		public bool DisableUpdateCheck;
+
 		public static AppSettings Default() =>
 			new()
 			{

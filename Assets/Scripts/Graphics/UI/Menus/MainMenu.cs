@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using DLS.Description;
 using DLS.Game;
+using DLS.Game.Updates;
 using DLS.SaveSystem;
 using DLS.Simulation;
 using Seb.Helpers;
@@ -168,8 +169,16 @@ namespace DLS.Graphics
 			Color shadowCol = ColHelper.MakeCol255(87, 94, 230);
 			Color subtitleCol = new(1, 1, 1, 0.55f);
 
-			UI.DrawText(title, FontType.Born2bSporty, titleFontSize, UI.Centre + Vector2.up * (titleHeight + shaddowOffset), Anchor.CentreTop, shadowCol);
-			UI.DrawText(title, FontType.Born2bSporty, titleFontSize, UI.Centre + Vector2.up * titleHeight, Anchor.CentreTop, Color.white);
+			// Logo to the left of the title, the two centred together.
+			Vector2 titleSize = UI.CalculateTextSize(title, titleFontSize, FontType.Born2bSporty);
+			float logoSize = titleSize.y * 1.25f;
+			const float logoGap = 1.5f;
+			float titleShift = (logoSize + logoGap) / 2;
+			Vector2 titleTop = UI.Centre + new Vector2(titleShift, titleHeight);
+			RewiredLogo.Draw(titleTop + new Vector2(-titleSize.x / 2 - logoGap - logoSize / 2, -titleSize.y / 2), logoSize);
+
+			UI.DrawText(title, FontType.Born2bSporty, titleFontSize, titleTop + Vector2.up * shaddowOffset, Anchor.CentreTop, shadowCol);
+			UI.DrawText(title, FontType.Born2bSporty, titleFontSize, titleTop, Anchor.CentreTop, Color.white);
 			UI.DrawText(subtitle, FontType.Born2bSporty, subtitleFontSize, UI.Centre + Vector2.up * 14.0f, Anchor.CentreTop, subtitleCol);
 		}
 
@@ -378,6 +387,12 @@ namespace DLS.Graphics
 				UI.DrawText("VSync", theme.FontRegular, theme.FontSizeRegular, pos, Anchor.CentreLeft, Color.white);
 				int vsyncSetting = UI.WheelSelector(EditedAppSettings.VSyncEnabled ? 1 : 0, SettingsWheelVSyncOptions, new Vector2(elementOriginRight, pos.y), wheelSize, theme.OptionsWheel, Anchor.CentreRight);
 				EditedAppSettings.VSyncEnabled = vsyncSetting == 1;
+
+				// -- Updates --
+				pos += Vector2.down * 4;
+				UI.DrawText("Check for updates at start", theme.FontRegular, theme.FontSizeRegular, pos, Anchor.CentreLeft, Color.white);
+				int updateSetting = UI.WheelSelector(EditedAppSettings.DisableUpdateCheck ? 0 : 1, SettingsWheelVSyncOptions, new Vector2(elementOriginRight, pos.y), wheelSize, theme.OptionsWheel, Anchor.CentreRight);
+				EditedAppSettings.DisableUpdateCheck = updateSetting == 0;
 
 				// -- Key bindings --
 				pos += Vector2.down * 4;
@@ -725,8 +740,37 @@ namespace DLS.Graphics
 
 			Vector2 versionPos = UI.PrevBounds.CentreLeft + Vector2.right * pad;
 			Vector2 datePos = UI.PrevBounds.CentreRight + Vector2.left * pad;
+			Bounds2D bar = UI.PrevBounds;
 			UI.DrawText(authorString, theme.FontRegular, theme.FontSizeRegular, versionPos, Anchor.TextCentreLeft, col);
 			UI.DrawText(versionString, theme.FontRegular, theme.FontSizeRegular, datePos, Anchor.TextCentreRight, col);
+			DrawUpdateStatus(bar);
+		}
+
+		// Middle of the bottom bar: what the updater is doing and a button to check or update.
+		static void DrawUpdateStatus(Bounds2D bar)
+		{
+			if (!AppUpdater.Supported) return;
+
+			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
+			string label = AppUpdater.ActionLabel;
+			string status = AppUpdater.StatusText;
+			bool available = AppUpdater.Current == AppUpdater.State.Available;
+			Color statusCol = available ? RewiredUI.Accent : new Color(1, 1, 1, 0.5f);
+
+			Vector2 centre = bar.Centre;
+			if (label != null)
+			{
+				if (UI.Button(label, theme.MainMenuButtonTheme, centre + Vector2.right * 0.5f, new Vector2(0, 3f), true, true, false, Anchor.CentreLeft))
+				{
+					AppUpdater.RunAction();
+				}
+				centre += Vector2.left * 0.5f;
+				if (status.Length > 0) UI.DrawText(status, theme.FontRegular, theme.FontSizeRegular, centre, Anchor.TextCentreRight, statusCol);
+			}
+			else
+			{
+				UI.DrawText(status, theme.FontRegular, theme.FontSizeRegular, centre, Anchor.TextCentre, statusCol);
+			}
 		}
 
 		static string ResolutionToString(Vector2Int r) => $"{r.x} x {r.y}";

@@ -1,3 +1,5 @@
+<p align="center"><img src="Docs/logo.png" width="128" alt="Rewired logo: a NAND gate with two input wires and an output wire"></p>
+
 # Rewired — Digital Logic Simulator
 
 **Rewired** is an open-source **digital logic simulator and logic gate circuit simulator** for building and testing digital circuits, CPUs, registers, memory and custom chips. It includes a high-performance simulation runtime, a graphical editor and **RHDL**, a small hardware description language for generating circuits from source.
@@ -46,6 +48,8 @@ The repository includes a compact example progression ending with a **4-bit CPU*
 - breakpoints: pause when a pin changes, rises, falls or reaches a value
 - export to structural Verilog, SVG schematics and PNG screenshots
 - 64 x 64 colour screen (4 bits per channel, double-buffered) for games and graphics demos
+- Snake example project, installed on first start
+- updates from GitHub Releases inside the app on Windows, Linux and Android
 - guided challenges from a NOT gate built from NAND to a 4-bit adder
 - Windows x64, Linux x86_64, WebGL (browser) and Android ARM64 (experimental) release builds
 - touch interface for Android tablets and phones: drag parts from a categorised panel, tap a part for its actions, one-finger panning and a step-by-step guide
@@ -69,6 +73,14 @@ On Linux, after extracting the archive, the executable may need permission:
 chmod +x DLSRewired.x86_64
 ./DLSRewired.x86_64
 ```
+
+### Updating
+
+Rewired checks GitHub for a newer release when it starts (turn this off in Settings). The bottom bar of the main menu, or the header on Android, then offers the update:
+
+- **Windows and Linux**: *Update* downloads the release, quits Rewired, copies the new files over the installed ones and starts the new version. If the install folder is not writable, the release page opens instead.
+- **Android**: *Download* opens the new APK in the browser. Open the downloaded file to update; Android may ask once to allow installs from the browser. Projects are kept.
+- **WebGL**: the site is updated by whoever hosts it.
 
 For a first project, see **[Getting Started](Docs/GETTING_STARTED.md)**.
 
