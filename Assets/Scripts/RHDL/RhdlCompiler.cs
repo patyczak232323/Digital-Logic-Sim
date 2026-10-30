@@ -567,8 +567,7 @@ namespace DLS.RHDL
 
 				PinDescription[] inputs = inputPins.ToArray();
 				PinDescription[] outputs = outputPins.ToArray();
-				Vector2 size = SubChipInstance.CalculateMinChipSize(inputs, outputs, chipName);
-				size.x = Mathf.Max(size.x, 1.5f);
+				Vector2 size = ChipSize(inputs, outputs, chipName);
 
 				return new ChipDescription
 				{
@@ -585,6 +584,29 @@ namespace DLS.RHDL
 					Wires = wires.ToArray(),
 					Displays = Array.Empty<DisplayDescription>()
 				};
+			}
+
+			// The editor measures the chip name with its font, which is only loaded while the
+			// game runs; without it (tests, tools) the size is worked out from the pins and an
+			// estimate of the name's width.
+			static Vector2 ChipSize(PinDescription[] inputs, PinDescription[] outputs, string chipName)
+			{
+				Vector2 size;
+				try
+				{
+					size = SubChipInstance.CalculateMinChipSize(inputs, outputs, chipName);
+				}
+				catch (Exception)
+				{
+					static float PinsHeight(PinDescription[] pins) =>
+						pins.Sum(p => p.BitCount == PinBitCount.Bit1 ? 2 : p.BitCount == PinBitCount.Bit4 ? 3 : 4) * 0.125f;
+
+					float height = Mathf.Max(0.375f, Mathf.Max(PinsHeight(inputs), PinsHeight(outputs)));
+					size = new Vector2(chipName.Length * 0.16f + 0.25f, height);
+				}
+
+				size.x = Mathf.Max(size.x, 1.5f);
+				return size;
 			}
 
 			PinAddress Address(LayoutNode node, int pin, bool output, Dictionary<LayoutNode, int> ids)
