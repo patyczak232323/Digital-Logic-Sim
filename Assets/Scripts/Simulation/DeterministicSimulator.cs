@@ -35,6 +35,9 @@ namespace DLS.Simulation
 		static readonly List<RuntimeChip> sourceChips = new();
 		static readonly List<RuntimeChip> sequentialChips = new();
 		static readonly List<RuntimeChip> buzzerChips = new();
+		// Custom chips the current topology runs as a LUT or native JIT. Their outputs are
+		// live, but the gate pins inside them are not updated (see RefreshAcceleratedInternals).
+		static readonly List<SimChip> acceleratedCombinationalChips = new();
 		static readonly List<SimPin> allPins = new();
 		static readonly List<int> pinOwnerCombinationalIndexBuild = new();
 
@@ -299,6 +302,7 @@ namespace DLS.Simulation
 
 			if (feedbackActivationPending)
 			{
+				RefreshAcceleratedInternals();
 				if (SynchronizeFeedbackExecutors(rootSimChip)) topologyDirty = true;
 				feedbackActivationPending = false;
 			}
@@ -346,6 +350,7 @@ namespace DLS.Simulation
 			sourceChips.Clear();
 			sequentialChips.Clear();
 			buzzerChips.Clear();
+			acceleratedCombinationalChips.Clear();
 			allPins.Clear();
 			pinOwnerCombinationalIndexBuild.Clear();
 			pinIndices.Clear();
@@ -460,6 +465,7 @@ namespace DLS.Simulation
 			if (topologyRoot != null)
 			{
 				MaterializeOutermostFeedbackState(topologyRoot);
+				RefreshAcceleratedInternals();
 			}
 
 			topologyRoot = root;
@@ -473,6 +479,7 @@ namespace DLS.Simulation
 			sourceChips.Clear();
 			sequentialChips.Clear();
 			buzzerChips.Clear();
+			acceleratedCombinationalChips.Clear();
 			allPins.Clear();
 			pinOwnerCombinationalIndexBuild.Clear();
 			pinIndices.Clear();
@@ -725,6 +732,7 @@ namespace DLS.Simulation
 
 			if (acceleratedCustom)
 			{
+				if (!feedbackAccelerationSelected) acceleratedCombinationalChips.Add(chip);
 				return;
 			}
 
@@ -1657,6 +1665,20 @@ namespace DLS.Simulation
 			for (int i = 0; i < chip.SubChips.Length; i++)
 			{
 				DisableFeedbackExecutorsRecursive(chip.SubChips[i]);
+			}
+		}
+
+		// A feedback executor starts from the states of the gate pins inside its chip. Gate pins
+		// inside a combinational subchip that ran as a LUT or native JIT were never updated, so
+		// starting from them can feed a latch a pulse that never happened and leave it
+		// oscillating. Before executors take over state (first tick, topology rebuilds),
+		// recompute the insides of every chip that ran accelerated from its live input pins.
+		// Its outputs do not change; only its gates catch up.
+		static void RefreshAcceleratedInternals()
+		{
+			for (int i = 0; i < acceleratedCombinationalChips.Count; i++)
+			{
+				Simulator.EvaluatePureCombinationalForMemo(acceleratedCombinationalChips[i]);
 			}
 		}
 
