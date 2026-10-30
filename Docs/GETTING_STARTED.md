@@ -15,7 +15,7 @@ Available packages:
 - `DLSRewired-WebGL.zip` (runs in a browser)
 - `DLSRewired-Android-arm64.apk` (experimental)
 
-Extract the archive before running it. On Android, open the APK and allow installing apps from that source if asked.
+Extract the archive before running it. On Android, open the APK and allow installing apps from that source if asked. On a phone the app turns with the screen; *SETTINGS → SCREEN* in the main menu can keep it sideways or upright. Upright, the parts panel moves below the board and the top bar gets a second row.
 
 ### Browser (WebGL)
 
