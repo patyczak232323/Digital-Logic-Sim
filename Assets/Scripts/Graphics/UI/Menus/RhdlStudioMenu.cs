@@ -90,7 +90,7 @@ namespace DLS.Graphics
 				topLeft,
 				WorkspaceWidth,
 				true,
-				"RHDL v0.6  /  HARDWARE LANGUAGE");
+				"RHDL 1.0  /  HARDWARE IN PYTHON SYNTAX");
 
 			Vector2 contentTop = mainHeader.BottomLeft + Vector2.down * 0.7f;
 			Vector2 sourceTop = contentTop;
@@ -366,15 +366,13 @@ namespace DLS.Graphics
 			y -= 2.4f;
 
 			string help =
-				"circuit Adder\n" +
-				"    input A: 8\n" +
-				"    input B: 8\n" +
-				"    output Y = A + B\n\n" +
-				"signal sum = A + B    constant WIDTH = 8\n" +
-				"and / or / xor / not    high / low\n" +
-				"choose(sel, A, B)    join(A[7:4], B[3:0])\n" +
-				"component n : NAND(A=A, B=B, OUT=Y)\n" +
-				"connect SOURCE -> TARGET    # comment\n\n" +
+				"circuit Adder(A: u8, B: u8) -> Y: u8:\n" +
+				"    Y = A + B\n\n" +
+				"sum = A + B    wide: u9 = A + B    WIDTH = 8\n" +
+				"& | ^ ~    and / or / not on bits\n" +
+				"A if sel else B    cat(A[4:8], B[0:4])\n" +
+				"y = NAND(a, b)    q, nq = DffBit(d, clk)\n" +
+				"for i in range(4):    # comment\n\n" +
 				"TAB indent    UNDO/REDO on keyboard    BUILD above";
 			UI.DrawText(
 				help,
@@ -475,26 +473,24 @@ namespace DLS.Graphics
 				statusCol);
 
 			cursor = statusCard.BottomLeft + Vector2.down * 0.6f;
-			Bounds2D syntaxHeader = RewiredUI.DrawSectionHeader("RHDL v0.6 QUICK REFERENCE", cursor, RightWidth);
+			Bounds2D syntaxHeader = RewiredUI.DrawSectionHeader("RHDL 1.0 QUICK REFERENCE", cursor, RightWidth);
 			cursor = syntaxHeader.BottomLeft;
 
 			RewiredUI.DrawCard(cursor, new Vector2(RightWidth, 24.6f));
 			Bounds2D syntaxCard = UI.PrevBounds;
 			string help =
-				"circuit Adder\n" +
-				"    input A: 8\n" +
-				"    input B: 8\n" +
-				"    output Y = A + B\n\n" +
-				"Internal signal: signal sum = A + B\n" +
-				"Constant: constant WIDTH = 8\n" +
-				"Logic: and / or / xor / not\n" +
-				"Logic levels: high / low\n" +
-				"Choice: choose(select, A, B)\n" +
-				"Join bits: join(A[7:4], B[3:0])\n" +
-				"Component: component n : NAND(A=A, B=B, OUT=Y)\n" +
-				"Exact wiring: connect SOURCE -> TARGET\n" +
+				"circuit Adder(A: u8, B: u8) -> Y: u8:\n" +
+				"    Y = A + B\n\n" +
+				"Signal: sum = A + B   or   wide: u9 = A + B\n" +
+				"Constant (top of file): WIDTH = 8\n" +
+				"Logic: & | ^ ~   (and / or / not on single bits)\n" +
+				"Choice: A if select else B\n" +
+				"Bits: A[0], A[0:4], A[-1], cat(high, low), u8(x)\n" +
+				"Loop: for i in range(4):\n" +
+				"Chip: y = NAND(a, b)   s, c = HalfAdder(a, b)\n" +
+				"Feedback: use a name above the line that sets it\n" +
 				"Comments start with #\n\n" +
-				"ENTER after circuit header indents automatically\n" +
+				"ENTER after a line ending in : indents automatically\n" +
 				"TAB / SHIFT+TAB indent   ALT+UP/DOWN move lines\n" +
 				"CTRL+BACKSPACE/DELETE delete word\n" +
 				"CTRL+Z/Y undo/redo   CTRL+/ comment\n" +
@@ -637,29 +633,20 @@ namespace DLS.Graphics
 
 		public const string StarterTemplate =
 @"# Smallest useful RHDL circuit.
-circuit Adder
-    input A: 8
-    input B: 8
-
-    output Y = A + B
-end";
+circuit Adder(A: u8, B: u8) -> Y: u8:
+    Y = A + B
+";
 
 		public const string DefaultExample =
-@"# RHDL v0.6: hardware description, not Python.
-circuit AluMini
-    constant WIDTH = 8
+@"# RHDL 1.0: Python syntax, but every line is hardware that runs at once.
+circuit AluMini(A: u8, B: u8, select) -> (Y: u8, equal, carry):
+    wide: u9 = A + B
+    mixed = cat(A[4:8], B[0:4])
 
-    input A: WIDTH
-    input B: WIDTH
-    input select
-
-    signal sum = A + B
-    signal mixed = join(A[7:4], B[3:0])
-
-    output Y: WIDTH = choose(select, sum, mixed)
-    output equal = A == B
-    output ready = high
-end";
+    Y = wide[0:8] if select else mixed
+    equal = A == B
+    carry = wide[8]
+";
 
 	}
 }

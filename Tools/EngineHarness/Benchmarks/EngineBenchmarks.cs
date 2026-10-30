@@ -122,27 +122,15 @@ namespace DLS.Benchmarks
 		public void AluRandomInputs()
 		{
 			Compile(@"
-circuit Alu8
-    input A: 8
-    input B: 8
-    input OP0, OP1
-    output Y: 8
-    output EQ, LT
-
-    Y = choose(OP1, choose(OP0, A xor B, A and B), choose(OP0, A - B, A + B))
+circuit Alu8(A: u8, B: u8, OP0, OP1) -> (Y: u8, EQ, LT):
+    Y = ((A - B) if OP0 else (A + B)) if OP1 else ((A ^ B) if OP0 else (A & B))
     EQ = A == B
     LT = A < B
-end");
+");
 			ChipDescription harness = Compile(@"
-circuit Alu8Harness
-    input A: 8
-    input B: 8
-    input OP0, OP1
-    output Y: 8
-    output EQ, LT
-
-    component alu : Alu8(A=A, B=B, OP0=OP0, OP1=OP1, Y=Y, EQ=EQ, LT=LT)
-end");
+circuit Alu8Harness(A: u8, B: u8, OP0, OP1) -> (Y: u8, EQ, LT):
+    Y, EQ, LT = Alu8(A, B, OP0, OP1)
+");
 
 			foreach (EnginePath path in new[] { EnginePath.Reference, EnginePath.NativeJit })
 			{

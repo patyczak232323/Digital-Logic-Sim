@@ -1,225 +1,236 @@
-# RHDL v0.6 — simple hardware description language
+# RHDL 1.0 — hardware description with Python syntax
 
-RHDL describes hardware. It is intentionally not Python and it is not a sequence of software instructions.
+RHDL describes a chip in text. It reads like Python: indentation instead of `end`, `def`-style headers, Python operators, `for` loops and tuple unpacking. What it builds is hardware: every line is a piece of circuitry that exists at the same time as all the others, and the result is an ordinary Rewired chip made of NAND gates and the chips you already have.
 
-Every equation describes hardware that exists at the same time. RHDL lowers to ordinary Rewired components, pins and wires, so it uses the normal Rewired simulation engine.
+## A first circuit
 
-## Minimal circuit
-
-```text
-circuit Adder
-    input A: 8
-    input B: 8
-    output Y: 8
-
+```python
+# 8-bit adder
+circuit Adder(A: u8, B: u8) -> Y: u8:
     Y = A + B
-end
 ```
 
-A file begins with `circuit NAME` and ends with `end`.
+- `circuit Name(inputs) -> outputs:` starts a circuit. The indented lines below it are its body.
+- Inputs and outputs are the chip's pins. A pin without a type is one bit; `u4` and `u8` are 4- and 8-bit pins (`bit` is the same as no type).
+- Several outputs go in brackets: `-> (SUM, COUT)`. A long header may span lines inside the brackets.
+- `#` starts a comment.
 
-Indentation is only for readability. `end` is the actual circuit terminator.
+## Logic
 
-## Core vocabulary
-
-| Syntax | Meaning |
-| --- | --- |
-| `circuit NAME` | define a circuit |
-| `input A: 8` | external input |
-| `output Y: 8` | external output |
-| `signal temp: 8` | internal signal |
-| `constant WIDTH = 8` | compile-time constant |
-| `component alu : ALU8(...)` | instantiate another Rewired component |
-| `connect A -> gate.A` | exact structural wire |
-| `end` | end the circuit |
-
-There is deliberately one canonical spelling for each concept.
-
-## Parallel logic
-
-```text
-circuit LogicExample
-    input A
-    input B
-
-    output both
-    output either
-    output different
-
-    both      = A and B
-    either    = A or B
-    different = A xor B
-end
+```python
+circuit Logic(A, B, C) -> (both, either, different, inverted, majority):
+    both = A & B
+    either = A | B
+    different = A ^ B
+    inverted = ~A
+    majority = (A & B) | (A & C) | (B & C)
 ```
 
-These equations are concurrent. Their order in the file does not define an execution order.
+`&`, `|`, `^` and `~` work on every bit of a value, like Python's operators on integers. For single bits, Python's `and`, `or` and `not` can be used as well:
 
-Supported logic words are `and`, `or`, `xor`, and `not`.
+```python
+circuit Enable(A, EN, RESET) -> Y:
+    Y = A and EN and not RESET
+```
+
+The order of the lines does not matter for plain wiring: all of them are hardware that exists at once.
+
+## Names
+
+A line such as `ab = A ^ B` creates a signal called `ab`. Its width comes from the value.
+
+- **A name assigned once is a wire.** It can be used anywhere in the circuit, also above the line that assigns it. This is how feedback is written (see *Memory* below).
+- **A name assigned several times is a variable.** Each use reads the latest assignment above it, exactly like Python. This is what makes loops useful.
+- Outputs are assigned once. They can also be read inside the circuit.
 
 ## Arithmetic and comparisons
 
-```text
-circuit MathExample
-    input A: 8
-    input B: 8
-
-    output sum: 8
-    output diff: 8
-    output same
-    output less
-    output shift: 8
-
-    sum   = A + B
-    diff  = A - B
-    same  = A == B
-    less  = A < B
-    shift = A << 1
-end
+```python
+circuit Math(A: u8, B: u8) -> (sum: u8, diff: u8, same, less, double: u8):
+    sum = A + B
+    diff = A - B
+    same = A == B
+    less = A < B
+    double = A << 1
 ```
 
-- `+` and `-` wrap around at the result width: with 8-bit values, `200 + 100` is `44`.
-- Comparisons `==`, `!=`, `<`, `>`, `<=` and `>=` are unsigned and give a 1-bit result.
-- `<<` and `>>` shift by a compile-time constant; bits shifted in are low.
+- `+` and `-` wrap around at the width of the result: with 8 bits, `200 + 100` is `44`.
+- Give the result one bit more to keep the carry: `wide: u9 = A + B`.
+- `==`, `!=`, `<`, `>`, `<=` and `>=` compare unsigned values and give one bit.
+- `<<` and `>>` shift by a fixed number of bits; the bits shifted in are 0.
+- Multiplication and division are not built; `* / %` give an error.
 
-### Operator precedence
+Operator precedence is Python's, from loosest to tightest: `x if c else y`, `or`, `and`, `not`, comparisons, `|`, `^`, `&`, `<<` `>>`, `+` `-`, `~`, then calls, `[...]` and `.`. So `A & B == 0` means `(A & B) == 0`, as in Python.
 
-From loosest to tightest binding:
+## Choosing between values
 
-| Level | Operators |
-| --- | --- |
-| 1 | `==` `!=` `<` `>` `<=` `>=` |
-| 2 | `or` |
-| 3 | `xor` |
-| 4 | `and` |
-| 5 | `<<` `>>` |
-| 6 | `+` `-` |
-| 7 | `not` |
-| 8 | bit selection `A[3]`, `A[7:4]` |
+Python's conditional expression builds a multiplexer:
 
-Comparisons bind more loosely than the logic words, so `A == B or C` means `A == (B or C)`. Use parentheses whenever a comparison is combined with other operators: `(A == B) or C`.
-
-## Choosing a value
-
-Use `choose(condition, when_high, when_low)`.
-
-```text
-Y = choose(select, A, B)
+```python
+circuit Select(A: u4, B: u4, SEL) -> Y: u4:
+    Y = A if SEL else B
 ```
 
-This describes selection hardware. It is intentionally not Python's `A if condition else B`.
+The condition must be one bit. Chains work as in Python, and long ones read well in brackets:
 
-Nested selection is valid:
-
-```text
-result = choose(do_add, add_result, choose(do_sub, sub_result, A))
+```python
+circuit Alu(A: u4, B: u4, OP: u4) -> Y: u4:
+    Y = (
+        A + B if OP == 0 else
+        A - B if OP == 1 else
+        A & B if OP == 2 else
+        A | B
+    )
 ```
+
+There is no `if` statement: an `if` block would run in sequence, but hardware runs all at once.
 
 ## Bits and buses
 
-Read one bit:
-
-```text
-bit0 = A[0]
+```python
+circuit Bits(A: u8, B: u8) -> (low: u4, high: u4, top, joined: u8, wide: u8):
+    low = A[0:4]
+    high = A[4:8]
+    top = A[-1]
+    joined = cat(A[4:8], B[0:4])
+    wide = u8(A[0:4])
 ```
 
-Read a slice:
+- `A[3]` is bit 3; bit 0 is the least significant. Negative indexes count from the top, as in Python.
+- Slices work like Python's: `A[0:4]` is bits 0, 1, 2 and 3. `A[4:]` is from bit 4 to the top.
+- `cat(high, ..., low)` joins values into a bus, most significant part first, the way numbers are written.
+- `u4(x)`, `u8(x)` and so on give a value another width: extra top bits are 0, missing ones are dropped.
+- Signals inside a circuit can have any width up to 32 bits; only chip pins are limited to 1, 4 and 8.
 
-```text
-upper = A[7:4]
+A signal can also be built bit by bit. Declare its width first (outputs already have one):
+
+```python
+circuit Reverse(A: u4) -> Y: u4:
+    for i in range(4):
+        Y[i] = A[3 - i]
 ```
 
-Join values from high part to low part:
+## Numbers and constants
 
-```text
-mixed = join(A[7:4], B[3:0])
+`5`, `0b0101`, `0x5` and `True`/`False` are numbers. A number takes the width it is used at. Spelling it in binary or hex also gives it a width: `0b0101` is 4 bits, `0x0F` is 8.
+
+Names assigned a number at the top of the file are constants:
+
+```python
+WIDTH = 4
+
+circuit Ones() -> Y: u4:
+    Y = (1 << WIDTH) - 1
 ```
 
-Current Rewired pin widths exposed through RHDL are 1, 4 and 8 bits. Larger architectural values can be represented by combining multiple buses.
+Constants are worked out when the circuit is built, so they can also choose what gets built: `Y = ~A if INVERT else A` builds only one of the two.
 
-## Logic levels and constants
+## Loops
 
-```text
-constant WIDTH = 8
-constant MASK = 0xFF
+`for i in range(...)` repeats hardware a fixed number of times. Together with a variable it describes chains such as a ripple-carry adder:
 
-signal enabled = high
-signal disabled = low
+```python
+circuit Add4(A: u4, B: u4, CIN) -> (S: u4, COUT):
+    carry = CIN
+    for i in range(4):
+        S[i] = A[i] ^ B[i] ^ carry
+        carry = (A[i] & B[i]) | (carry & (A[i] ^ B[i]))
+    COUT = carry
 ```
 
-Numeric literals may be decimal, binary or hexadecimal.
+`range(stop)`, `range(start, stop)` and `range(start, stop, step)` work as in Python.
 
-## Components
+## Using other chips
 
-Existing Rewired components and custom circuits can be instantiated directly:
+Any chip from the library, and every circuit you have built, can be called like a function. Inputs are given in order, or by name:
 
-```text
-circuit NandExample
-    input A
-    input B
-    output Y
-
-    component gate : NAND(A=A, B=B, OUT=Y)
-end
+```python
+circuit TwoNands(A, B, C) -> Y:
+    t = NAND(A, B)
+    Y = NAND(t, C)
 ```
 
-The compact pin list binds pins by name.
+- A chip with one output gives its value directly.
+- A chip with several outputs is unpacked like a Python tuple: `s, c = HalfAdder(A, B)`. Use `_` for an output you do not need.
+- Name a chip to reach its pins later: `h = HalfAdder(A, B)` then `h.SUM` and `h.CARRY`. Its inputs can also be connected afterwards with `h.A = x`.
+- Pin names are written without spaces: the NAND pins `IN A` and `IN B` are `IN_A` and `IN_B` (or just `A` and `B`).
 
-For complex or unusual hardware, use explicit structural wiring:
+Built-in chips are called `NAND`, `TRISTATE`, `CLOCK`, `PULSE`, `ROM`, `KEY`, `LED`, `SEVEN_SEGMENT`, `RGB_DISPLAY`, `DOT_DISPLAY` and `BUZZER`.
 
-```text
-circuit StructuralNand
-    input A
-    input B
-    output Y
+Several `TRISTATE` buffers may drive the same signal, which is how a shared bus is made:
 
-    component gate : NAND
-
-    connect A -> gate.A
-    connect B -> gate.B
-    connect gate.OUT -> Y
-end
+```python
+circuit SharedBus(A, B, SEL) -> Y:
+    bus = TRISTATE(A, SEL)
+    bus = TRISTATE(B, ~SEL)
+    Y = bus
 ```
 
-This structural level is the escape hatch that keeps RHDL general: if a topology can be represented by Rewired components and wires, RHDL can describe it. That includes feedback networks, latches, flip-flops, registers, clocks, custom chips and complete CPUs. The current public Rewired palette has no general-purpose RAM primitive; the example set therefore includes a small `Ram4x4` built from four `Reg4` components.
+## Memory
 
-## Complete example
+A latch is two NAND gates that feed each other. Because a name can be used above the line that assigns it, the circuit is written the way it is drawn:
 
-```text
-circuit AluMini
-    constant WIDTH = 8
-
-    input A: WIDTH
-    input B: WIDTH
-    input select
-
-    output Y: WIDTH
-    output equal
-
-    signal sum = A + B
-    signal mixed = join(A[7:4], B[3:0])
-
-    Y = choose(select, sum, mixed)
-    equal = A == B
-end
+```python
+circuit SrLatch(S_N, R_N) -> (Q, QN):
+    Q = NAND(S_N, QN)
+    QN = NAND(R_N, Q)
 ```
 
-## Why this is an HDL
+Every `NAND(...)` written in the source is exactly one gate, kept as written. The `Examples/RHDL` folder builds a D flip-flop, a 4-bit register, a small RAM and a CPU this way.
 
-RHDL source is declarative. `A = B + C` means that combinational hardware drives A from B and C; it does not mean “execute this statement now”.
+## What gets built
 
-State can be represented directly with explicit feedback topology. The curated examples build a D flip-flop, a 4-bit register and a small RAM from ordinary components, without relying on a hidden RAM primitive. This keeps the surface language small while still allowing stateful Rewired hardware to be built.
+Rewired's only logic gate is the NAND, and RHDL builds everything from it:
+
+| Expression | NAND gates |
+| --- | --- |
+| `~a` | 1 |
+| `a & b` | 2 |
+| `a \| b` | 3 |
+| `a ^ b` | 4 |
+| `a if s else b` | 3 per bit, plus 1 for `~s` |
+| full adder (one bit of `+`) | 9 |
+
+Constants are folded, identical gates are shared and gates nobody reads are removed, so `A & 0b1111` is just a wire. Multi-bit pins are split into bits only where single bits are needed.
+
+The generated chip is drawn like a hand-made schematic: signals flow from left to right, each bit of a bus operation sits on its own row with the most significant bit at the top (as on Rewired's pins), wires run horizontally into pins and their vertical parts get separate tracks, and feedback loops back over the parts it skips.
+
+## Messages
+
+Mistakes are reported with the line and a hint, for example:
+
+- `Unknown name 'totl'. Did you mean 'total'?`
+- `This value is 4 bits but 'Y' is 8. Write u8(...) to add zero bits at the top.`
+- `'t' is used before it is assigned. Names that are assigned more than once are read in order, like Python variables.`
+- `'if' blocks would run in sequence, but hardware runs all at once. Choose between values with 'a if select else b'.`
 
 ## RHDL Studio
 
-- Enter after a `circuit NAME` line indents the body.
+- Enter after a line ending in `:` indents the next line.
 - `Ctrl+/` toggles `#` comments.
 - `Ctrl+Shift+F` formats the document.
 - `Ctrl+B` / `Ctrl+Enter` builds.
 - `F5` builds and opens the circuit.
 - `F8` / `Shift+F8` navigates diagnostics.
 
-RHDL is experimental. v0.6 intentionally makes breaking syntax changes instead of carrying compatibility aliases from earlier development versions.
+Write one circuit per source. Build it, then use it by name from the next one.
+
+## Coming from RHDL 0.6
+
+RHDL 1.0 replaces the earlier syntax:
+
+| 0.6 | 1.0 |
+| --- | --- |
+| `circuit X` ... `input A: 4` ... `end` | `circuit X(A: u4) -> ...:` and an indented body |
+| `signal t: 4` | `t: u4` (or just assign `t = ...`) |
+| `and`, `or`, `xor`, `not` on buses | `&`, `\|`, `^`, `~` |
+| `choose(s, a, b)` | `a if s else b` |
+| `A[7:4]` | `A[4:8]` |
+| `join(a, b)` | `cat(a, b)` |
+| `component g : NAND(IN_A=a, IN_B=b, OUT=y)` | `y = NAND(a, b)` |
+| `connect a -> g.IN_A` | `g.IN_A = a` |
+| `constant N = 4` | `N = 4` at the top of the file |
 
 ## Examples
 
-The curated `Examples/RHDL/` set progresses through `AND -> HalfAdder -> FullAdder -> Mux4 -> DffBit -> Reg4`, then adds a separate `Ram4x4` memory example and `CPU4`. CPU4 is intentionally the largest processor example and uses a 4-bit datapath.
+The curated `Examples/RHDL/` set progresses through `And2 -> HalfAdder -> FullAdder -> Mux4 -> DffBit -> Reg4`, then adds a separate `Ram4x4` memory example and `CPU4`, a 4-bit accumulator processor.

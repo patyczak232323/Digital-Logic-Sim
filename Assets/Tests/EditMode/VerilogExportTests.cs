@@ -16,26 +16,16 @@ namespace DLS.Tests
 	public class VerilogExportTests
 	{
 		const string Alu4Source = @"
-circuit Alu4
-    input A: 4
-    input B: 4
-    input OP0, OP1
-    output Y: 4
-    output EQ, LT
-
-    Y = choose(OP1, choose(OP0, A xor B, A and B), choose(OP0, A - B, A + B))
+circuit Alu4(A: u4, B: u4, OP0, OP1) -> (Y: u4, EQ, LT):
+    Y = ((A - B) if OP0 else (A + B)) if OP1 else ((A ^ B) if OP0 else (A & B))
     EQ = A == B
     LT = A < B
-end";
+";
 
 		const string Add8Source = @"
-circuit Add8
-    input A: 8
-    input B: 8
-    output Y: 8
-
+circuit Add8(A: u8, B: u8) -> Y: u8:
     Y = A + B
-end";
+";
 
 
 		static string ExamplesRoot => Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Examples", "RHDL"));

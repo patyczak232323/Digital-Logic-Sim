@@ -21,6 +21,33 @@ namespace Seb.Vis
 
 		static FontData[] defaultFontsData;
 
+		// Loads the fonts on first use. Measuring text needs them as well, also before
+		// anything has been drawn (in tests and tools), so this is not tied to Init.
+		static void EnsureDefaultFontsLoaded()
+		{
+			if (defaultFontsData != null && defaultFontsData.Length == FontMap.map.Length) return;
+
+			defaultFontsData = new FontData[FontMap.map.Length];
+			HashSet<FontType> fontCoverageTest = new((FontType[])Enum.GetValues(typeof(FontType)));
+
+			for (int i = 0; i < FontMap.map.Length; i++)
+			{
+				(FontType font, string path) = FontMap.map[i];
+
+				byte[] raw = Resources.Load<TextAsset>(FontMap.FontFolderPath + "/" + path).bytes;
+				defaultFontsData[(int)font] = FontParser.Parse(raw);
+				fontCoverageTest.Remove(font);
+			}
+
+			if (fontCoverageTest.Count != 0)
+			{
+				foreach (FontType f in fontCoverageTest)
+				{
+					Debug.LogError("Font not found in map: " + f);
+				}
+			}
+		}
+
 		// Command buffer stuff
 		static CommandBuffer cmd;
 		static int lastDispatchFrame;
@@ -158,7 +185,7 @@ namespace Seb.Vis
 
 			try
 			{
-				LoadDefaultFonts();
+				EnsureDefaultFontsLoaded();
 			}
 			catch (Exception)
 			{
@@ -184,32 +211,6 @@ namespace Seb.Vis
 			{
 				shapeDrawer = new InstancedDrawer<ShapeData>(quadMesh, Shader.Find("Vis/Draw"));
 				textDrawer = new TextDrawManager();
-			}
-
-			static void LoadDefaultFonts()
-			{
-				if (defaultFontsData == null || defaultFontsData.Length != FontMap.map.Length)
-				{
-					defaultFontsData = new FontData[FontMap.map.Length];
-					HashSet<FontType> fontCoverageTest = new((FontType[])Enum.GetValues(typeof(FontType)));
-
-					for (int i = 0; i < FontMap.map.Length; i++)
-					{
-						(FontType font, string path) = FontMap.map[i];
-
-						byte[] raw = Resources.Load<TextAsset>(FontMap.FontFolderPath + "/" + path).bytes;
-						defaultFontsData[(int)font] = FontParser.Parse(raw);
-						fontCoverageTest.Remove(font);
-					}
-
-					if (fontCoverageTest.Count != 0)
-					{
-						foreach (FontType f in fontCoverageTest)
-						{
-							Debug.LogError("Font not found in map: " + f);
-						}
-					}
-				}
 			}
 		}
 

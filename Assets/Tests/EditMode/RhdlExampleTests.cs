@@ -253,20 +253,16 @@ namespace DLS.Tests
 			Assert.AreEqual(6u, c.Get("OUT_PORT"), "OUT_PORT");
 		}
 
-		// "not X" used to invert the cached bits of X in place, so every later use of X in the
+		// "~X" used to invert the cached bits of X in place, so every later use of X in the
 		// same circuit saw ~X (CPU4's INC and DEC computed ~A + 1 and ~A - 1).
 		[Test]
-		public void NotDoesNotChangeLaterUsesOfItsOperand()
+		public void InvertDoesNotChangeLaterUsesOfItsOperand()
 		{
 			RhdlCompileResult result = RhdlCompiler.Compile(@"
-circuit NotThenUse
-    input A: 4
-    output N: 4
-    output Y: 4
-
-    N = not A
-    Y = A + 0x1
-end", library);
+circuit NotThenUse(A: u4) -> (N: u4, Y: u4):
+    N = ~A
+    Y = A + 1
+", library);
 			Assert.IsTrue(result.Success);
 			library.NotifyChipSaved(result.Description, false);
 
@@ -280,23 +276,14 @@ end", library);
 			}
 		}
 
-		// "connect A -> gate.A" names the NAND pin "IN A" by its friendly alias. The alias used to
-		// pass validation but reach the netlist builder unresolved, so the build failed.
+		// Component pins can be named without their spaces: "IN A" is IN_A or INA.
 		[Test]
-		public void StructuralConnectAcceptsPinAliases()
+		public void ComponentPinsAcceptNamesWithoutSpaces()
 		{
 			RhdlCompileResult result = RhdlCompiler.Compile(@"
-circuit StructuralNand
-    input A
-    input B
-    output Y
-
-    component gate : NAND
-
-    connect A -> gate.A
-    connect B -> gate.B
-    connect gate.OUT -> Y
-end", library);
+circuit StructuralNand(A, B) -> Y:
+    Y = NAND(IN_A=A, INB=B)
+", library);
 			Assert.IsTrue(result.Success, string.Join("\n", result.Diagnostics.Select(d => d.ToString())));
 			library.NotifyChipSaved(result.Description, false);
 
@@ -313,7 +300,7 @@ end", library);
 		[Test]
 		public void InvalidSourceReportsDiagnosticsWithLine()
 		{
-			const string source = "circuit Broken\n    input A\n    output Y\n    Y = A and MISSING\nend\n";
+			const string source = "circuit Broken(A) -> Y:\n    # comment\n\n    Y = A & MISSING\n";
 			RhdlCompileResult result = RhdlCompiler.Compile(source, library);
 
 			Assert.IsFalse(result.Success);

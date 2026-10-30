@@ -17,52 +17,30 @@ namespace DLS.Tests
 	public class AccelerationEquivalenceTests
 	{
 		const string Alu4Source = @"
-circuit Alu4
-    input A: 4
-    input B: 4
-    input OP0, OP1
-    output Y: 4
-    output EQ, LT
-
-    Y = choose(OP1, choose(OP0, A xor B, A and B), choose(OP0, A - B, A + B))
+circuit Alu4(A: u4, B: u4, OP0, OP1) -> (Y: u4, EQ, LT):
+    Y = ((A - B) if OP0 else (A + B)) if OP1 else ((A ^ B) if OP0 else (A & B))
     EQ = A == B
     LT = A < B
-end";
+";
 
 		// Same pins as Alu4 but different logic, so its LUT fingerprint differs.
 		const string Alu4VariantSource = @"
-circuit Alu4
-    input A: 4
-    input B: 4
-    input OP0, OP1
-    output Y: 4
-    output EQ, LT
-
-    Y = choose(OP1, choose(OP0, A or B, A and B), choose(OP0, A - B, A + B))
+circuit Alu4(A: u4, B: u4, OP0, OP1) -> (Y: u4, EQ, LT):
+    Y = ((A - B) if OP0 else (A + B)) if OP1 else ((A | B) if OP0 else (A & B))
     EQ = A == B
     LT = B < A
-end";
+";
 
 		// The root chip is never collapsed, so the chip under test sits one level down.
 		const string AluHarnessSource = @"
-circuit AluHarness
-    input A: 4
-    input B: 4
-    input OP0, OP1
-    output Y: 4
-    output EQ, LT
-
-    component alu : Alu4(A=A, B=B, OP0=OP0, OP1=OP1, Y=Y, EQ=EQ, LT=LT)
-end";
+circuit AluHarness(A: u4, B: u4, OP0, OP1) -> (Y: u4, EQ, LT):
+    Y, EQ, LT = Alu4(A, B, OP0, OP1)
+";
 
 		const string Reg4HarnessSource = @"
-circuit Reg4Harness
-    input D: 4
-    input WE, CLK, RESET
-    output Q: 4
-
-    component reg : Reg4(D=D, WE=WE, CLK=CLK, RESET=RESET, Q=Q)
-end";
+circuit Reg4Harness(D: u4, WE, CLK, RESET) -> Q: u4:
+    Q = Reg4(D, WE, CLK, RESET)
+";
 
 		static readonly string[] AluInputs = { "A", "B", "OP0", "OP1" };
 		static readonly string[] AluOutputs = { "Y", "EQ", "LT" };
@@ -119,30 +97,16 @@ end";
 		// Three 4-bit operands and two select bits give 16384 LUT entries, enough for the
 		// build to be split across threads on a machine with four or more cores.
 		const string Mix3Source = @"
-circuit Mix3
-    input A: 4
-    input B: 4
-    input C: 4
-    input OP0, OP1
-    output Y: 4
-    output EQ, LT
-
-    Y = choose(OP1, choose(OP0, A xor B, A and C), choose(OP0, A - B, B + C))
+circuit Mix3(A: u4, B: u4, C: u4, OP0, OP1) -> (Y: u4, EQ, LT):
+    Y = ((A - B) if OP0 else (B + C)) if OP1 else ((A ^ B) if OP0 else (A & C))
     EQ = A == C
     LT = B < C
-end";
+";
 
 		const string Mix3HarnessSource = @"
-circuit Mix3Harness
-    input A: 4
-    input B: 4
-    input C: 4
-    input OP0, OP1
-    output Y: 4
-    output EQ, LT
-
-    component mix : Mix3(A=A, B=B, C=C, OP0=OP0, OP1=OP1, Y=Y, EQ=EQ, LT=LT)
-end";
+circuit Mix3Harness(A: u4, B: u4, C: u4, OP0, OP1) -> (Y: u4, EQ, LT):
+    Y, EQ, LT = Mix3(A, B, C, OP0, OP1)
+";
 
 		[Test]
 		public void LargeFullLutBuiltOnSeveralThreadsMatchesReference()

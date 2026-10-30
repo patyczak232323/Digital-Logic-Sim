@@ -12,15 +12,15 @@ namespace DLS.Tests
 		// so each one also respects its challenge's "only NAND" rule.
 		static readonly (string chip, string source)[] Solutions =
 		{
-			("NOT", "circuit SolutionNOT\n input IN\n output OUT\n OUT = not IN\nend"),
-			("AND", "circuit SolutionAND\n input A, B\n output OUT\n OUT = A and B\nend"),
-			("OR", "circuit SolutionOR\n input A, B\n output OUT\n OUT = A or B\nend"),
-			("XOR", "circuit SolutionXOR\n input A, B\n output OUT\n OUT = A xor B\nend"),
-			("MUX", "circuit SolutionMUX\n input A, B, SEL\n output OUT\n OUT = choose(SEL, A, B)\nend"),
-			("HALF ADDER", "circuit HalfAdder\n input A, B\n output SUM, CARRY\n SUM = A xor B\n CARRY = A and B\nend"),
-			("FULL ADDER", "circuit FullAdder\n input A, B, CIN\n output SUM, COUT\n SUM = A xor B xor CIN\n COUT = (A and B) or (CIN and (A xor B))\nend"),
-			("DECODER", "circuit Decoder\n input A1, A0\n output Y0, Y1, Y2, Y3\n Y0 = (not A1) and (not A0)\n Y1 = (not A1) and A0\n Y2 = A1 and (not A0)\n Y3 = A1 and A0\nend"),
-			("ADDER 4", "circuit Adder4\n input A: 4\n input B: 4\n output SUM: 4\n output COUT\n signal wide: 8\n wide = join(0x0, A) + join(0x0, B)\n SUM = wide[3:0]\n COUT = wide[4]\nend")
+			("NOT", "circuit SolutionNOT(IN) -> OUT:\n    OUT = ~IN\n"),
+			("AND", "circuit SolutionAND(A, B) -> OUT:\n    OUT = A & B\n"),
+			("OR", "circuit SolutionOR(A, B) -> OUT:\n    OUT = A | B\n"),
+			("XOR", "circuit SolutionXOR(A, B) -> OUT:\n    OUT = A ^ B\n"),
+			("MUX", "circuit SolutionMUX(A, B, SEL) -> OUT:\n    OUT = A if SEL else B\n"),
+			("HALF ADDER", "circuit HalfAdder(A, B) -> (SUM, CARRY):\n    SUM = A ^ B\n    CARRY = A & B\n"),
+			("FULL ADDER", "circuit FullAdder(A, B, CIN) -> (SUM, COUT):\n    SUM = A ^ B ^ CIN\n    COUT = (A & B) | (CIN & (A ^ B))\n"),
+			("DECODER", "circuit Decoder(A1, A0) -> (Y0, Y1, Y2, Y3):\n    Y0 = ~A1 & ~A0\n    Y1 = ~A1 & A0\n    Y2 = A1 & ~A0\n    Y3 = A1 & A0\n"),
+			("ADDER 4", "circuit Adder4(A: u4, B: u4) -> (SUM: u4, COUT):\n    wide: u5 = A + B\n    SUM = wide[0:4]\n    COUT = wide[4]\n")
 		};
 
 		ChipLibrary library;
@@ -55,7 +55,7 @@ namespace DLS.Tests
 		[Test]
 		public void WrongLogicNamesTheFailingRow()
 		{
-			Save("XOR", "circuit SolutionXOR\n input A, B\n output OUT\n OUT = A or B\nend");
+			Save("XOR", "circuit SolutionXOR(A, B) -> OUT:\n    OUT = A | B\n");
 			ChallengeResult result = ChallengeLibrary.Check(Find("XOR"), library);
 			Assert.IsFalse(result.Passed);
 			StringAssert.Contains("A=1 B=1", result.Message);
@@ -65,14 +65,14 @@ namespace DLS.Tests
 		[Test]
 		public void PinsAreMatchedByNameInAnyOrder()
 		{
-			Save("MUX", "circuit SolutionMUX\n input SEL, B, A\n output OUT\n OUT = choose(SEL, A, B)\nend");
+			Save("MUX", "circuit SolutionMUX(SEL, B, A) -> OUT:\n    OUT = A if SEL else B\n");
 			Assert.IsTrue(ChallengeLibrary.Check(Find("MUX"), library).Passed);
 		}
 
 		[Test]
 		public void MissingPinIsReported()
 		{
-			Save("AND", "circuit SolutionAND\n input A, C\n output OUT\n OUT = A and C\nend");
+			Save("AND", "circuit SolutionAND(A, C) -> OUT:\n    OUT = A & C\n");
 			ChallengeResult result = ChallengeLibrary.Check(Find("AND"), library);
 			Assert.IsFalse(result.Passed);
 			StringAssert.Contains("pin named B", result.Message);

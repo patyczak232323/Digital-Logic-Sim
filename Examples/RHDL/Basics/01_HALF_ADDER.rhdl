@@ -1,8 +1,4 @@
 # One-bit half adder.
-circuit HalfAdder
-    input A, B
-    output SUM, CARRY
-
-    SUM = A xor B
-    CARRY = A and B
-end
+circuit HalfAdder(A, B) -> (SUM, CARRY):
+    SUM = A ^ B
+    CARRY = A & B

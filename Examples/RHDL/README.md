@@ -1,6 +1,6 @@
 # RHDL examples
 
-This is the small curated RHDL example set for the current Rewired/RHDL v0.6 syntax.
+This is the small curated RHDL example set for RHDL 1.0 (Python-style syntax).
 
 Build them in this order:
 

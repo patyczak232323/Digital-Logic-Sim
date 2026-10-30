@@ -12,10 +12,11 @@ namespace DLS.Tests
 {
 	// Compiles every complete RHDL circuit shown in the Markdown documentation, so a syntax
 	// change cannot leave README.md, Docs/ or the example READMEs describing code that no
-	// longer builds. Fragments (code blocks without a whole "circuit ... end") are skipped.
+	// longer builds. Fragments (code blocks without a "circuit Name(" header) are skipped.
 	public class DocumentationExampleTests
 	{
 		static readonly Regex CodeBlock = new(@"^```[^\n]*\n(.*?)^```", RegexOptions.Singleline | RegexOptions.Multiline);
+		static readonly Regex CircuitHeader = new(@"^circuit \w+\(", RegexOptions.Multiline);
 
 		static string RepositoryRoot => Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
 
@@ -36,7 +37,7 @@ namespace DLS.Tests
 				foreach (Match match in CodeBlock.Matches(File.ReadAllText(file)))
 				{
 					string code = match.Groups[1].Value.Trim();
-					if (!code.StartsWith("circuit ") || !code.EndsWith("end")) continue;
+					if (!CircuitHeader.IsMatch(code)) continue;
 
 					index++;
 					yield return new TestCaseData(code).SetName($"{relativePath} #{index}");
