@@ -4,6 +4,9 @@ on:
   push:
     tags:
       - "v*"
+  # Releasing without pushing a tag (e.g. from the Actions tab): the version comes from
+  # VERSION on main and the release creates the tag v<version> on the commit it built.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -16,19 +19,33 @@ jobs:
   version:
     name: Check the tag matches VERSION
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Compare tag and VERSION
+        id: tag
         shell: bash
         env:
-          TAG: ${{ github.ref_name }}
+          EVENT: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           version="$(tr -d '[:space:]' < VERSION)"
-          if [ "${TAG#v}" != "$version" ]; then
-            echo "::error::Tag $TAG does not match VERSION ($version). Update VERSION, Main.RewiredVersion and bundleVersion first."
-            exit 1
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            if [ "$REF_NAME" != "main" ]; then
+              echo "::error::Run the release from main, not $REF_NAME."
+              exit 1
+            fi
+            tag="v$version"
+          else
+            tag="$REF_NAME"
+            if [ "${tag#v}" != "$version" ]; then
+              echo "::error::Tag $tag does not match VERSION ($version). Update VERSION, Main.RewiredVersion and bundleVersion first."
+              exit 1
+            fi
           fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
   engine_tests:
     name: Engine tests
@@ -263,7 +280,7 @@ jobs:
   release:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
-    needs: [build, build_android, build_webgl]
+    needs: [version, build, build_android, build_webgl]
     # Android is experimental: a failed APK build must not block the desktop release.
     if: ${{ !cancelled() && needs.build.result == 'success' }}
 
@@ -296,7 +313,8 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ needs.version.outputs.tag }}
+          TARGET: ${{ github.sha }}
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -312,6 +330,7 @@ jobs:
           if ! gh release view "$TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
             gh release create "$TAG" \
               --repo "$REPOSITORY" \
+              --target "$TARGET" \
               --title "Rewired $TAG" \
               "${notes_args[@]}"
           fi
