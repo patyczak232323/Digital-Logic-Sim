@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using DLS.Description;
 using DLS.Game;
+using DLS.Game.Updates;
 using DLS.SaveSystem;
 using DLS.Simulation;
 using Seb.Helpers;
@@ -83,6 +84,9 @@ namespace DLS.Graphics
 			}
 
 			float titleX = screen == ScreenKind.Home ? bar.Left + 1.2f : bar.Left + 13.3f;
+			const float logoSize = 4.6f;
+			RewiredLogo.Draw(new Vector2(titleX + logoSize / 2, bar.Centre.y), logoSize);
+			titleX += logoSize + 0.8f;
 			UI.DrawText("REWIRED", FontType.Born2bSporty, 4.7f,
 				new Vector2(titleX, bar.Centre.y + 0.15f), Anchor.TextCentreLeft, Color.white);
 			if (screen == ScreenKind.Home)
@@ -90,8 +94,18 @@ namespace DLS.Graphics
 				UI.DrawText("DIGITAL LOGIC SIMULATOR", theme.FontBold, theme.FontSizeRegular * 0.8f,
 					new Vector2(UI.PrevBounds.Right + 2f, bar.Centre.y), Anchor.TextCentreLeft, RewiredUI.SecondaryText);
 			}
-			UI.DrawText($"ANDROID  •  v{Main.RewiredVersion}", theme.FontRegular, theme.FontSizeRegular * 0.68f,
-				bar.CentreRight + Vector2.left * 1.1f, Anchor.TextCentreRight, RewiredUI.SecondaryText);
+			if (AppUpdater.Current == AppUpdater.State.Available)
+			{
+				if (MobileTheme.Button(AppUpdater.ActionLabel, MobileTheme.Primary, bar.CentreRight + Vector2.left * 0.6f, new Vector2(20f, 4.8f), true, Anchor.CentreRight))
+				{
+					AppUpdater.RunAction();
+				}
+			}
+			else
+			{
+				UI.DrawText($"ANDROID  •  v{Main.RewiredVersion}", theme.FontRegular, theme.FontSizeRegular * 0.68f,
+					bar.CentreRight + Vector2.left * 1.1f, Anchor.TextCentreRight, RewiredUI.SecondaryText);
+			}
 		}
 
 		// Home: start a new project on the left, open an existing one on the right with one tap.
@@ -411,6 +425,24 @@ namespace DLS.Graphics
 			}
 
 			y -= h + 2.6f;
+			UI.DrawText("UPDATES", theme.FontBold, theme.FontSizeRegular * 0.72f,
+				new Vector2(x, y), Anchor.TextCentreLeft, RewiredUI.SecondaryText);
+			y -= 1.6f;
+			float half = (width - gap) / 2f;
+			bool checkAtStart = !Main.ActiveAppSettings.DisableUpdateCheck;
+			if (MobileTheme.Button("CHECK AT START", MobileTheme.Toggle(checkAtStart), new Vector2(x, y), new Vector2(half, h), true, Anchor.TopLeft))
+			{
+				AppSettings settings = Main.ActiveAppSettings;
+				settings.DisableUpdateCheck = checkAtStart;
+				Main.SaveAppSettings(settings);
+			}
+			string updateLabel = AppUpdater.ActionLabel ?? AppUpdater.StatusText;
+			if (MobileTheme.Button(updateLabel, MobileTheme.Neutral, new Vector2(x + half + gap, y), new Vector2(half, h), !AppUpdater.Busy, Anchor.TopLeft))
+			{
+				AppUpdater.RunAction();
+			}
+
+			y -= h + 2.6f;
 			UI.DrawText("TOUCH", theme.FontBold, theme.FontSizeRegular * 0.72f,
 				new Vector2(x, y), Anchor.TextCentreLeft, RewiredUI.SecondaryText);
 			y -= 2f;
@@ -447,6 +479,23 @@ namespace DLS.Graphics
 			UI.DrawText("Based on Digital Logic Sim by Sebastian Lague.",
 				theme.FontRegular, theme.FontSizeRegular * 0.78f,
 				new Vector2(safe.center.x, y), Anchor.Centre, RewiredUI.SecondaryText);
+
+			if (!AppUpdater.Supported) return;
+			y -= 6f;
+			UI.DrawText(AppUpdater.StatusText, theme.FontRegular, theme.FontSizeRegular * 0.78f,
+				new Vector2(safe.center.x, y), Anchor.Centre, Color.white);
+			y -= 4.5f;
+			string label = AppUpdater.ActionLabel;
+			if (label != null && MobileTheme.Button(label, MobileTheme.Primary, new Vector2(safe.center.x, y), new Vector2(26f, 5.2f), true, Anchor.Centre))
+			{
+				AppUpdater.RunAction();
+			}
+			if (AppUpdater.Current == AppUpdater.State.Available && AppUpdater.Platform == UpdatePlatform.Android)
+			{
+				y -= 5f;
+				UI.DrawText("The browser downloads the new APK. Open it to update; Android may ask to allow installs from the browser.",
+					theme.FontRegular, theme.FontSizeRegular * 0.62f, new Vector2(safe.center.x, y), Anchor.Centre, RewiredUI.SecondaryText);
+			}
 		}
 
 		static void OpenProjectNameScreen(ProjectNameMode mode)

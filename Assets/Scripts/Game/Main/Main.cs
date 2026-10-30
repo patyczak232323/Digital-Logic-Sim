@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using DLS.Description;
+using DLS.Game.Updates;
 using DLS.Graphics;
 using DLS.SaveSystem;
 using UnityEngine;
@@ -31,6 +32,7 @@ namespace DLS.Game
 			SavePaths.EnsureDirectoryExists(SavePaths.ProjectsPath);
 			SaveAndApplyAppSettings(Loader.LoadAppSettings());
 			InstallBundledProjects();
+			if (!ActiveAppSettings.DisableUpdateCheck) AppUpdater.Check();
 			Main.audioState = audioState;
 		}
 
@@ -65,8 +67,14 @@ namespace DLS.Game
 			if (!changed) return;
 			AppSettings settings = ActiveAppSettings;
 			settings.InstalledBundledProjects = installed.ToArray();
-			ActiveAppSettings = settings;
-			Saver.SaveAppSettings(settings);
+			SaveAppSettings(settings);
+		}
+
+		// Saves settings that do not change the window (unlike SaveAndApplyAppSettings).
+		public static void SaveAppSettings(AppSettings settings)
+		{
+			ActiveAppSettings = AppSettings.Normalize(settings);
+			Saver.SaveAppSettings(ActiveAppSettings);
 		}
 
 		public static void Update()
@@ -82,6 +90,7 @@ namespace DLS.Game
 
 			UIDrawer.Draw();
 
+			AppUpdater.Update();
 			HandleGlobalInput();
 		}
 
