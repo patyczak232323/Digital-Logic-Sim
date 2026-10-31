@@ -25,7 +25,11 @@ namespace DLS.Game
 		public static bool ToggleGridShortcutTriggered => Triggered(ShortcutAction.ToggleGrid);
 		public static bool ResetCameraShortcutTriggered => Triggered(ShortcutAction.ResetCamera);
 		public static bool UndoShortcutTriggered => Triggered(ShortcutAction.Undo);
-		public static bool RedoShortcutTriggered => Triggered(ShortcutAction.Redo);
+		public static bool RedoShortcutTriggered => Triggered(ShortcutAction.Redo) || Triggered(ShortcutAction.RedoAlternative);
+		public static bool SelectAllShortcutTriggered => Triggered(ShortcutAction.SelectAll);
+		public static bool CopyShortcutTriggered => Triggered(ShortcutAction.Copy);
+		public static bool CutShortcutTriggered => Triggered(ShortcutAction.Cut);
+		public static bool PasteShortcutTriggered => Triggered(ShortcutAction.Paste);
 		public static bool MirrorHorizontalShortcutTriggered => Triggered(ShortcutAction.MirrorHorizontal);
 		public static bool MirrorVerticalShortcutTriggered => Triggered(ShortcutAction.MirrorVertical);
 
@@ -83,6 +87,11 @@ namespace DLS.Game
 				ShortcutAction.SimulationPause => "Pause / Resume Simulation",
 				ShortcutAction.MirrorHorizontal => "Mirror Horizontal",
 				ShortcutAction.MirrorVertical => "Mirror Vertical",
+				ShortcutAction.SelectAll => "Select All",
+				ShortcutAction.Copy => "Copy",
+				ShortcutAction.Cut => "Cut",
+				ShortcutAction.Paste => "Paste",
+				ShortcutAction.RedoAlternative => "Redo (Alternative)",
 				_ => action.ToString()
 			};
 

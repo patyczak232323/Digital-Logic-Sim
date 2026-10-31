@@ -219,6 +219,11 @@ namespace DLS.Game
 			}
 
 
+			if (KeyboardShortcuts.SelectAllShortcutTriggered) SelectAll();
+			if (KeyboardShortcuts.CopyShortcutTriggered) CopySelection();
+			if (KeyboardShortcuts.CutShortcutTriggered) CutSelection();
+			if (KeyboardShortcuts.PasteShortcutTriggered) Paste();
+
 			if (KeyboardShortcuts.DuplicateShortcutTriggered)
 			{
 				if (SelectedElements.Count > 0 && !IsPlacingOrMovingElementOrCreatingWire)
@@ -302,17 +307,11 @@ namespace DLS.Game
 		}
 
 		// Set the correct LinkedBusPairIDs on duplicated elements (still set to original IDs at this point)
-		static void LinkDuplicatedBuses(List<IMoveable> duplicatedElements, IMoveable[] originalElements)
+		// busPairOfOriginal maps the original ID of each copied bus terminus to the original ID of its origin.
+		static void LinkDuplicatedBuses(List<IMoveable> duplicatedElements, Dictionary<int, int> busPairOfOriginal)
 		{
 			List<SubChipInstance> busOrigins = new();
 			List<SubChipInstance> busTerminuses = new();
-
-			Dictionary<int, int> lookup = new();
-			foreach (IMoveable element in originalElements)
-			{
-				if (element is not SubChipInstance subChip) continue;
-				if (ChipTypeHelper.IsBusTerminusType(subChip.ChipType)) lookup[subChip.ID] = subChip.LinkedBusPairID;
-			}
 
 			foreach (IMoveable element in duplicatedElements)
 			{
@@ -323,7 +322,8 @@ namespace DLS.Game
 
 			foreach (SubChipInstance busOrigin in busOrigins)
 			{
-				int originalBusOriginId = lookup[busOrigin.LinkedBusPairID];
+				// A copied origin still holds the original ID of its terminus
+				if (!busPairOfOriginal.TryGetValue(busOrigin.LinkedBusPairID, out int originalBusOriginId)) continue;
 				foreach (SubChipInstance busTerminus in busTerminuses)
 				{
 					if (busTerminus.LinkedBusPairID == originalBusOriginId)
@@ -336,96 +336,271 @@ namespace DLS.Game
 			}
 		}
 
-		void DuplicateElements(List<IMoveable> elements)
+		// ---- Copy and paste ----
+
+		// A copy of some elements and the wires between them, independent of the chip they came from,
+		// so it can be pasted after the originals are deleted, or into another chip.
+		sealed class ElementSnapshot
 		{
-			if (elements.Count == 0) return;
-			IMoveable[] elementsToDuplicate = elements.Concat(GetNonIncludedLinkedBusElements(elements)).ToArray();
+			public int OriginalID;
+			public Vector2 Position;
+			public Vector2 AnchorPosition; // the point that follows the mouse when this element is nearest to it
+			public bool IsDevPin;
+			public bool IsInputPin;
+			public PinDescription PinDesc;
+			public ChipDescription ChipDesc;
+			public SubChipDescription SubChipDesc;
+		}
 
-			List<IMoveable> duplicatedElements = new(elementsToDuplicate.Length);
-			Dictionary<int, int> duplicatedElementIDFromOriginalID = new();
+		sealed class WireSnapshot
+		{
+			public PinAddress Source;
+			public PinAddress Target;
+			public int SourceConnectedWire = -1; // index of an earlier wire in the snapshot, or -1
+			public int TargetConnectedWire = -1;
+			public Vector2 SourceConnectionPoint;
+			public Vector2 TargetConnectionPoint;
+			public int SourceSegmentIndex;
+			public int TargetSegmentIndex;
+			public Vector2[] Points;
+		}
 
-			// Get description of each element, and start placing a copy of it
-			foreach (IMoveable element in elementsToDuplicate)
+		sealed class ElementsSnapshot
+		{
+			public readonly List<ElementSnapshot> Elements = new();
+			public readonly List<WireSnapshot> Wires = new();
+		}
+
+		// Shared by all chips and projects for as long as the app runs
+		static ElementsSnapshot clipboard;
+
+		public static bool ClipboardHasContent => clipboard != null && clipboard.Elements.Count > 0;
+
+		ElementsSnapshot CreateSnapshot(IEnumerable<IMoveable> elements)
+		{
+			List<IMoveable> list = elements.Where(e => e != null).Distinct().ToList();
+			IMoveable[] elementsToCopy = list.Concat(GetNonIncludedLinkedBusElements(list)).Where(e => e != null).Distinct().ToArray();
+
+			ElementsSnapshot snapshot = new();
+			HashSet<int> copiedIDs = new();
+
+			foreach (IMoveable element in elementsToCopy)
 			{
-				IMoveable duplicatedElement = CreateElementFromDuplicationSource(element);
-				StartPlacing(duplicatedElement, element.Position, true);
-				duplicatedElement.StraightLineReferencePoint = element.Position;
-				duplicatedElements.Add(duplicatedElement);
-				duplicatedElementIDFromOriginalID.Add(element.ID, duplicatedElement.ID);
+				ElementSnapshot entry = new()
+				{
+					OriginalID = element.ID,
+					Position = element.Position,
+					AnchorPosition = element is DevPinInstance p ? p.HandlePosition : element.Position
+				};
+
+				if (element is DevPinInstance devPin)
+				{
+					entry.IsDevPin = true;
+					entry.IsInputPin = devPin.IsInputPin;
+					entry.PinDesc = DescriptionCreator.CreatePinDescription(devPin);
+				}
+				else
+				{
+					SubChipInstance subChip = (SubChipInstance)element;
+					entry.ChipDesc = subChip.Description;
+					entry.SubChipDesc = DescriptionCreator.CreateSubChipDescription(subChip);
+				}
+
+				snapshot.Elements.Add(entry);
+				copiedIDs.Add(element.ID);
 			}
 
-			LinkDuplicatedBuses(duplicatedElements, elementsToDuplicate);
-
-			// ---- Duplicate wires ----
-			Dictionary<WireInstance, WireInstance> duplicatedWireFromOriginal = new();
-			DuplicatedWires.Clear();
-
+			Dictionary<WireInstance, int> wireIndex = new();
 			foreach (WireInstance wire in ActiveDevChip.Wires)
 			{
-				bool wireSourceHasBeenDuplicated = duplicatedElementIDFromOriginalID.TryGetValue(wire.SourcePin.Address.PinOwnerID, out int sourceID);
-				bool wireTargetHasBeenDuplicated = duplicatedElementIDFromOriginalID.TryGetValue(wire.TargetPin.Address.PinOwnerID, out int targetID);
+				if (!copiedIDs.Contains(wire.SourcePin.Address.PinOwnerID) || !copiedIDs.Contains(wire.TargetPin.Address.PinOwnerID)) continue;
 
-				if (wireSourceHasBeenDuplicated && wireTargetHasBeenDuplicated)
+				WireSnapshot entry = new()
 				{
-					PinAddress duplicatedSourcePinAddress = new(sourceID, wire.SourcePin.Address.PinID);
-					PinAddress duplicatedTargetPinAddress = new(targetID, wire.TargetPin.Address.PinID);
+					Source = wire.SourcePin.Address,
+					Target = wire.TargetPin.Address,
+					SourceConnectionPoint = wire.SourceConnectionInfo.connectionPoint,
+					TargetConnectionPoint = wire.TargetConnectionInfo.connectionPoint,
+					SourceSegmentIndex = wire.SourceConnectionInfo.wireConnectionSegmentIndex,
+					TargetSegmentIndex = wire.TargetConnectionInfo.wireConnectionSegmentIndex,
+					Points = new Vector2[wire.WirePointCount]
+				};
 
-					DevChipInstance.TryFindPin(duplicatedElements, duplicatedSourcePinAddress, out PinInstance duplicatedSourcePin);
-					DevChipInstance.TryFindPin(duplicatedElements, duplicatedTargetPinAddress, out PinInstance duplicatedTargetPin);
+				if (wire.SourceConnectionInfo.connectedWire != null && wireIndex.TryGetValue(wire.SourceConnectionInfo.connectedWire, out int sourceWireIndex)) entry.SourceConnectedWire = sourceWireIndex;
+				if (wire.TargetConnectionInfo.connectedWire != null && wireIndex.TryGetValue(wire.TargetConnectionInfo.connectedWire, out int targetWireIndex)) entry.TargetConnectedWire = targetWireIndex;
+				for (int i = 0; i < entry.Points.Length; i++) entry.Points[i] = wire.GetWirePoint(i);
 
-					Debug.Assert(duplicatedSourcePin != null && duplicatedTargetPin != null, "Pins not found for duplicated wire!");
-
-					WireInstance duplicatedConnectedSourceWire = null;
-					WireInstance duplicatedConnectedTargetWire = null;
-					if (wire.SourceConnectionInfo.connectedWire != null) duplicatedWireFromOriginal.TryGetValue(wire.SourceConnectionInfo.connectedWire, out duplicatedConnectedSourceWire);
-					if (wire.TargetConnectionInfo.connectedWire != null) duplicatedWireFromOriginal.TryGetValue(wire.TargetConnectionInfo.connectedWire, out duplicatedConnectedTargetWire);
-
-					WireInstance.ConnectionInfo sourceConnectionInfo = new()
-					{
-						pin = duplicatedSourcePin,
-						connectedWire = duplicatedConnectedSourceWire,
-						connectionPoint = wire.SourceConnectionInfo.connectionPoint,
-						wireConnectionSegmentIndex = wire.SourceConnectionInfo.wireConnectionSegmentIndex
-					};
-
-					WireInstance.ConnectionInfo targetConnectionInfo = new()
-					{
-						pin = duplicatedTargetPin,
-						connectedWire = duplicatedConnectedTargetWire,
-						connectionPoint = wire.TargetConnectionInfo.connectionPoint,
-						wireConnectionSegmentIndex = wire.TargetConnectionInfo.wireConnectionSegmentIndex
-					};
-
-					Vector2[] wirePoints = new Vector2[wire.WirePointCount];
-					for (int i = 0; i < wirePoints.Length; i++)
-					{
-						wirePoints[i] = wire.GetWirePoint(i);
-					}
-
-					WireInstance duplicatedWire = new(sourceConnectionInfo, targetConnectionInfo, wirePoints, ActiveDevChip.Wires.Count + DuplicatedWires.Count);
-					duplicatedWireFromOriginal.Add(wire, duplicatedWire);
-					DuplicatedWires.Add(duplicatedWire);
-				}
+				wireIndex.Add(wire, snapshot.Wires.Count);
+				snapshot.Wires.Add(entry);
 			}
 
-			// Find element closest to mouse to use as origin point for duplicated elements
+			return snapshot;
+		}
+
+		// Starts placing a copy of the snapshot, following the mouse. With resolveFromLibrary, chips are
+		// looked up by name in this project (the snapshot may come from another chip or project), and
+		// chips that are missing or cannot go inside the viewed chip are left out, with their wires.
+		bool PlaceSnapshot(ElementsSnapshot snapshot, bool resolveFromLibrary)
+		{
+			// ---- Decide which elements can be placed ----
+			Dictionary<ElementSnapshot, ChipDescription> chipDescriptions = new();
+			foreach (ElementSnapshot entry in snapshot.Elements)
+			{
+				if (entry.IsDevPin) continue;
+
+				ChipDescription chipDesc = entry.ChipDesc;
+				if (resolveFromLibrary)
+				{
+					if (!project.chipLibrary.TryGetChipDescription(entry.SubChipDesc.Name, out chipDesc)) continue;
+					if (!ActiveDevChip.CanAddSubchip(chipDesc.Name)) continue;
+				}
+
+				chipDescriptions.Add(entry, chipDesc);
+			}
+
+			HashSet<int> placeableIDs = snapshot.Elements.Where(e => e.IsDevPin || chipDescriptions.ContainsKey(e)).Select(e => e.OriginalID).ToHashSet();
+			Dictionary<int, int> busPairOfOriginal = new();
+			List<ElementSnapshot> toPlace = new();
+
+			foreach (ElementSnapshot entry in snapshot.Elements)
+			{
+				if (!placeableIDs.Contains(entry.OriginalID)) continue;
+
+				// A bus is only usable together with its other end
+				if (!entry.IsDevPin && ChipTypeHelper.IsBusType(chipDescriptions[entry].ChipType))
+				{
+					uint[] data = entry.SubChipDesc.InternalData;
+					if (data == null || data.Length == 0 || !placeableIDs.Contains((int)data[0])) continue;
+					if (ChipTypeHelper.IsBusTerminusType(chipDescriptions[entry].ChipType)) busPairOfOriginal[entry.OriginalID] = (int)data[0];
+				}
+
+				toPlace.Add(entry);
+			}
+
+			if (toPlace.Count == 0) return false;
+
+			// ---- Create and start placing the elements ----
+			List<IMoveable> placedElements = new(toPlace.Count);
+			Dictionary<int, int> newIDFromOriginalID = new();
+
+			foreach (ElementSnapshot entry in toPlace)
+			{
+				int instanceID = IDGenerator.GenerateNewElementID(ActiveDevChip);
+				IMoveable element;
+
+				if (entry.IsDevPin)
+				{
+					PinDescription pinDesc = entry.PinDesc;
+					pinDesc.ID = instanceID;
+					element = new DevPinInstance(pinDesc, entry.IsInputPin);
+				}
+				else
+				{
+					SubChipDescription subChipDesc = entry.SubChipDesc;
+					subChipDesc.ID = instanceID;
+					subChipDesc.InternalData = (uint[])subChipDesc.InternalData?.Clone();
+					element = new SubChipInstance(chipDescriptions[entry], subChipDesc);
+				}
+
+				StartPlacing(element, entry.Position, true);
+				element.StraightLineReferencePoint = entry.Position;
+				// A pasted copy has no sensible line to keep to (the original may be anywhere)
+				if (resolveFromLibrary) element.HasReferencePointForStraightLineMovement = false;
+
+				placedElements.Add(element);
+				newIDFromOriginalID.Add(entry.OriginalID, instanceID);
+			}
+
+			LinkDuplicatedBuses(placedElements, busPairOfOriginal);
+
+			// ---- Recreate the wires between them ----
+			DuplicatedWires.Clear();
+			WireInstance[] createdWires = new WireInstance[snapshot.Wires.Count];
+
+			for (int w = 0; w < snapshot.Wires.Count; w++)
+			{
+				WireSnapshot entry = snapshot.Wires[w];
+				if (!newIDFromOriginalID.TryGetValue(entry.Source.PinOwnerID, out int sourceID)) continue;
+				if (!newIDFromOriginalID.TryGetValue(entry.Target.PinOwnerID, out int targetID)) continue;
+
+				// Pins can be missing or different if a chip pasted by name has changed since it was copied
+				if (!DevChipInstance.TryFindPin(placedElements, new PinAddress(sourceID, entry.Source.PinID), out PinInstance sourcePin)) continue;
+				if (!DevChipInstance.TryFindPin(placedElements, new PinAddress(targetID, entry.Target.PinID), out PinInstance targetPin)) continue;
+				if (!sourcePin.IsSourcePin || targetPin.IsSourcePin || sourcePin.bitCount != targetPin.bitCount) continue;
+
+				WireInstance.ConnectionInfo sourceConnectionInfo = new()
+				{
+					pin = sourcePin,
+					connectedWire = entry.SourceConnectedWire >= 0 ? createdWires[entry.SourceConnectedWire] : null,
+					connectionPoint = entry.SourceConnectionPoint,
+					wireConnectionSegmentIndex = entry.SourceSegmentIndex
+				};
+
+				WireInstance.ConnectionInfo targetConnectionInfo = new()
+				{
+					pin = targetPin,
+					connectedWire = entry.TargetConnectedWire >= 0 ? createdWires[entry.TargetConnectedWire] : null,
+					connectionPoint = entry.TargetConnectionPoint,
+					wireConnectionSegmentIndex = entry.TargetSegmentIndex
+				};
+
+				WireInstance wire = new(sourceConnectionInfo, targetConnectionInfo, (Vector2[])entry.Points.Clone(), ActiveDevChip.Wires.Count + DuplicatedWires.Count);
+				createdWires[w] = wire;
+				DuplicatedWires.Add(wire);
+			}
+
+			// ---- Attach the element nearest the mouse to the mouse ----
 			Vector2 mousePos = InputHelper.MousePosWorld;
 			Vector2 closestElementPos = Vector2.zero;
 			float closestDst = float.MaxValue;
 
-			foreach (IMoveable element in elementsToDuplicate)
+			foreach (ElementSnapshot entry in toPlace)
 			{
-				Vector2 pos = element is DevPinInstance pin ? pin.HandlePosition : element.Position;
-				float dst = Vector2.Distance(pos, mousePos);
+				float dst = Vector2.Distance(entry.AnchorPosition, mousePos);
 				if (dst < closestDst)
 				{
 					closestDst = dst;
-					closestElementPos = pos;
+					closestElementPos = entry.AnchorPosition;
 				}
 			}
 
-			Vector2 offset = InputHelper.MousePosWorld - closestElementPos;
-			moveElementMouseStartPos -= offset;
+			moveElementMouseStartPos -= mousePos - closestElementPos;
+			return true;
+		}
+
+		void DuplicateElements(List<IMoveable> elements)
+		{
+			if (elements.Count == 0) return;
+			PlaceSnapshot(CreateSnapshot(elements), false);
+		}
+
+		public bool CanCopy => HasControl && SelectedElements.Count > 0 && !IsPlacingOrMovingElementOrCreatingWire;
+
+		public void CopySelection()
+		{
+			if (!CanCopy) return;
+			clipboard = CreateSnapshot(SelectedElements);
+		}
+
+		public void CutSelection()
+		{
+			if (!CanCopy) return;
+			clipboard = CreateSnapshot(SelectedElements);
+			DeleteElements(SelectedElements);
+		}
+
+		public void Paste()
+		{
+			if (!HasControl || !ClipboardHasContent || IsPlacingOrMovingElementOrCreatingWire) return;
+			PlaceSnapshot(clipboard, true);
+		}
+
+		public void SelectAll()
+		{
+			if (!HasControl || IsPlacingOrMovingElementOrCreatingWire) return;
+
+			ClearSelection();
+			foreach (IMoveable element in ActiveDevChip.Elements) Select(element);
 		}
 
 		void DuplicateSelectedElements()
@@ -1066,27 +1241,6 @@ namespace DLS.Game
 			}
 
 			return elementToPlace;
-		}
-
-		IMoveable CreateElementFromDuplicationSource(IMoveable duplicationSource)
-		{
-			IMoveable element;
-			int instanceID = IDGenerator.GenerateNewElementID(ActiveDevChip);
-
-			if (duplicationSource is DevPinInstance devPinSrc)
-			{
-				PinDescription pinDesc = DescriptionCreator.CreatePinDescription(devPinSrc);
-				pinDesc.ID = instanceID;
-				element = new DevPinInstance(pinDesc, devPinSrc.IsInputPin);
-			}
-			else
-			{
-				SubChipDescription subChipDesc = DescriptionCreator.CreateSubChipDescription((SubChipInstance)duplicationSource);
-				subChipDesc.ID = instanceID;
-				element = new SubChipInstance(((SubChipInstance)duplicationSource).Description, subChipDesc);
-			}
-
-			return element;
 		}
 
 		public void CancelEverything()
