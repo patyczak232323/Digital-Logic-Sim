@@ -1,0 +1,7 @@
+# 8-bit 8:1 multiplexer: two Mux4x8 and a Mux2x8. S bits 0-2 choose I0..I7.
+circuit Mux8x8(
+    I0: u8, I1: u8, I2: u8, I3: u8, I4: u8, I5: u8, I6: u8, I7: u8, S: u4,
+) -> Y: u8:
+    low = Mux4x8(I0, I1, I2, I3, S)
+    high = Mux4x8(I4, I5, I6, I7, S)
+    Y = Mux2x8(high, low, S[2])

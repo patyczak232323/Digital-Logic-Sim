@@ -1,0 +1,29 @@
+# Cpu8Computer: the CPU with a clock, a reset key and a power-on reset.
+# Type a program into the ROMs inside ProgramRom (ROM 0 holds 0x000-0x0FF),
+# run the simulation and watch the registers on the outputs. R resets.
+circuit Cpu8Computer() -> (
+    PC_LO: u8, PC_HI: u4,
+    R0: u8, R1: u8, R2: u8, R3: u8, R4: u8, R5: u8, R6: u8, R7: u8,
+    Z, C, HALTED,
+):
+    clk = CLOCK()
+    reset_key = KEY()
+
+    # Registers made of NAND gates start in no particular state, so the
+    # processor is reset for a few steps when the simulation starts.
+    power_on = PULSE(1)
+
+    cpu = Cpu8(clk, Or(reset_key, power_on))
+    PC_LO = cpu.PC_LO
+    PC_HI = cpu.PC_HI
+    R0 = cpu.R0
+    R1 = cpu.R1
+    R2 = cpu.R2
+    R3 = cpu.R3
+    R4 = cpu.R4
+    R5 = cpu.R5
+    R6 = cpu.R6
+    R7 = cpu.R7
+    Z = cpu.Z
+    C = cpu.C
+    HALTED = cpu.HALTED

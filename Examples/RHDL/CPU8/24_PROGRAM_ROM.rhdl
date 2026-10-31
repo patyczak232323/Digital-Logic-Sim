@@ -1,0 +1,20 @@
+# 2048 x 16-bit program memory from eight stock 256x16 ROMs.
+# The low address byte goes to every ROM; HI (address bits 8-10) chooses
+# which ROM's word comes out. ROM n holds addresses 0x n00 .. 0x nFF.
+circuit ProgramRom(LO: u8, HI: u4) -> (INSTR_HI: u8, INSTR_LO: u8):
+    rom0 = ROM(LO)
+    rom1 = ROM(LO)
+    rom2 = ROM(LO)
+    rom3 = ROM(LO)
+    rom4 = ROM(LO)
+    rom5 = ROM(LO)
+    rom6 = ROM(LO)
+    rom7 = ROM(LO)
+    INSTR_HI = Mux8x8(
+        rom0.OUT_B, rom1.OUT_B, rom2.OUT_B, rom3.OUT_B,
+        rom4.OUT_B, rom5.OUT_B, rom6.OUT_B, rom7.OUT_B, HI,
+    )
+    INSTR_LO = Mux8x8(
+        rom0.OUT_A, rom1.OUT_A, rom2.OUT_A, rom3.OUT_A,
+        rom4.OUT_A, rom5.OUT_A, rom6.OUT_A, rom7.OUT_A, HI,
+    )

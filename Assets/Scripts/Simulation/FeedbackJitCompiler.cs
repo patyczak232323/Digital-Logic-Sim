@@ -23,6 +23,12 @@ namespace DLS.Simulation
 		const int NodesPerNativeMethod = 256;
 		const int MinPrimitiveNodeCount = 2;
 
+		// Every sweep evaluates the whole program and a deep circuit needs many sweeps before it
+		// settles, so a large program costs far more than simulating only the gates that change.
+		// Larger chips are not compiled as a whole; their smaller feedback subchips (registers,
+		// latches) still are. A 256-byte RAM built from registers ran 40x slower as one program.
+		internal const int MaxPrimitiveNodeCount = 1024;
+
 		internal delegate void NativeFeedbackBlock(uint[] current, uint[] next);
 
 		sealed class ProgramHolder
@@ -132,6 +138,7 @@ namespace DLS.Simulation
 
 			primitiveChips.RemoveAll(c => c.OutputPins.Length == 0);
 			if (primitiveChips.Count < MinPrimitiveNodeCount) return null;
+			if (primitiveChips.Count > MaxPrimitiveNodeCount) return null;
 
 			Dictionary<SimPin, SimPin> incomingSource = BuildIncomingSourceMap(localPins, localPinSet);
 			Dictionary<SimPin, int> rootInputSlots = new();

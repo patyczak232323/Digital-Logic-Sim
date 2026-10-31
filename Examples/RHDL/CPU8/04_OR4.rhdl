@@ -1,0 +1,3 @@
+# Four-input OR, from three OR gates.
+circuit Or4(A, B, C, D) -> Y:
+    Y = Or(Or(A, B), Or(C, D))

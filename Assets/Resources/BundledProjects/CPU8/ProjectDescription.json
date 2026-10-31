@@ -1,0 +1,94 @@
+{
+  "ProjectName": "CPU8",
+  "DLSVersion_LastSaved": "2.1.6",
+  "DLSVersion_EarliestCompatible": "2.0.0",
+  "CreationTime": "2026-10-31T00:00:00.000",
+  "LastSaveTime": "2026-10-31T00:00:00.000",
+  "Prefs_MainPinNamesDisplayMode": 1,
+  "Prefs_ChipPinNamesDisplayMode": 1,
+  "Prefs_GridDisplayMode": 0,
+  "Prefs_Snapping": 0,
+  "Prefs_StraightWires": 0,
+  "Prefs_SimPaused": false,
+  "Prefs_SimTargetStepsPerSecond": 20,
+  "Prefs_SimStepsPerClockTick": 1,
+  "AllCustomChipNames":[
+    "DffBit",
+    "Not",
+    "And",
+    "Or",
+    "Xor",
+    "Or4",
+    "Mux",
+    "Add1",
+    "Add8",
+    "Mux2x8",
+    "Mux4x8",
+    "Mux8x8",
+    "Mux16x8",
+    "Dec2",
+    "Dec3",
+    "Dec4",
+    "Dec5",
+    "IsZero8",
+    "Register8",
+    "Ram16x8",
+    "Ram256x8",
+    "RegisterFile",
+    "Alu",
+    "Flags",
+    "ProgramCounter",
+    "ProgramRom",
+    "ControlUnit",
+    "Cpu8",
+    "Cpu8Computer"
+  ],
+  "StarredList":[
+    {
+      "Name":"IN/OUT",
+      "IsCollection":true
+    },
+    {
+      "Name":"NAND",
+      "IsCollection":false
+    }
+  ],
+  "ChipCollections":[
+    {
+      "Chips":["NAND","CLOCK","PULSE","KEY","3-STATE BUFFER"],
+      "IsToggledOpen":false,
+      "Name":"BASIC"
+    },
+    {
+      "Chips":["IN-1","IN-4","IN-8","OUT-1","OUT-4","OUT-8"],
+      "IsToggledOpen":false,
+      "Name":"IN/OUT"
+    },
+    {
+      "Chips":["1-4BIT","1-8BIT","4-8BIT","4-1BIT","8-4BIT","8-1BIT"],
+      "IsToggledOpen":false,
+      "Name":"MERGE/SPLIT"
+    },
+    {
+      "Chips":["BUS-1","BUS-4","BUS-8"],
+      "IsToggledOpen":false,
+      "Name":"BUS"
+    },
+    {
+      "Chips":["7-SEGMENT","DOT DISPLAY","RGB DISPLAY","RGB DISPLAY 64","LED"],
+      "IsToggledOpen":false,
+      "Name":"DISPLAY"
+    },
+    {
+      "Chips":["ROM 256×16"],
+      "IsToggledOpen":false,
+      "Name":"MEMORY"
+    },
+    {
+      "Chips":["DffBit","Not","And","Or","Xor","Or4","Mux","Add1","Add8","Mux2x8","Mux4x8","Mux8x8","Mux16x8","Dec2","Dec3","Dec4","Dec5","IsZero8","Register8","Ram16x8","Ram256x8","RegisterFile","Alu","Flags","ProgramCounter","ProgramRom","ControlUnit","Cpu8","Cpu8Computer"],
+      "IsToggledOpen":false,
+      "Name":"CPU8"
+    }
+  ],
+  "StartupChipName": "Cpu8Computer"
+}

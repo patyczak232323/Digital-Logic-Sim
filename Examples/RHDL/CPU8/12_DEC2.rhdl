@@ -1,0 +1,8 @@
+# 2-to-4 decoder with enable: output Yn is 1 when EN=1 and A1 A0 = n.
+circuit Dec2(A0, A1, EN) -> (Y0, Y1, Y2, Y3):
+    n0 = Not(A0)
+    n1 = Not(A1)
+    Y0 = And(EN, And(n1, n0))
+    Y1 = And(EN, And(n1, A0))
+    Y2 = And(EN, And(A1, n0))
+    Y3 = And(EN, And(A1, A0))

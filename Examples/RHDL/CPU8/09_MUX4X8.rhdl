@@ -1,0 +1,5 @@
+# 8-bit 4:1 multiplexer: a tree of three Mux2x8. S bits 0-1 choose I0..I3.
+circuit Mux4x8(I0: u8, I1: u8, I2: u8, I3: u8, S: u4) -> Y: u8:
+    low = Mux2x8(I1, I0, S[0])
+    high = Mux2x8(I3, I2, S[0])
+    Y = Mux2x8(high, low, S[1])

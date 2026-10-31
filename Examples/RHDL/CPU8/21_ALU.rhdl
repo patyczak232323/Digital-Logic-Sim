@@ -1,0 +1,37 @@
+# 8-bit ALU.
+#
+# OP  operation         C (carry out)
+# 0   A + (B ^ SUB) + CIN   carry, or borrow when SUB=1
+# 1   A AND B           -
+# 2   A OR B            -
+# 3   A XOR B           -
+# 4   NOT A             -
+# 5   A << 1            bit 7 of A
+# 6   A >> 1            bit 0 of A
+# 7   B (pass)          -
+#
+# Subtraction is A + NOT B + 1: SUB inverts B through XOR gates and the
+# control unit sets CIN. The adder's carry out is 1 when there was no
+# borrow, so with SUB=1 it is inverted once more to give C = borrow.
+circuit Alu(A: u8, B: u8, OP: u4, SUB, CIN) -> (Y: u8, C, Z):
+    b_in: u8
+    and_ab: u8
+    or_ab: u8
+    xor_ab: u8
+    not_a: u8
+    for i in range(8):
+        b_in[i] = Xor(B[i], SUB)
+        and_ab[i] = And(A[i], B[i])
+        or_ab[i] = Or(A[i], B[i])
+        xor_ab[i] = Xor(A[i], B[i])
+        not_a[i] = Not(A[i])
+    total, carry = Add8(A, b_in, CIN)
+    shl = cat(A[0:7], 0b0)
+    shr = cat(0b0, A[1:8])
+
+    Y = Mux8x8(total, and_ab, or_ab, xor_ab, not_a, shl, shr, B, OP)
+
+    op = Dec3(OP[0], OP[1], OP[2], 1)
+    arith_c = Xor(carry, SUB)
+    C = Mux(A[7], Mux(A[0], arith_c, op.Y6), op.Y5)
+    Z = IsZero8(Y)

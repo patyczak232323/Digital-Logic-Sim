@@ -1,0 +1,6 @@
+# 8-bit ripple-carry adder: eight full adders, the carry runs from bit 0 up.
+circuit Add8(A: u8, B: u8, CIN) -> (S: u8, COUT):
+    carry = CIN
+    for i in range(8):
+        S[i], carry = Add1(A[i], B[i], carry)
+    COUT = carry

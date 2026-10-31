@@ -1015,7 +1015,7 @@ namespace DLS.RHDL
 
 			signal.InferringWidth = true;
 			AssignStatement statement = (AssignStatement)signal.Definition.Statement;
-			int width = InferWidth(statement.Value, signal.Definition);
+			int width = AssignedWidth(statement, signal.TargetIndex, signal.Definition);
 			signal.InferringWidth = false;
 			if (signal.Width > 0) return;
 
@@ -1027,6 +1027,20 @@ namespace DLS.RHDL
 
 			signal.Width = width;
 			CreateBits(signal);
+		}
+
+		// Width of the value that target number 'target' of an assignment receives: in
+		// 'a, b = Chip(...)' each name takes the width of its own output.
+		int AssignedWidth(AssignStatement statement, int target, Work work)
+		{
+			if (statement.Targets.Count > 1 && statement.Value is CallExpr call &&
+			    TryResolveComponent(call, work, out ChipDescription component, report: false) &&
+			    target >= 0 && target < component.OutputPins.Length)
+			{
+				return (int)component.OutputPins[target].BitCount;
+			}
+
+			return InferWidth(statement.Value, work);
 		}
 
 		// Natural width of an expression without building it; 0 for a constant without a width.
@@ -1127,7 +1141,7 @@ namespace DLS.RHDL
 			if (!variable.Inferring.Add(latest.work.Index)) return 1;
 
 			AssignStatement statement = (AssignStatement)latest.work.Statement;
-			int width = statement.AnnotatedWidth > 0 ? statement.AnnotatedWidth : InferWidth(statement.Value, latest.work);
+			int width = statement.AnnotatedWidth > 0 ? statement.AnnotatedWidth : AssignedWidth(statement, latest.target, latest.work);
 			variable.Inferring.Remove(latest.work.Index);
 			variable.InferredWidths[latest.work.Index] = width;
 			return width;
