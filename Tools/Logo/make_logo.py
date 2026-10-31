@@ -3,7 +3,7 @@
 #
 #   python3 Tools/Logo/make_logo.py Assets/Build/Icon.png 512
 #   python3 Tools/Logo/make_logo.py Docs/logo.png 160
-import math
+import re
 import sys
 from PIL import Image, ImageDraw, ImageFilter
 
@@ -21,14 +21,30 @@ PIN_OFFSETS = (-0.39, -0.13, 0.13, 0.39)
 PIN_WIDTH = 0.12
 PIN_LENGTH = 0.12
 
-# The R, as boxes (x0, y0, x1, y1) and the leg as a thick line (a, b, thickness).
-R_BOXES = [
-    (-0.25, -0.33, -0.12, 0.34),  # stem
-    (-0.25, 0.21, 0.17, 0.34),  # top
-    (0.12, 0.05, 0.25, 0.29),  # right of the bowl
-    (-0.25, 0.01, 0.17, 0.14),  # middle
+# The R as square pixels on a 4 x 6 grid (top row first), drawn in the box R_LEFT..R_RIGHT,
+# R_BOTTOM..R_TOP. The pixels match the pixel font of the REWIRED title.
+R_PIXELS = [
+    "###.",
+    "#..#",
+    "#..#",
+    "###.",
+    "#.#.",
+    "#..#",
 ]
-R_LEG = ((0.06, 0.06), (0.22, -0.30), 0.14)
+R_LEFT, R_RIGHT = -0.24, 0.24
+R_BOTTOM, R_TOP = -0.36, 0.36
+
+
+def r_boxes():
+    """The R as boxes (x0, y0, x1, y1), one per horizontal run of pixels."""
+    cols, rows = len(R_PIXELS[0]), len(R_PIXELS)
+    cw, rh = (R_RIGHT - R_LEFT) / cols, (R_TOP - R_BOTTOM) / rows
+    boxes = []
+    for r, line in enumerate(R_PIXELS):
+        y1 = R_TOP - r * rh
+        for m in re.finditer("#+", line):
+            boxes.append((R_LEFT + m.start() * cw, y1 - rh, R_LEFT + m.end() * cw, y1))
+    return boxes
 
 
 def render(size, background=True):
@@ -78,14 +94,8 @@ def render(size, background=True):
     box(d, -i, -i, i, i, BODY)
     disc(d, (-0.38, 0.38), 0.045, DOT)
 
-    for b in R_BOXES:
+    for b in r_boxes():
         box(d, *b, LETTER)
-    # Leg: a thick line with square ends.
-    (ax, ay), (bx, by), th = R_LEG
-    dx, dy = bx - ax, by - ay
-    n = math.hypot(dx, dy)
-    px, py = -dy / n * th / 2, dx / n * th / 2
-    d.polygon([P(ax + px, ay + py), P(bx + px, by + py), P(bx - px, by - py), P(ax - px, ay - py)], fill=LETTER)
 
     return img.resize((size, size), Image.LANCZOS)
 

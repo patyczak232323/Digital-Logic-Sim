@@ -21,17 +21,21 @@ namespace DLS.Graphics
 		const float PinLength = 0.12f;
 		static readonly float[] PinOffsets = { -0.39f, -0.13f, 0.13f, 0.39f };
 
-		// The R: boxes (x0, y0, x1, y1) and the leg as a thick line.
-		static readonly Vector4[] LetterBoxes =
+		// The R as square pixels on a 4 x 6 grid (top row first), drawn in the box
+		// LetterLeft..LetterRight, LetterBottom..LetterTop, like the pixel font of the title.
+		static readonly string[] LetterPixels =
 		{
-			new(-0.25f, -0.33f, -0.12f, 0.34f), // stem
-			new(-0.25f, 0.21f, 0.17f, 0.34f), // top
-			new(0.12f, 0.05f, 0.25f, 0.29f), // right of the bowl
-			new(-0.25f, 0.01f, 0.17f, 0.14f) // middle
+			"###.",
+			"#..#",
+			"#..#",
+			"###.",
+			"#.#.",
+			"#..#"
 		};
-		static readonly Vector2 LegStart = new(0.06f, 0.06f);
-		static readonly Vector2 LegEnd = new(0.22f, -0.30f);
-		const float LegThickness = 0.14f;
+		const float LetterLeft = -0.24f;
+		const float LetterRight = 0.24f;
+		const float LetterBottom = -0.36f;
+		const float LetterTop = 0.36f;
 
 		// Draws the logo in a square of the given size.
 		public static void Draw(Vector2 centre, float size)
@@ -56,18 +60,22 @@ namespace DLS.Graphics
 			Box(-inner, -inner, inner, inner, Body);
 			UI.DrawCircle(centre + new Vector2(-0.38f, 0.38f) * s, 0.045f * s, Dot);
 
-			foreach (Vector4 b in LetterBoxes) Box(b.x, b.y, b.z, b.w, Letter);
-			// The leg is a quad with square ends, like the icon. UI.DrawLine would not do: its
-			// thickness is the distance from the centre line and its ends are rounded, which drew
-			// the leg twice as thick and poking out below the R.
-			Vector2 dir = (LegEnd - LegStart).normalized;
-			Vector2 side = new Vector2(-dir.y, dir.x) * (LegThickness / 2);
-			Vector2 p0 = centre + (LegStart + side) * s;
-			Vector2 p1 = centre + (LegEnd + side) * s;
-			Vector2 p2 = centre + (LegEnd - side) * s;
-			Vector2 p3 = centre + (LegStart - side) * s;
-			UI.DrawTriangle(p0, p1, p2, Letter);
-			UI.DrawTriangle(p0, p2, p3, Letter);
+			// One box per horizontal run of pixels.
+			int cols = LetterPixels[0].Length;
+			float cw = (LetterRight - LetterLeft) / cols;
+			float rh = (LetterTop - LetterBottom) / LetterPixels.Length;
+			for (int r = 0; r < LetterPixels.Length; r++)
+			{
+				string line = LetterPixels[r];
+				float y1 = LetterTop - r * rh;
+				for (int c = 0; c < cols; c++)
+				{
+					if (line[c] != '#') continue;
+					int start = c;
+					while (c + 1 < cols && line[c + 1] == '#') c++;
+					Box(LetterLeft + start * cw, y1 - rh, LetterLeft + (c + 1) * cw, y1, Letter);
+				}
+			}
 		}
 	}
 }
