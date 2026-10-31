@@ -715,6 +715,14 @@ namespace Seb.Vis.UI
 			}
 		}
 
+		public static void DrawTriangle(Vector2 a, Vector2 b, Vector2 c, Color col)
+		{
+			if (IsRendering)
+			{
+				Draw.Triangle(UIToScreenSpace(a), UIToScreenSpace(b), UIToScreenSpace(c), col);
+			}
+		}
+
 		public static void DrawCircle(Vector2 pos, float radius, Color col, Anchor anchor = Anchor.Centre)
 		{
 			Vector2 size = Vector2.one * radius;

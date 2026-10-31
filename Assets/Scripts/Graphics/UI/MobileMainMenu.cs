@@ -103,8 +103,11 @@ namespace DLS.Graphics
 			}
 			else
 			{
-				UI.DrawText($"ANDROID  •  v{Main.RewiredVersion}", theme.FontRegular, theme.FontSizeRegular * 0.68f,
-					bar.CentreRight + Vector2.left * 1.1f, Anchor.TextCentreRight, RewiredUI.SecondaryText);
+				// While an update downloads and installs, show its progress instead of the version.
+				bool updating = AppUpdater.Current is AppUpdater.State.Downloading or AppUpdater.State.Installing or AppUpdater.State.Failed;
+				string text = updating ? AppUpdater.StatusText : $"ANDROID  •  v{Main.RewiredVersion}";
+				UI.DrawText(text, theme.FontRegular, theme.FontSizeRegular * 0.68f,
+					bar.CentreRight + Vector2.left * 1.1f, Anchor.TextCentreRight, updating ? Color.white : RewiredUI.SecondaryText);
 			}
 		}
 
@@ -534,7 +537,7 @@ namespace DLS.Graphics
 			if (AppUpdater.Current == AppUpdater.State.Available && AppUpdater.Platform == UpdatePlatform.Android)
 			{
 				y -= 5f;
-				UI.DrawText("The browser downloads the new APK. Open it to update; Android may ask to allow installs from the browser.",
+				UI.DrawText("Rewired downloads and installs the update, then closes. The first time, Android asks to allow installs from Rewired.",
 					theme.FontRegular, theme.FontSizeRegular * 0.62f, new Vector2(safe.center.x, y), Anchor.Centre, RewiredUI.SecondaryText);
 			}
 		}

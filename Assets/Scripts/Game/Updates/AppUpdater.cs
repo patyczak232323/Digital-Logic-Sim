@@ -13,7 +13,9 @@ namespace DLS.Game.Updates
 	// - Windows and Linux builds download the release zip, unpack it next to the download and
 	//   start a small script that copies it over this installation once Rewired has quit, then
 	//   starts the new version.
-	// - Android opens the release's APK in the browser; Android's installer then asks to update.
+	// - Android downloads the release's APK and installs it with PackageInstaller
+	//   (Assets/Plugins/Android/RewiredApkInstaller.java). Android 12+ lets Rewired update itself
+	//   without a dialog once installs from Rewired are allowed; the update then closes the app.
 	// - The editor, WebGL and other platforms open the release page instead.
 	public static class AppUpdater
 	{
@@ -25,6 +27,7 @@ namespace DLS.Game.Updates
 			Available,
 			Downloading,
 			Unpacking,
+			Installing,
 			Restarting,
 			Failed
 		}
@@ -45,6 +48,8 @@ namespace DLS.Game.Updates
 		static string stagingDir;
 		static long expectedDownloadSize;
 		static string stagedExecutable;
+		static AndroidJavaClass androidInstaller;
+		static string androidStatus = string.Empty;
 
 		public static UpdatePlatform Platform => Application.isEditor ? UpdatePlatform.Other : Application.platform switch
 		{
@@ -61,6 +66,7 @@ namespace DLS.Game.Updates
 			State.Available => $"Rewired v{LatestVersion} is available",
 			State.Downloading => $"Downloading v{LatestVersion}: {Mathf.RoundToInt(DownloadProgress * 100)}%",
 			State.Unpacking => $"Unpacking v{LatestVersion}...",
+			State.Installing => androidStatus == "confirm" ? $"Confirm the update to v{LatestVersion} in Android's dialog" : $"Installing v{LatestVersion}...",
 			State.Restarting => "Restarting with the new version...",
 			State.Failed => "Update failed: " + Error,
 			_ => string.Empty
@@ -68,12 +74,12 @@ namespace DLS.Game.Updates
 
 		public static string ActionLabel => Current switch
 		{
-			State.Available => Platform is UpdatePlatform.Windows or UpdatePlatform.Linux ? $"UPDATE TO v{LatestVersion}" : $"DOWNLOAD v{LatestVersion}",
+			State.Available => Platform is UpdatePlatform.Windows or UpdatePlatform.Linux or UpdatePlatform.Android ? $"UPDATE TO v{LatestVersion}" : $"DOWNLOAD v{LatestVersion}",
 			State.Idle or State.UpToDate or State.Failed => "CHECK FOR UPDATES",
 			_ => null
 		};
 
-		public static bool Busy => Current is State.Checking or State.Downloading or State.Unpacking or State.Restarting;
+		public static bool Busy => Current is State.Checking or State.Downloading or State.Unpacking or State.Installing or State.Restarting;
 
 		// The button next to the status: checks, or installs the update that was found.
 		public static void RunAction()
@@ -105,8 +111,8 @@ namespace DLS.Game.Updates
 
 			if (platform == UpdatePlatform.Android && hasAsset)
 			{
-				// The browser downloads the APK; opening it asks Android to update Rewired.
-				Application.OpenURL(assetUrl);
+				expectedDownloadSize = assetSize;
+				StartDownload(assetUrl);
 				return;
 			}
 
@@ -128,6 +134,7 @@ namespace DLS.Game.Updates
 				if (check != null && check.isDone) FinishCheck();
 				if (download != null && download.isDone) FinishDownload();
 				if (unpack != null && unpack.IsCompleted) FinishUnpack();
+				if (Current == State.Installing) PollAndroidInstall();
 			}
 			catch (Exception e)
 			{
@@ -186,6 +193,12 @@ namespace DLS.Game.Updates
 				return;
 			}
 
+			if (Platform == UpdatePlatform.Android)
+			{
+				StartAndroidInstall(zipPath);
+				return;
+			}
+
 			stagingDir = Path.Combine(downloadDir, "files");
 			string[] candidates = ExecutableCandidates;
 			string staging = stagingDir;
@@ -222,6 +235,23 @@ namespace DLS.Game.Updates
 
 			Current = State.Restarting;
 			Application.Quit();
+		}
+
+		// Hands the APK to Android's PackageInstaller, which replaces the running app.
+		static void StartAndroidInstall(string apkPath)
+		{
+			using AndroidJavaClass unityPlayer = new("com.unity3d.player.UnityPlayer");
+			using AndroidJavaObject activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
+			androidInstaller ??= new AndroidJavaClass("com.rewired.updater.RewiredApkInstaller");
+			androidStatus = string.Empty;
+			androidInstaller.CallStatic("install", activity, apkPath);
+			Current = State.Installing;
+		}
+
+		static void PollAndroidInstall()
+		{
+			androidStatus = androidInstaller?.CallStatic<string>("getStatus") ?? string.Empty;
+			if (androidStatus.StartsWith("failed:", StringComparison.Ordinal)) Fail(androidStatus.Substring("failed:".Length));
 		}
 
 		// Extracts with ZipArchive (always present, unlike ZipFile's helpers) and refuses entries
