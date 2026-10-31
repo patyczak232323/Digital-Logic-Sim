@@ -78,7 +78,7 @@ chmod +x DLSRewired.x86_64
 Rewired checks GitHub for a newer release when it starts (turn this off in Settings). The bottom bar of the main menu, or the header on Android, then offers the update:
 
 - **Windows and Linux**: *Update* downloads the release, quits Rewired, copies the new files over the installed ones and starts the new version. If the install folder is not writable, the release page opens instead.
-- **Android**: *Download* opens the new APK in the browser. Open the downloaded file to update; Android may ask once to allow installs from the browser. Projects are kept.
+- **Android**: *Update* downloads the new APK and installs it, then Rewired closes; open it again to use the new version. The first time, Android asks to allow installs from Rewired and to confirm the update. After that, Android 12 and newer install updates without asking. Projects are kept.
 - **WebGL**: the site is updated by whoever hosts it.
 
 For a first project, see **[Getting Started](Docs/GETTING_STARTED.md)**.

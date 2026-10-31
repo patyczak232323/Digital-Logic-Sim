@@ -57,7 +57,17 @@ namespace DLS.Graphics
 			UI.DrawCircle(centre + new Vector2(-0.38f, 0.38f) * s, 0.045f * s, Dot);
 
 			foreach (Vector4 b in LetterBoxes) Box(b.x, b.y, b.z, b.w, Letter);
-			UI.DrawLine(centre + LegStart * s, centre + LegEnd * s, LegThickness * s, Letter);
+			// The leg is a quad with square ends, like the icon. UI.DrawLine would not do: its
+			// thickness is the distance from the centre line and its ends are rounded, which drew
+			// the leg twice as thick and poking out below the R.
+			Vector2 dir = (LegEnd - LegStart).normalized;
+			Vector2 side = new Vector2(-dir.y, dir.x) * (LegThickness / 2);
+			Vector2 p0 = centre + (LegStart + side) * s;
+			Vector2 p1 = centre + (LegEnd + side) * s;
+			Vector2 p2 = centre + (LegEnd - side) * s;
+			Vector2 p3 = centre + (LegStart - side) * s;
+			UI.DrawTriangle(p0, p1, p2, Letter);
+			UI.DrawTriangle(p0, p2, p3, Letter);
 		}
 	}
 }
