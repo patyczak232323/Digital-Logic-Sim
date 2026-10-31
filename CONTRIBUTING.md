@@ -74,9 +74,20 @@ A desktop build started with `-mobile-ui` shows the Android interface, and the l
 
 ## Releasing
 
-1. Set the new version in `VERSION`, `Main.RewiredVersion` (`Assets/Scripts/Game/Main/Main.cs`, with the date in `RewiredLastUpdatedString`) and `bundleVersion` in `ProjectSettings/ProjectSettings.asset`; increase `AndroidBundleVersionCode` there by one.
+1. Set the new version in `VERSION`, `Main.RewiredVersion` (`Assets/Scripts/Game/Main/Main.cs`, with the date in `RewiredLastUpdatedString`) and `bundleVersion` in `ProjectSettings/ProjectSettings.asset`.
 2. Write `Docs/RELEASE_<version>.md`, and update the version in `README.md` and the release list in `Docs/README.md`. `Tools/ProgramRegression` fails until all of these agree.
-3. Merge to `main`, then push a tag `v<version>`. `release.yml` checks that the tag matches `VERSION`, runs the tests, builds every platform and publishes the release with the notes from `Docs/RELEASE_<version>.md`.
+3. Merge to `main`, then either push a tag `v<version>` or run *Build and Release* (`release.yml`) on `main` from the Actions tab, which creates the tag itself. The workflow checks that the tag matches `VERSION`, runs the tests, builds every platform and publishes the release with the notes from `Docs/RELEASE_<version>.md`.
+
+### Android signing
+
+Release and unofficial APKs are signed with the Rewired release key, so each installs over the previous one. The Android build fails if any of these repository secrets is missing:
+
+- `ANDROID_KEYSTORE_BASE64`: the keystore file, base64-encoded (`base64 -w0 rewired.keystore`)
+- `ANDROID_KEYSTORE_PASS`: the keystore password
+- `ANDROID_KEYALIAS_NAME`: `rewired`
+- `ANDROID_KEYALIAS_PASS`: the key password
+
+The APK's version code is the number of commits on the built branch, so it grows with every build. The owner keeps a copy of the keystore and its password outside the repository: without them, no later APK installs over the published ones.
 
 ## Reporting bugs
 
