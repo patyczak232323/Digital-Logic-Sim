@@ -1,0 +1,5 @@
+# One-bit full adder from two XOR gates, two AND gates and an OR gate.
+circuit Add1(A, B, CIN) -> (SUM, COUT):
+    ab = Xor(A, B)
+    SUM = Xor(ab, CIN)
+    COUT = Or(And(A, B), And(ab, CIN))

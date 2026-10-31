@@ -220,6 +220,34 @@ circuit TwoHalves(X, Y, Z) -> (S, C1, C2):
 			}
 		}
 
+		// Each unpacked name takes the width of its own output; all of them used to get the
+		// width of the first output, so 's, c = Add4(...)' made c four bits wide.
+		[Test]
+		public void UnpackedOutputsKeepTheirOwnWidths()
+		{
+			Build(@"
+circuit Add4(A: u4, B: u4) -> (S: u4, COUT):
+    wide: u5 = A + B
+    S = wide[0:4]
+    COUT = wide[4]
+");
+			ChipDescription chip = Build(@"
+circuit Add4Twice(A: u4, B: u4) -> (S: u4, C1, C2):
+    s, carry = Add4(A, B)
+    total = s
+    total, C2 = Add4(total, B)
+    S = total
+    C1 = carry
+");
+			TestCircuit c = new(chip, library);
+			c.Set("A", 9);
+			c.Set("B", 4);
+			c.Step();
+			Assert.AreEqual(1u, c.Get("S"));
+			Assert.AreEqual(0u, c.Get("C1"));
+			Assert.AreEqual(1u, c.Get("C2"));
+		}
+
 		[Test]
 		public void TriStateBuffersShareOneSignal()
 		{

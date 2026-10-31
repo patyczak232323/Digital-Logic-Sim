@@ -1,0 +1,103 @@
+{
+  "DLSVersion": "2.1.6",
+  "Name": "Not",
+  "NameLocation": 0,
+  "ChipType": 0,
+  "CacheMode": 0,
+  "Size": {
+    "x": 2.0,
+    "y": 2.0
+  },
+  "Colour": {
+    "r": 0.18,
+    "g": 0.31,
+    "b": 0.58,
+    "a": 1
+  },
+  "InputPins":[
+    {
+      "Name":"A",
+      "ID":1,
+      "Position":{
+        "x":-2.125,
+        "y":0.0
+      },
+      "BitCount":1,
+      "Colour":4,
+      "ValueDisplayMode":0
+    }
+  ],
+  "OutputPins":[
+    {
+      "Name":"Y",
+      "ID":2,
+      "Position":{
+        "x":2.125,
+        "y":0.0
+      },
+      "BitCount":1,
+      "Colour":4,
+      "ValueDisplayMode":0
+    }
+  ],
+  "SubChips":[
+    {
+      "Name":"NAND",
+      "ID":3,
+      "Label":"",
+      "Position":{
+        "x":0.0,
+        "y":0.0
+      },
+      "OutputPinColourInfo":[],
+      "MirrorX":false,
+      "MirrorY":false,
+      "InternalData":null
+    }
+  ],
+  "Wires":[
+    {
+      "SourcePinAddress":{
+        "PinID":0,
+        "PinOwnerID":1
+      },
+      "TargetPinAddress":{
+        "PinID":1,
+        "PinOwnerID":3
+      },
+      "ConnectionType":0,
+      "ConnectedWireIndex":-1,
+      "ConnectedWireSegmentIndex":-1,
+      "Points":[{"x":0.0,"y":0.0},{"x":-1.125,"y":0.0},{"x":-1.125,"y":-0.125},{"x":0.0,"y":0.0}]
+    },
+    {
+      "SourcePinAddress":{
+        "PinID":0,
+        "PinOwnerID":1
+      },
+      "TargetPinAddress":{
+        "PinID":0,
+        "PinOwnerID":3
+      },
+      "ConnectionType":0,
+      "ConnectedWireIndex":-1,
+      "ConnectedWireSegmentIndex":-1,
+      "Points":[{"x":0.0,"y":0.0},{"x":-1.125,"y":0.0},{"x":-1.125,"y":0.125},{"x":0.0,"y":0.0}]
+    },
+    {
+      "SourcePinAddress":{
+        "PinID":2,
+        "PinOwnerID":3
+      },
+      "TargetPinAddress":{
+        "PinID":0,
+        "PinOwnerID":2
+      },
+      "ConnectionType":0,
+      "ConnectedWireIndex":-1,
+      "ConnectedWireSegmentIndex":-1,
+      "Points":[{"x":0.0,"y":0.0},{"x":0.0,"y":0.0}]
+    }
+  ],
+  "Displays":[]
+}

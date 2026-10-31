@@ -22,7 +22,8 @@ namespace DLS.Tests
 	{
 		const string ProjectName = "Snake";
 		static string ExamplesRoot => Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Examples", "RHDL"));
-		static string BundledFolder => Path.Combine(Application.dataPath, "Resources", BundledProjectInstaller.ResourcesFolder, ProjectName);
+		static string BundledFolder => FolderOf(ProjectName);
+		internal static string FolderOf(string projectName) => Path.Combine(Application.dataPath, "Resources", BundledProjectInstaller.ResourcesFolder, projectName);
 
 		static readonly string[] Sources =
 		{
@@ -149,14 +150,20 @@ namespace DLS.Tests
 		public void BundledFilesMatchTheSources()
 		{
 			(ProjectDescription project, ChipDescription[] chips) = CreateSnakeProject();
+			CheckBundledFiles(BundledFolder, project, chips);
+		}
 
+		// Compares the shipped files with the project built from the sources, or rewrites them
+		// when REWIRED_WRITE_BUNDLED=1.
+		internal static void CheckBundledFiles(string bundledFolder, ProjectDescription project, ChipDescription[] chips)
+		{
 			if (Environment.GetEnvironmentVariable("REWIRED_WRITE_BUNDLED") == "1")
 			{
-				Write(project, chips);
+				Write(bundledFolder, project, chips);
 				Assert.Pass("bundled project written");
 			}
 
-			string projectPath = Path.Combine(BundledFolder, "ProjectDescription.json");
+			string projectPath = Path.Combine(bundledFolder, "ProjectDescription.json");
 			Assert.IsTrue(File.Exists(projectPath), "missing " + projectPath);
 			ProjectDescription shipped = Serializer.DeserializeProjectDescription(File.ReadAllText(projectPath));
 			Assert.AreEqual(project.StartupChipName, shipped.StartupChipName);
@@ -164,14 +171,14 @@ namespace DLS.Tests
 			Assert.AreEqual(project.Prefs_SimTargetStepsPerSecond, shipped.Prefs_SimTargetStepsPerSecond);
 			Assert.AreEqual(project.Prefs_SimStepsPerClockTick, shipped.Prefs_SimStepsPerClockTick);
 
-			string[] chipFiles = Directory.GetFiles(Path.Combine(BundledFolder, "Chips"), "*.json");
+			string[] chipFiles = Directory.GetFiles(Path.Combine(bundledFolder, "Chips"), "*.json");
 			CollectionAssert.AreEquivalent(chips.Select(c => c.Name + ".json"), chipFiles.Select(Path.GetFileName));
 
 			// Compare what the chips do, not where their parts are drawn: chip sizes (and with
 			// them the layout) depend on whether the editor's fonts are loaded.
 			foreach (ChipDescription chip in chips)
 			{
-				ChipDescription shippedChip = Serializer.DeserializeChipDescription(File.ReadAllText(Path.Combine(BundledFolder, "Chips", chip.Name + ".json")));
+				ChipDescription shippedChip = Serializer.DeserializeChipDescription(File.ReadAllText(Path.Combine(bundledFolder, "Chips", chip.Name + ".json")));
 				Assert.AreEqual(Logic(chip), Logic(shippedChip), $"{chip.Name} differs from its source; see the comment at the top of BundledProjectTests");
 			}
 		}
@@ -186,13 +193,13 @@ namespace DLS.Tests
 			return string.Join("\n", lines.OrderBy(l => l, StringComparer.Ordinal));
 		}
 
-		static void Write(ProjectDescription project, ChipDescription[] chips)
+		static void Write(string bundledFolder, ProjectDescription project, ChipDescription[] chips)
 		{
-			string chipsFolder = Path.Combine(BundledFolder, "Chips");
+			string chipsFolder = Path.Combine(bundledFolder, "Chips");
 			Directory.CreateDirectory(chipsFolder);
 			foreach (string old in Directory.GetFiles(chipsFolder, "*.json")) File.Delete(old);
 
-			File.WriteAllText(Path.Combine(BundledFolder, "ProjectDescription.json"), Serializer.SerializeProjectDescription(project));
+			File.WriteAllText(Path.Combine(bundledFolder, "ProjectDescription.json"), Serializer.SerializeProjectDescription(project));
 			foreach (ChipDescription chip in chips)
 			{
 				File.WriteAllText(Path.Combine(chipsFolder, chip.Name + ".json"), Serializer.SerializeChipDescription(chip));
@@ -200,8 +207,8 @@ namespace DLS.Tests
 
 			// Unity needs a .meta file next to every asset and folder.
 			string resources = Path.Combine(Application.dataPath, "Resources");
-			foreach (string folder in new[] { resources, Path.GetDirectoryName(BundledFolder), BundledFolder, chipsFolder }) WriteMeta(folder, true);
-			foreach (string file in Directory.GetFiles(BundledFolder, "*.json", SearchOption.AllDirectories)) WriteMeta(file, false);
+			foreach (string folder in new[] { resources, Path.GetDirectoryName(bundledFolder), bundledFolder, chipsFolder }) WriteMeta(folder, true);
+			foreach (string file in Directory.GetFiles(bundledFolder, "*.json", SearchOption.AllDirectories)) WriteMeta(file, false);
 		}
 
 		static void WriteMeta(string path, bool folder)
@@ -262,7 +269,7 @@ namespace DLS.Tests
 			}
 		}
 
-		static SimChip Find(SimChip chip, ChipType type)
+		internal static SimChip Find(SimChip chip, ChipType type)
 		{
 			if (chip.ChipType == type) return chip;
 			foreach (SimChip sub in chip.SubChips)

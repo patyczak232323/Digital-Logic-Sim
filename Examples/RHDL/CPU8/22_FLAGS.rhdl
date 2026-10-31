@@ -1,0 +1,6 @@
+# Flag register: Z and C, each a D flip-flop that loads on a rising CLK edge
+# when its write enable is 1 and keeps its value otherwise. RESET clears both.
+circuit Flags(Z_IN, C_IN, Z_WE, C_WE, CLK, RESET) -> (Z, C):
+    keep = Not(RESET)
+    Z, _ = DffBit(And(Mux(Z_IN, Z, Z_WE), keep), CLK)
+    C, _ = DffBit(And(Mux(C_IN, C, C_WE), keep), CLK)

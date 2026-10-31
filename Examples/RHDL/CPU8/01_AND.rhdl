@@ -1,0 +1,3 @@
+# AND gate: NAND followed by NOT.
+circuit And(A, B) -> Y:
+    Y = Not(NAND(A, B))

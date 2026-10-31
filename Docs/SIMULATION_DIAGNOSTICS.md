@@ -70,6 +70,7 @@ Important behavior:
 - native feedback evaluation uses two delta buffers (`current -> next`)
 - stable feedback regions with unchanged boundary inputs require zero native sweeps
 - if native feedback does not converge, the accelerator is disabled and the live solver is restored
+- a chip with more than 1024 gates is not compiled as a whole, because every sweep evaluates all of it; its smaller feedback subchips (registers, latches) are compiled instead
 - state ownership is explicit: only the currently active native executor may materialize state back into primitive gates
 
 Entering a compiled chip for inspection, probing an internal signal, or structurally editing the circuit safely hands state back to the live gate tree.

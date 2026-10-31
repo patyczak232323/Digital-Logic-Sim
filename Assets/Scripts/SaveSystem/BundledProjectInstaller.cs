@@ -10,7 +10,7 @@ namespace DLS.SaveSystem
 	public static class BundledProjectInstaller
 	{
 		public const string ResourcesFolder = "BundledProjects";
-		public static readonly string[] ProjectNames = { "Snake" };
+		public static readonly string[] ProjectNames = { "Snake", "CPU8" };
 
 		// Saves the project into the projects folder. Returns false, and changes nothing, if a
 		// project with that name already exists.

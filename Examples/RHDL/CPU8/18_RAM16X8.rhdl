@@ -1,0 +1,22 @@
+# 16 x 8-bit RAM: sixteen Register8, a Dec4 that picks the one to write and a
+# Mux16x8 that reads the addressed word. Reading is combinational; writing
+# happens on the rising CLK edge while WE=1.
+circuit Ram16x8(D: u8, A: u4, WE, CLK) -> Q: u8:
+    w = Dec4(A, WE)
+    r0 = Register8(D, w.Y0, CLK)
+    r1 = Register8(D, w.Y1, CLK)
+    r2 = Register8(D, w.Y2, CLK)
+    r3 = Register8(D, w.Y3, CLK)
+    r4 = Register8(D, w.Y4, CLK)
+    r5 = Register8(D, w.Y5, CLK)
+    r6 = Register8(D, w.Y6, CLK)
+    r7 = Register8(D, w.Y7, CLK)
+    r8 = Register8(D, w.Y8, CLK)
+    r9 = Register8(D, w.Y9, CLK)
+    r10 = Register8(D, w.Y10, CLK)
+    r11 = Register8(D, w.Y11, CLK)
+    r12 = Register8(D, w.Y12, CLK)
+    r13 = Register8(D, w.Y13, CLK)
+    r14 = Register8(D, w.Y14, CLK)
+    r15 = Register8(D, w.Y15, CLK)
+    Q = Mux16x8(r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, A)

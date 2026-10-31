@@ -1,0 +1,21 @@
+# Register file: R0..R7, two read ports and one write port.
+#   - read port A shows the register chosen by RA, port B the one chosen by RB
+#     (combinational, through two Mux8x8)
+#   - on a rising CLK edge, WD is written into register WA when WE=1
+#   - RESET writes 0 into all eight registers on the next rising edge
+circuit RegisterFile(WD: u8, WA: u4, WE, RA: u4, RB: u4, CLK, RESET) -> (
+    A: u8, B: u8,
+    R0: u8, R1: u8, R2: u8, R3: u8, R4: u8, R5: u8, R6: u8, R7: u8,
+):
+    w = Dec3(WA[0], WA[1], WA[2], WE)
+    d = Mux2x8(0, WD, RESET)
+    R0 = Register8(d, Or(w.Y0, RESET), CLK)
+    R1 = Register8(d, Or(w.Y1, RESET), CLK)
+    R2 = Register8(d, Or(w.Y2, RESET), CLK)
+    R3 = Register8(d, Or(w.Y3, RESET), CLK)
+    R4 = Register8(d, Or(w.Y4, RESET), CLK)
+    R5 = Register8(d, Or(w.Y5, RESET), CLK)
+    R6 = Register8(d, Or(w.Y6, RESET), CLK)
+    R7 = Register8(d, Or(w.Y7, RESET), CLK)
+    A = Mux8x8(R0, R1, R2, R3, R4, R5, R6, R7, RA)
+    B = Mux8x8(R0, R1, R2, R3, R4, R5, R6, R7, RB)

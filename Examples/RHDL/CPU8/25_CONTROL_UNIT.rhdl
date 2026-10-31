@@ -1,0 +1,64 @@
+# Control unit: turns the opcode (bits 15-11 of the instruction, which are
+# bits 7-3 of INSTR_HI) into the control lines of the datapath. A Dec5 gives
+# one line per instruction; each control line is an OR of the instructions
+# that need it.
+#
+#  0 NOP   8 ADD   16 AND   24 SHR
+#  1 HLT   9 ADDI  17 ANDI  25 CMP
+#  2 MOV  10 ADC   18 OR    26 CMPI
+#  3 LDI  11 SUB   19 ORI   27 JMP
+#  4 LD   12 SUBI  20 XOR   28 JZ
+#  5 ST   13 SBC   21 XORI  29 JNZ
+#  6 LDR  14 INC   22 NOT   30 JC
+#  7 STR  15 DEC   23 SHL   31 JNC
+circuit ControlUnit(INSTR_HI: u8, ZF, CF) -> (
+    REG_WE, LOAD, MEM_WE, B_IMM, B_ONE, ALU_OP: u4, SUB, CIN,
+    Z_WE, C_WE, ADDR_REG, ADDR_A, DATA_B, JUMP, HALT,
+):
+    op = Dec5(INSTR_HI[3], INSTR_HI[4], INSTR_HI[5], INSTR_HI[6], INSTR_HI[7])
+
+    # Register write: MOV, LDI, LD, LDR, every ALU instruction up to SHR.
+    REG_WE = Or4(Or(op.G1, op.G2), Or(op.Y2, op.Y3), Or(op.Y4, op.Y6), op.Y24)
+    # Write-back from RAM instead of the ALU: LD, LDR.
+    LOAD = Or(op.Y4, op.Y6)
+    # RAM write: ST, STR.
+    MEM_WE = Or(op.Y5, op.Y7)
+    # ALU input B is the immediate byte: LDI, ADDI, SUBI, ANDI, ORI, XORI, CMPI.
+    B_IMM = Or4(Or(op.Y3, op.Y9), Or(op.Y12, op.Y17), Or(op.Y19, op.Y21), op.Y26)
+    # ALU input B is the constant 1: INC, DEC.
+    B_ONE = Or(op.Y14, op.Y15)
+
+    # ALU operation (see Alu): 0 add/sub, 1 AND, 2 OR, 3 XOR, 4 NOT,
+    # 5 SHL, 6 SHR, 7 pass B (MOV, LDI).
+    is_and = Or(op.Y16, op.Y17)
+    is_or = Or(op.Y18, op.Y19)
+    is_xor = Or(op.Y20, op.Y21)
+    is_pass = Or(op.Y2, op.Y3)
+    alu0 = Or4(is_and, is_xor, op.Y23, is_pass)
+    alu1 = Or4(is_or, is_xor, op.Y24, is_pass)
+    alu2 = Or4(op.Y22, op.Y23, op.Y24, is_pass)
+    ALU_OP = cat(0b0, alu2, alu1, alu0)
+
+    # Subtraction: SUB, SUBI, SBC, DEC, CMP, CMPI.
+    plain_sub = Or4(Or(op.Y11, op.Y12), op.Y15, op.Y25, op.Y26)
+    SUB = Or(plain_sub, op.Y13)
+    # Carry into the adder: 1 for a plain subtraction (A + NOT B + 1),
+    # C for ADC, NOT C for SBC (C holds the borrow).
+    CIN = Or(plain_sub, Or(And(op.Y10, CF), And(op.Y13, Not(CF))))
+
+    # Flags: Z from every ALU instruction and CMP/CMPI, C only from the
+    # arithmetic ones, the shifts and the compares.
+    Z_WE = Or4(op.G1, op.G2, op.Y24, Or(op.Y25, op.Y26))
+    C_WE = Or4(op.G1, op.Y23, op.Y24, Or(op.Y25, op.Y26))
+
+    # RAM address from a register: LDR uses Rs (port B), STR uses Rd (port A).
+    ADDR_REG = Or(op.Y6, op.Y7)
+    ADDR_A = op.Y7
+    # RAM data from Rs (port B) for STR, from the R field (port A) for ST.
+    DATA_B = op.Y7
+
+    # Jumps.
+    taken_z = Or(And(op.Y28, ZF), And(op.Y29, Not(ZF)))
+    taken_c = Or(And(op.Y30, CF), And(op.Y31, Not(CF)))
+    JUMP = Or(op.Y27, Or(taken_z, taken_c))
+    HALT = op.Y1

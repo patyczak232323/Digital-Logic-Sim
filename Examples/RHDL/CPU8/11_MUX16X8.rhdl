@@ -1,0 +1,9 @@
+# 8-bit 16:1 multiplexer: two Mux8x8 and a Mux2x8. S chooses I0..I15.
+circuit Mux16x8(
+    I0: u8, I1: u8, I2: u8, I3: u8, I4: u8, I5: u8, I6: u8, I7: u8,
+    I8: u8, I9: u8, I10: u8, I11: u8, I12: u8, I13: u8, I14: u8, I15: u8,
+    S: u4,
+) -> Y: u8:
+    low = Mux8x8(I0, I1, I2, I3, I4, I5, I6, I7, S)
+    high = Mux8x8(I8, I9, I10, I11, I12, I13, I14, I15, S)
+    Y = Mux2x8(high, low, S[3])

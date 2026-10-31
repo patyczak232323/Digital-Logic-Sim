@@ -1,0 +1,65 @@
+# CPU8: 8-bit single-cycle processor with 32 instructions.
+#
+#   - 8 registers R0..R7, flags Z and C
+#   - 16-bit instruction: [ opcode:5 ][ Rd:3 ][ imm8 / addr8 / Rs:3 + 00000 ]
+#     jumps: [ opcode:5 ][ addr11 ]
+#   - 11-bit program counter, program in ProgramRom (2048 words)
+#   - 256 bytes of RAM, read combinationally, written on the clock edge
+#   - every instruction takes one rising CLK edge
+#
+# Datapath, left to right: PC -> ROM -> control unit and register file ->
+# ALU / RAM -> write-back multiplexer -> register file.
+circuit Cpu8(CLK, RESET) -> (
+    PC_LO: u8, PC_HI: u4, INSTR_HI: u8, INSTR_LO: u8,
+    R0: u8, R1: u8, R2: u8, R3: u8, R4: u8, R5: u8, R6: u8, R7: u8,
+    Z, C, HALTED,
+):
+    # Fetch. pc, regs, flags and halted are further down: using them here is
+    # the feedback loop of the processor.
+    rom = ProgramRom(pc.LO, pc.HI)
+    hi = rom.INSTR_HI
+    lo = rom.INSTR_LO
+    rd = u4(hi[0:3])
+    rs = u4(lo[5:8])
+
+    # Decode.
+    cu = ControlUnit(hi, flags.Z, flags.C)
+    running = Not(halted)
+
+    # Registers: port A reads Rd, port B reads Rs.
+    regs = RegisterFile(write_back, rd, And(cu.REG_WE, running), rd, rs, CLK, RESET)
+
+    # ALU. Input B is Rs, the immediate byte or the constant 1.
+    b = Mux2x8(0x01, Mux2x8(lo, regs.B, cu.B_IMM), cu.B_ONE)
+    alu = Alu(regs.A, b, cu.ALU_OP, cu.SUB, cu.CIN)
+    flags = Flags(alu.Z, alu.C, And(cu.Z_WE, running), And(cu.C_WE, running), CLK, RESET)
+
+    # Data memory. Address: addr8 (LD, ST), Rs (LDR) or Rd (STR).
+    address = Mux2x8(Mux2x8(regs.A, regs.B, cu.ADDR_A), lo, cu.ADDR_REG)
+    data = Mux2x8(regs.B, regs.A, cu.DATA_B)
+    ram = Ram256x8(data, address, And(cu.MEM_WE, running), CLK)
+
+    # Write-back: RAM for LD and LDR, the ALU for everything else.
+    write_back = Mux2x8(ram, alu.Y, cu.LOAD)
+
+    # Halt flip-flop: set by HLT, cleared by RESET.
+    halted, _ = DffBit(And(Not(RESET), Or(halted, cu.HALT)), CLK)
+
+    # Next PC: the jump target (addr11) or PC + 1. HLT keeps the PC on itself.
+    pc = ProgramCounter(lo, rd, cu.JUMP, And(running, Not(cu.HALT)), CLK, RESET)
+
+    PC_LO = pc.LO
+    PC_HI = pc.HI
+    INSTR_HI = hi
+    INSTR_LO = lo
+    R0 = regs.R0
+    R1 = regs.R1
+    R2 = regs.R2
+    R3 = regs.R3
+    R4 = regs.R4
+    R5 = regs.R5
+    R6 = regs.R6
+    R7 = regs.R7
+    Z = flags.Z
+    C = flags.C
+    HALTED = halted

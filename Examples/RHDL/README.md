@@ -13,7 +13,8 @@ Build them in this order:
 7. `Memory/00_RAM4x4.rhdl`
 8. `CPU4/00_CPU4.rhdl`
 9. `PIX6/00_REG8.rhdl`, `PIX6/01_PIX6.rhdl`, `PIX6/02_PIX6_COMPUTER.rhdl`, `PIX6/03_SNAKE.rhdl`
+10. `CPU8/` in file order, after `Basics/04_DFF.rhdl` (see `CPU8/README.md`)
 
-The examples intentionally stay small. CPU4 is a 4-bit accumulator processor. PIX6 is a small computer that draws on the 64 x 64 screen; see `PIX6/README.md` for its instructions, two example programs and the Snake game.
+The examples intentionally stay small. CPU4 is a 4-bit accumulator processor. PIX6 is a small computer that draws on the 64 x 64 screen; see `PIX6/README.md` for its instructions, two example programs and the Snake game. CPU8 is an 8-bit single-cycle processor with 32 instructions, eight registers and 256 bytes of RAM, built from small chips the way it would be built by hand; Rewired installs it as the **CPU8** project.
 
 RAM4x4, CPU4 and PIX6 depend on `DffBit` and `Reg4`, so build the two stateful examples first.

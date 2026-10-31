@@ -1,0 +1,20 @@
+# 11-bit program counter (addresses 0x000..0x7FF), kept in two Register8:
+# LO holds bits 0-7, HI bits 8-10.
+#   - LOAD=1: PC <- D (jump target), otherwise PC <- PC + 1
+#   - the PC only changes when EN=1
+#   - RESET sets it to 0 on the next rising edge
+circuit ProgramCounter(D_LO: u8, D_HI: u4, LOAD, EN, CLK, RESET) -> (LO: u8, HI: u4):
+    # Incrementer: two Add8 chained through the carry, adding 1 at the bottom.
+    inc_lo, carry = Add8(lo, 0, 1)
+    inc_hi, _ = Add8(hi, 0, carry)
+
+    next_lo = Mux2x8(D_LO, inc_lo, LOAD)
+    next_hi = Mux2x8(u8(D_HI), inc_hi, LOAD)
+
+    # Only bits 8-10 are wired into HI, so the PC wraps from 0x7FF to 0x000.
+    we = Or(EN, RESET)
+    lo = Register8(Mux2x8(0, next_lo, RESET), we, CLK)
+    hi = Register8(Mux2x8(0, u8(next_hi[0:3]), RESET), we, CLK)
+
+    LO = lo
+    HI = hi[0:4]
