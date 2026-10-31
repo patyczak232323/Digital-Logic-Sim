@@ -208,6 +208,13 @@ jobs:
         shell: bash
         run: |
           docker run --rm -v "$GITHUB_WORKSPACE:/w" -w /w alpine:3.20 rm -rf Library/Bee Library/BuildCache build
+          # The failed build leaves files behind (the decoded keystore, Assets/Editor, changed
+          # ProjectSettings), and unity-builder refuses to build again on a dirty checkout.
+          # Unity writes them as root, so hand them back to the runner user first.
+          docker run --rm -v "$GITHUB_WORKSPACE:/w" alpine:3.20 chown -R "$(id -u):$(id -g)" /w
+          git checkout -- .
+          git clean -fd
+          git status --short
           mkdir -p build
 
       - name: Retry Android APK build once
