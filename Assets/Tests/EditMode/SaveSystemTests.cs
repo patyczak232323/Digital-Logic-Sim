@@ -53,6 +53,21 @@ namespace DLS.Tests
 		string ChipPath(string name) => SavePaths.GetProjectChipPath(projectName, name);
 
 		[Test]
+		public void CaseOnlyRenameMovesChipTestsToTheNewName()
+		{
+			ChipTestSuite suite = new() { ChipName = "Inv", InputNames = new[] { "A" }, OutputNames = new[] { "Y" }, Inputs = new[] { new uint[] { 0 } }, Outputs = new[] { new uint[] { 1 } } };
+			Saver.SaveChipTests(suite, projectName);
+			Saver.SaveChipTests(suite, projectName); // leaves a backup as well
+
+			Saver.RenameChipTests("Inv", "INV", projectName);
+
+			string folder = Path.GetDirectoryName(SavePaths.GetChipTestsPath(projectName, "INV"));
+			string[] files = Directory.GetFiles(folder).Select(Path.GetFileName).OrderBy(n => n, StringComparer.Ordinal).ToArray();
+			CollectionAssert.AreEqual(new[] { "INV.json", "INV.json.bak" }, files);
+			Assert.AreEqual("INV", Loader.LoadChipTests(projectName, "INV").ChipName);
+		}
+
+		[Test]
 		public void SavingAgainKeepsThePreviousVersionAsBackup()
 		{
 			Saver.SaveChip(Chip("Inv"), projectName);

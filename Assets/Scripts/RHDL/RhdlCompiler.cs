@@ -48,8 +48,39 @@ namespace DLS.RHDL
 	public static class RhdlCompiler
 	{
 		public const string LanguageVersion = "1.0";
+		public const int MaxExpressionNesting = RhdlParser.MaxNesting;
+
+		// Parsing and elaboration recurse over expressions and over wires used before the line
+		// that assigns them. A stack overflow cannot be caught and would close Rewired, so the
+		// compiler runs on its own thread with a large stack. WebGL has no threads.
+		const int CompilerStackBytes = 64 * 1024 * 1024;
 
 		public static RhdlCompileResult Compile(string source, ChipLibrary library)
+		{
+#if UNITY_WEBGL && !UNITY_EDITOR
+			return CompileOnThisThread(source, library);
+#else
+			RhdlCompileResult result = null;
+			Exception failure = null;
+			System.Threading.Thread thread = new(() =>
+			{
+				try
+				{
+					result = CompileOnThisThread(source, library);
+				}
+				catch (Exception e)
+				{
+					failure = e;
+				}
+			}, CompilerStackBytes) { Name = "RHDL compiler", IsBackground = true };
+			thread.Start();
+			thread.Join();
+			if (failure != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
+			return result;
+#endif
+		}
+
+		static RhdlCompileResult CompileOnThisThread(string source, ChipLibrary library)
 		{
 			List<RhdlDiagnostic> diagnostics = new();
 			if (library == null)

@@ -32,8 +32,8 @@ Then open `http://localhost:8000`. Opening `index.html` straight from disk usual
 If needed:
 
 ```bash
-chmod +x DLSRewired.x86_64
-./DLSRewired.x86_64
+chmod +x DLSRewired
+./DLSRewired
 ```
 
 ## 2. Start with a small circuit

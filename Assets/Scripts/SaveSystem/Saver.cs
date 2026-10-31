@@ -115,6 +115,7 @@ namespace DLS.SaveSystem
 			string path = SavePaths.GetChipTestsPath(projectName, chipName);
 			if (File.Exists(path)) File.Delete(path);
 			if (File.Exists(path + ".bak")) File.Delete(path + ".bak");
+			if (File.Exists(path + ".bak.next")) File.Delete(path + ".bak.next");
 		}
 
 		public static void RenameChipTests(string oldName, string newName, string projectName)
@@ -123,8 +124,21 @@ namespace DLS.SaveSystem
 			if (suite == null) return;
 
 			suite.ChipName = newName;
+			string oldPath = SavePaths.GetChipTestsPath(projectName, oldName);
+			string newPath = SavePaths.GetChipTestsPath(projectName, newName);
+
+			// As with chips: a case-only rename is the same file on Windows/macOS but a different
+			// one on Linux/Android, so update the file in place and then fix its casing.
+			if (string.Equals(oldPath, newPath, StringComparison.OrdinalIgnoreCase))
+			{
+				WriteToFile(Serializer.SerializeChipTestSuite(suite), oldPath);
+				MoveFileSupportingCaseOnlyRename(oldPath, newPath);
+				if (File.Exists(oldPath + ".bak")) MoveFileSupportingCaseOnlyRename(oldPath + ".bak", newPath + ".bak");
+				return;
+			}
+
 			SaveChipTests(suite, projectName);
-			if (!string.Equals(oldName, newName, StringComparison.OrdinalIgnoreCase)) DeleteChipTests(oldName, projectName);
+			DeleteChipTests(oldName, projectName);
 		}
 
 

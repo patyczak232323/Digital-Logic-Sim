@@ -65,12 +65,16 @@ namespace DLS.Tests
 		[Test]
 		public void LinuxScriptWaitsCopiesAndRestarts()
 		{
-			string script = UpdateInstallScript.Create(UpdatePlatform.Linux, 4242, "/tmp/up/files", "/tmp/up", "/opt/Rewired it's", "DLSRewired.x86_64");
+			string script = UpdateInstallScript.Create(UpdatePlatform.Linux, 4242, "/tmp/up/files", "/tmp/up", "/opt/Rewired it's $(x)", "DLSRewired");
 			StringAssert.StartsWith("#!/bin/sh\n", script);
 			StringAssert.Contains("while kill -0 4242", script);
-			StringAssert.Contains("cp -R '/tmp/up/files/.' '/opt/Rewired it'\\''s'", script);
-			StringAssert.Contains("chmod +x '/opt/Rewired it'\\''s/DLSRewired.x86_64'", script);
+			StringAssert.Contains("cp -R '/tmp/up/files/.' '/opt/Rewired it'\\''s $(x)'", script);
+			StringAssert.Contains("chmod +x '/opt/Rewired it'\\''s $(x)/DLSRewired'", script);
 			StringAssert.Contains("rm -rf '/tmp/up'", script);
+			// A failed copy leaves the marker and starts the installed version again.
+			StringAssert.Contains(": > '/tmp/up/" + UpdateInstallScript.FailedMarker + "'", script);
+			// Paths only ever appear in single quotes, so nothing in them is expanded.
+			StringAssert.DoesNotContain("\"", script);
 		}
 
 		[Test]
@@ -80,6 +84,8 @@ namespace DLS.Tests
 			StringAssert.Contains("PID eq 4242", script);
 			StringAssert.Contains(@"robocopy ""C:\Temp\up\files"" ""C:\Games\Rewired"" /E", script);
 			StringAssert.Contains(@"start """" ""C:\Games\Rewired\DLSRewired.exe""", script);
+			StringAssert.Contains(@"type nul > ""C:\Temp\up\" + UpdateInstallScript.FailedMarker + @"""", script);
+			StringAssert.DoesNotContain("pause", script);
 			StringAssert.DoesNotContain("\r\r", script);
 			StringAssert.Contains("\r\n", script);
 			Assert.Throws<System.ArgumentException>(() => UpdateInstallScript.Create(UpdatePlatform.Windows, 1, @"C:\%TEMP%", @"C:\x", @"C:\y", "a.exe"));

@@ -43,6 +43,8 @@ namespace DLS.Game.Updates
 		static Task unpack;
 		static string downloadDir;
 		static string stagingDir;
+		static long expectedDownloadSize;
+		static string stagedExecutable;
 
 		public static UpdatePlatform Platform => Application.isEditor ? UpdatePlatform.Other : Application.platform switch
 		{
@@ -83,6 +85,7 @@ namespace DLS.Game.Updates
 		public static void Check()
 		{
 			if (!Supported || Busy) return;
+			if (ReportFailedInstall()) return;
 
 			Error = string.Empty;
 			check = UnityWebRequest.Get(ReleaseInfo.LatestReleaseApiUrl);
@@ -98,7 +101,7 @@ namespace DLS.Game.Updates
 			if (latest == null || Current != State.Available) return;
 
 			UpdatePlatform platform = Platform;
-			bool hasAsset = latest.TryGetAsset(platform, out string assetUrl, out _);
+			bool hasAsset = latest.TryGetAsset(platform, out string assetUrl, out long assetSize);
 
 			if (platform == UpdatePlatform.Android && hasAsset)
 			{
@@ -109,6 +112,7 @@ namespace DLS.Game.Updates
 
 			if (platform is UpdatePlatform.Windows or UpdatePlatform.Linux && hasAsset && InstallFolderIsWritable())
 			{
+				expectedDownloadSize = assetSize;
 				StartDownload(assetUrl);
 				return;
 			}
@@ -175,13 +179,22 @@ namespace DLS.Game.Updates
 			}
 
 			string zipPath = Path.Combine(downloadDir, ReleaseInfo.AssetName(Platform));
+			long downloadedSize = new FileInfo(zipPath).Length;
+			if (expectedDownloadSize > 0 && downloadedSize != expectedDownloadSize)
+			{
+				Fail($"the download is incomplete ({downloadedSize} of {expectedDownloadSize} bytes)");
+				return;
+			}
+
 			stagingDir = Path.Combine(downloadDir, "files");
-			string expectedExecutable = ExecutableName;
+			string[] candidates = ExecutableCandidates;
 			string staging = stagingDir;
+			stagedExecutable = null;
 			unpack = Task.Run(() =>
 			{
 				Unzip(zipPath, staging);
-				if (!File.Exists(Path.Combine(staging, expectedExecutable))) throw new InvalidDataException($"the download does not contain {expectedExecutable}");
+				stagedExecutable = Array.Find(candidates, name => File.Exists(Path.Combine(staging, name)));
+				if (stagedExecutable == null) throw new InvalidDataException($"the download does not contain {candidates[0]}");
 			});
 			Current = State.Unpacking;
 		}
@@ -197,7 +210,7 @@ namespace DLS.Game.Updates
 			}
 
 			UpdatePlatform platform = Platform;
-			string script = UpdateInstallScript.Create(platform, Process.GetCurrentProcess().Id, stagingDir, downloadDir, InstallFolder, ExecutableName);
+			string script = UpdateInstallScript.Create(platform, Process.GetCurrentProcess().Id, stagingDir, downloadDir, InstallFolder, stagedExecutable);
 			string scriptPath = Path.Combine(Application.temporaryCachePath, UpdateInstallScript.FileName(platform));
 			File.WriteAllText(scriptPath, script);
 
@@ -242,16 +255,39 @@ namespace DLS.Game.Updates
 			Debug.LogWarning("Rewired update: " + Error);
 		}
 
+		// The install script leaves a marker in the download folder when it could not copy the
+		// update and started this version again instead.
+		static bool ReportFailedInstall()
+		{
+			string folder = Path.Combine(Application.temporaryCachePath, "RewiredUpdate");
+			string marker = Path.Combine(folder, UpdateInstallScript.FailedMarker);
+			if (!File.Exists(marker)) return false;
+
+			try
+			{
+				Directory.Delete(folder, true);
+			}
+			catch (Exception)
+			{
+				// Left for the next download, which clears the folder first.
+			}
+
+			Fail($"the new version could not be copied into {InstallFolder}. Close anything using that folder and try again");
+			return true;
+		}
+
 		// The player's folder: <install>/<name>_Data is Application.dataPath.
 		static string InstallFolder => Directory.GetParent(Application.dataPath).FullName;
 
-		static string ExecutableName
+		// Possible names of the player executable: Unity names the Linux player after the build
+		// without an extension (DLSRewired), or with .x86_64 when built from the editor.
+		static string[] ExecutableCandidates
 		{
 			get
 			{
 				string name = Path.GetFileName(Application.dataPath);
 				if (name.EndsWith("_Data", StringComparison.Ordinal)) name = name.Substring(0, name.Length - "_Data".Length);
-				return Platform == UpdatePlatform.Windows ? name + ".exe" : name + ".x86_64";
+				return Platform == UpdatePlatform.Windows ? new[] { name + ".exe" } : new[] { name, name + ".x86_64" };
 			}
 		}
 
@@ -262,7 +298,7 @@ namespace DLS.Game.Updates
 				string probe = Path.Combine(InstallFolder, ".rewired-update-check");
 				File.WriteAllText(probe, string.Empty);
 				File.Delete(probe);
-				return File.Exists(Path.Combine(InstallFolder, ExecutableName));
+				return Array.Exists(ExecutableCandidates, name => File.Exists(Path.Combine(InstallFolder, name)));
 			}
 			catch (Exception)
 			{
