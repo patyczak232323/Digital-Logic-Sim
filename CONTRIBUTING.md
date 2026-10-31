@@ -87,6 +87,12 @@ Release and unofficial APKs are signed with the Rewired release key, so each ins
 - `ANDROID_KEYALIAS_NAME`: `rewired`
 - `ANDROID_KEYALIAS_PASS`: the key password
 
+Generate the key with the same password for the keystore and the key. Keytool's default PKCS12 keystore has one password for both, so a different `ANDROID_KEYALIAS_PASS` makes Gradle fail with "Cannot recover key":
+
+```bash
+keytool -genkeypair -keystore rewired.keystore -storetype PKCS12 -alias rewired -keyalg RSA -keysize 4096 -validity 36500 -dname "CN=Rewired" -storepass "$PASS" -keypass "$PASS"
+```
+
 The APK's version code is the number of commits on the built branch, so it grows with every build. The owner keeps a copy of the keystore and its password outside the repository: without them, no later APK installs over the published ones.
 
 ## Reporting bugs
