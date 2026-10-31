@@ -116,6 +116,13 @@ For difficult circuits, use the simulation diagnostics and profiling tools descr
 - **Breakpoints**: right-click a pin (on Android, tap it) and pick *BREAKPOINT* to pause the simulation when it changes, rises, falls or reaches a value. *SPACE* (or *STEP* on Android) then advances one tick at a time.
 - **Export**: *EXPORT* in a chip's menu or the bottom-bar menu (*MENU* on Android) writes structural Verilog (also copied to the clipboard), an SVG schematic or a PNG screenshot to the project's `Exports` folder. On Android 10 and later each export is also copied to `Download/Rewired`, and *SHARE LAST EXPORT* sends it to another app.
 
+## Desktop editing shortcuts
+
+- **Ctrl+A** selects every part of the chip you are editing.
+- **Ctrl+C** copies the selected parts and the wires between them; **Ctrl+X** also deletes them. **Ctrl+V** pastes them at the mouse; click to put them down. A copy can be pasted into another chip or project. Chips the target cannot use (missing from the project, or ones that contain the chip being edited) are left out.
+- **Ctrl+Z** undoes; **Ctrl+Shift+Z** or **Ctrl+Y** redoes. **Shift+D** duplicates the selection.
+- All of these can be changed in *Settings* on the home screen.
+
 ## Android controls
 
 The screen has three parts: the top bar, the *PARTS* panel on the left and the board.

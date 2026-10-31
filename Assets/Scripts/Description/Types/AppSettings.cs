@@ -24,7 +24,13 @@ namespace DLS.Description
 		SimulationNextStep,
 		SimulationPause,
 		MirrorHorizontal,
-		MirrorVertical
+		MirrorVertical,
+		// New actions go at the end: saved settings store the number.
+		SelectAll,
+		Copy,
+		Cut,
+		Paste,
+		RedoAlternative
 	}
 
 	public struct ShortcutBinding
@@ -126,8 +132,37 @@ namespace DLS.Description
 				normalized.Add(binding);
 			}
 
+			// An action added in a newer version starts unbound if its default combination is
+			// already taken by a binding the user chose, so one key press never runs two actions.
+			if (settings.KeyBindings != null)
+			{
+				for (int i = 0; i < normalized.Count; i++)
+				{
+					if (!normalized[i].IsBound || ContainsAction(settings.KeyBindings, normalized[i].Action)) continue;
+
+					for (int j = 0; j < normalized.Count; j++)
+					{
+						if (i == j || !ContainsAction(settings.KeyBindings, normalized[j].Action)) continue;
+						if (!SameShortcutContext(normalized[i].Action, normalized[j].Action) || !normalized[i].SameCombination(normalized[j])) continue;
+
+						normalized[i] = new ShortcutBinding(normalized[i].Action, KeyCode.None);
+						break;
+					}
+				}
+			}
+
 			settings.KeyBindings = normalized.ToArray();
 			return settings;
+		}
+
+		static bool ContainsAction(ShortcutBinding[] bindings, ShortcutAction action)
+		{
+			for (int i = 0; i < bindings.Length; i++)
+			{
+				if (bindings[i].Action == action) return true;
+			}
+
+			return false;
 		}
 
 		public ShortcutBinding GetBinding(ShortcutAction action)
@@ -213,7 +248,12 @@ namespace DLS.Description
 				new ShortcutBinding(ShortcutAction.SimulationNextStep, KeyCode.Space),
 				new ShortcutBinding(ShortcutAction.SimulationPause, KeyCode.Space, ctrl: true),
 				new ShortcutBinding(ShortcutAction.MirrorHorizontal, KeyCode.H),
-				new ShortcutBinding(ShortcutAction.MirrorVertical, KeyCode.V)
+				new ShortcutBinding(ShortcutAction.MirrorVertical, KeyCode.V),
+				new ShortcutBinding(ShortcutAction.SelectAll, KeyCode.A, ctrl: true),
+				new ShortcutBinding(ShortcutAction.Copy, KeyCode.C, ctrl: true),
+				new ShortcutBinding(ShortcutAction.Cut, KeyCode.X, ctrl: true),
+				new ShortcutBinding(ShortcutAction.Paste, KeyCode.V, ctrl: true),
+				new ShortcutBinding(ShortcutAction.RedoAlternative, KeyCode.Y, ctrl: true)
 			};
 	}
 }
