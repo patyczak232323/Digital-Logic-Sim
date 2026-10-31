@@ -137,10 +137,11 @@ namespace DLS.Graphics
 				Build(project, true);
 			}
 
-			DrawRightPanel(theme, infoTop, project);
+			DrawRightPanel(theme, infoTop, sourceCard.Bottom);
 
 			Vector2 actionsTopLeft = sourceCard.BottomLeft + Vector2.down * 0.7f;
-			string[] actionNames = { "SAVE DRAFT", "BUILD", "BUILD & OPEN", "CLOSE" };
+			// One row under both columns, so the right column cannot run into it
+			string[] actionNames = { "SAVE DRAFT", "BUILD", "BUILD & OPEN", "NEW CIRCUIT", "LOAD EXAMPLE", "CLOSE" };
 			int action = UI.HorizontalButtonGroup(
 				actionNames,
 				theme.MainMenuButtonTheme,
@@ -163,11 +164,41 @@ namespace DLS.Graphics
 			{
 				Build(project, true);
 			}
-			else if (action == 3 || KeyboardShortcuts.CancelShortcutTriggered)
+			else if (action == 3)
+			{
+				LoadStarterTemplate();
+			}
+			else if (action == 4)
+			{
+				LoadExample();
+			}
+			else if (action == 5 || KeyboardShortcuts.CancelShortcutTriggered)
 			{
 				SaveDraft(project);
 				UIDrawer.SetActiveMenu(UIDrawer.MenuType.None);
 			}
+		}
+
+		static void LoadStarterTemplate()
+		{
+			SetEditorSource(StarterTemplate);
+			CodeEditor.MarkDirty();
+			CodeEditor.SetDiagnosticLines(Array.Empty<int>());
+			latestResult = null;
+			buildAttempted = false;
+			statusSuccess = false;
+			statusText = "New circuit template loaded.";
+		}
+
+		static void LoadExample()
+		{
+			SetEditorSource(DefaultExample);
+			CodeEditor.MarkDirty();
+			CodeEditor.SetDiagnosticLines(Array.Empty<int>());
+			latestResult = null;
+			buildAttempted = false;
+			statusSuccess = false;
+			statusText = "Example loaded. Press BUILD & OPEN.";
 		}
 
 		static void DrawMobileMenu(DrawSettings.UIThemeDLS theme, Project project)
@@ -435,7 +466,8 @@ namespace DLS.Graphics
 			return singleLine.Substring(0, Mathf.Max(0, max - 3)) + "...";
 		}
 
-		static void DrawRightPanel(DrawSettings.UIThemeDLS theme, Vector2 topLeft, Project project)
+		// The right column ends level with the source editor (bottom at y = bottom)
+		static void DrawRightPanel(DrawSettings.UIThemeDLS theme, Vector2 topLeft, float bottom)
 		{
 			Bounds2D compilerHeader = RewiredUI.DrawSectionHeader("COMPILER", topLeft, RightWidth);
 			Vector2 cursor = compilerHeader.BottomLeft;
@@ -476,7 +508,7 @@ namespace DLS.Graphics
 			Bounds2D syntaxHeader = RewiredUI.DrawSectionHeader("RHDL 1.0 QUICK REFERENCE", cursor, RightWidth);
 			cursor = syntaxHeader.BottomLeft;
 
-			RewiredUI.DrawCard(cursor, new Vector2(RightWidth, 24.6f));
+			RewiredUI.DrawCard(cursor, new Vector2(RightWidth, Mathf.Max(4f, cursor.y - bottom)));
 			Bounds2D syntaxCard = UI.PrevBounds;
 			string help =
 				"circuit Adder(A: u8, B: u8) -> Y: u8:\n" +
@@ -505,36 +537,6 @@ namespace DLS.Graphics
 				syntaxCard.TopLeft + new Vector2(0.8f, -0.8f),
 				Anchor.TopLeft,
 				RewiredUI.SecondaryText);
-
-			cursor = syntaxCard.BottomLeft + Vector2.down * 0.6f;
-			int templateAction = UI.HorizontalButtonGroup(
-				new[] { "NEW CIRCUIT", "LOAD EXAMPLE" },
-				theme.MainMenuButtonTheme,
-				cursor,
-				RightWidth,
-				DrawSettings.DefaultButtonSpacing,
-				0,
-				Anchor.TopLeft);
-			if (templateAction == 0)
-			{
-				SetEditorSource(StarterTemplate);
-				CodeEditor.MarkDirty();
-				CodeEditor.SetDiagnosticLines(Array.Empty<int>());
-				latestResult = null;
-				buildAttempted = false;
-				statusSuccess = false;
-				statusText = "New circuit template loaded.";
-			}
-			else if (templateAction == 1)
-			{
-				SetEditorSource(DefaultExample);
-				CodeEditor.MarkDirty();
-				CodeEditor.SetDiagnosticLines(Array.Empty<int>());
-				latestResult = null;
-				buildAttempted = false;
-				statusSuccess = false;
-				statusText = "Example loaded. Press BUILD & OPEN.";
-			}
 		}
 
 		static void Build(Project project, bool openAfterBuild)

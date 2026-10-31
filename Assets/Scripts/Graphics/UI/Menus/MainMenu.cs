@@ -735,42 +735,68 @@ namespace DLS.Graphics
 			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
 			UI.DrawPanel(UI.BottomLeft, new Vector2(UI.Width, 4), RewiredUI.SurfaceRaised, Anchor.BottomLeft);
 
-			float pad = 1;
+			const float pad = 1;
+			const float gap = 2;
 			Color col = new(1, 1, 1, 0.5f);
-
-			Vector2 versionPos = UI.PrevBounds.CentreLeft + Vector2.right * pad;
-			Vector2 datePos = UI.PrevBounds.CentreRight + Vector2.left * pad;
 			Bounds2D bar = UI.PrevBounds;
-			UI.DrawText(authorString, theme.FontRegular, theme.FontSizeRegular, versionPos, Anchor.TextCentreLeft, col);
-			UI.DrawText(versionString, theme.FontRegular, theme.FontSizeRegular, datePos, Anchor.TextCentreRight, col);
-			DrawUpdateStatus(bar);
-		}
+			float fontSize = theme.FontSizeRegular;
 
-		// Middle of the bottom bar: what the updater is doing and a button to check or update.
-		static void DrawUpdateStatus(Bounds2D bar)
-		{
-			if (!AppUpdater.Supported) return;
+			// The update status sits between the author (left) and the version (right). On a narrow
+			// window the parts would overlap, so the status text goes first, then the author.
+			float authorWidth = UI.CalculateTextSize(authorString, fontSize, theme.FontRegular).x;
+			float versionWidth = UI.CalculateTextSize(versionString, fontSize, theme.FontRegular).x;
+			float versionLeft = bar.Right - pad - versionWidth;
 
-			DrawSettings.UIThemeDLS theme = DrawSettings.ActiveUITheme;
-			string label = AppUpdater.ActionLabel;
-			string status = AppUpdater.StatusText;
+			bool hasUpdater = AppUpdater.Supported;
+			string label = hasUpdater ? AppUpdater.ActionLabel : null;
+			string status = hasUpdater ? AppUpdater.StatusText ?? string.Empty : string.Empty;
+			ButtonTheme buttonTheme = theme.MainMenuButtonTheme;
+			const float buttonStatusGap = 1;
+			float buttonWidth = label == null ? 0 : ButtonWidth(label, buttonTheme);
+			float statusWidth = status.Length == 0 ? 0 : UI.CalculateTextSize(status, fontSize, theme.FontRegular).x;
+
+			bool showAuthor = true;
+			bool showStatus = statusWidth > 0;
+			float GroupWidth() => buttonWidth + (showStatus ? statusWidth + (buttonWidth > 0 ? buttonStatusGap : 0) : 0);
+			float FreeLeft() => showAuthor ? bar.Left + pad + authorWidth + gap : bar.Left + pad;
+			float FreeWidth() => versionLeft - gap - FreeLeft();
+
+			if (hasUpdater)
+			{
+				if (GroupWidth() > FreeWidth() && buttonWidth > 0) showStatus = false;
+				if (GroupWidth() > FreeWidth()) showAuthor = false;
+			}
+
+			if (showAuthor) UI.DrawText(authorString, theme.FontRegular, fontSize, bar.CentreLeft + Vector2.right * pad, Anchor.TextCentreLeft, col);
+			UI.DrawText(versionString, theme.FontRegular, fontSize, bar.CentreRight + Vector2.left * pad, Anchor.TextCentreRight, col);
+			if (!hasUpdater || GroupWidth() <= 0) return;
+
+			// Centre the group on the bar when it fits there, otherwise in the free space
+			float groupWidth = GroupWidth();
+			float groupLeft = bar.Centre.x - groupWidth / 2;
+			groupLeft = Mathf.Clamp(groupLeft, FreeLeft(), Mathf.Max(FreeLeft(), versionLeft - gap - groupWidth));
+			float y = bar.Centre.y;
+
 			bool available = AppUpdater.Current == AppUpdater.State.Available;
 			Color statusCol = available ? RewiredUI.Accent : new Color(1, 1, 1, 0.5f);
+			if (showStatus)
+			{
+				UI.DrawText(status, theme.FontRegular, fontSize, new Vector2(groupLeft, y), Anchor.TextCentreLeft, statusCol);
+				groupLeft += statusWidth + (buttonWidth > 0 ? buttonStatusGap : 0);
+			}
 
-			Vector2 centre = bar.Centre;
-			if (label != null)
+			if (label != null && UI.Button(label, buttonTheme, new Vector2(groupLeft, y), new Vector2(0, 3f), true, true, false, Anchor.CentreLeft))
 			{
-				if (UI.Button(label, theme.MainMenuButtonTheme, centre + Vector2.right * 0.5f, new Vector2(0, 3f), true, true, false, Anchor.CentreLeft))
-				{
-					AppUpdater.RunAction();
-				}
-				centre += Vector2.left * 0.5f;
-				if (status.Length > 0) UI.DrawText(status, theme.FontRegular, theme.FontSizeRegular, centre, Anchor.TextCentreRight, statusCol);
+				AppUpdater.RunAction();
 			}
-			else
-			{
-				UI.DrawText(status, theme.FontRegular, theme.FontSizeRegular, centre, Anchor.TextCentre, statusCol);
-			}
+		}
+
+		// Width of a button sized to its text, as UI.Button computes it
+		static float ButtonWidth(string text, ButtonTheme buttonTheme)
+		{
+			float textWidth = UI.CalculateTextSize(text, buttonTheme.fontSize, buttonTheme.font).x;
+			float lineHeight = UI.CalculateTextSize("M", buttonTheme.fontSize, buttonTheme.font).y;
+			return textWidth + lineHeight * buttonTheme.paddingScale.x;
 		}
 
 		static string ResolutionToString(Vector2Int r) => $"{r.x} x {r.y}";

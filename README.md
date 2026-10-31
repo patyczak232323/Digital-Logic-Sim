@@ -1,15 +1,49 @@
 <p align="center"><img src="Docs/logo.png" width="128" alt="Rewired logo: a chip with a gold R"></p>
 
-# Rewired — Digital Logic Simulator
+<h1 align="center">Rewired — Digital Logic Simulator</h1>
 
-**Rewired** is an open-source **digital logic simulator and logic gate circuit simulator** for building and testing digital circuits, CPUs, registers, memory and custom chips. It includes a high-performance simulation runtime, a graphical editor and **RHDL**, a small hardware description language for generating circuits from source.
+<p align="center">
+<b>Build logic gates, adders, registers, RAM and whole CPUs from NAND gates — then play Snake on the computer you built.</b><br>
+Free and open source · Windows · Linux · Android · MIT licence
+</p>
+
+<p align="center">
+<a href="https://github.com/patyczak232323/Rewired/releases/latest"><b>⬇ Download the latest release</b></a> ·
+<a href="Docs/GETTING_STARTED.md">Getting Started</a> ·
+<a href="Docs/RHDL_GUIDE.md">RHDL Guide</a> ·
+<a href="Examples/RHDL/">Examples</a>
+</p>
+
+<p align="center">
+<a href="https://github.com/patyczak232323/Rewired/releases/latest"><img src="https://img.shields.io/github/v/release/patyczak232323/Rewired?label=release" alt="Latest release"></a>
+<a href="https://github.com/patyczak232323/Rewired/releases"><img src="https://img.shields.io/github/downloads/patyczak232323/Rewired/total" alt="Downloads"></a>
+<a href="https://github.com/patyczak232323/Rewired/actions/workflows/simulation-regression.yml"><img src="https://github.com/patyczak232323/Rewired/actions/workflows/simulation-regression.yml/badge.svg" alt="Regression"></a>
+<a href="https://github.com/patyczak232323/Rewired/actions/workflows/unity-tests.yml"><img src="https://github.com/patyczak232323/Rewired/actions/workflows/unity-tests.yml/badge.svg" alt="Unity tests"></a>
+<a href="LICENSE"><img src="https://img.shields.io/github/license/patyczak232323/Rewired" alt="License"></a>
+<a href="https://github.com/patyczak232323/Rewired/stargazers"><img src="https://img.shields.io/github/stars/patyczak232323/Rewired?style=social" alt="Stars"></a>
+</p>
+
+<p align="center"><img src="Docs/images/snake-pix6.png" alt="Rewired running the bundled Snake project: the PIX6 processor drives a 64 by 64 colour screen, with W A S D keys, a clock and a power-on reset wired to it" width="900"></p>
+<p align="center"><i>The Snake project that ships with Rewired: a small processor made of logic gates, a 64×64 screen and four keys.</i></p>
+
+**Rewired** is a free, open-source **digital logic simulator** and **logic gate circuit simulator** for learning **digital electronics**, **Boolean logic** and **computer architecture**. Start with a single NAND gate, build your own chips, and keep going until you have an ALU, registers, RAM and a working CPU. Rewired is a desktop and Android app built with Unity, with a deterministic, JIT-accelerated simulation engine and **RHDL**, a small **hardware description language** with Python syntax that turns source code into gate-level circuits.
 
 Rewired is based on Sebastian Lague's [Digital Logic Sim](https://github.com/SebLague/Digital-Logic-Sim), but uses its own simulation engine and should be treated as an independent simulator rather than a drop-in compatible replacement.
 
-[![Latest Release](https://img.shields.io/github/v/release/patyczak232323/Digital-Logic-Sim?label=release)](https://github.com/patyczak232323/Digital-Logic-Sim/releases/latest)
-[![Regression](https://github.com/patyczak232323/Digital-Logic-Sim/actions/workflows/simulation-regression.yml/badge.svg)](https://github.com/patyczak232323/Digital-Logic-Sim/actions/workflows/simulation-regression.yml)
-[![Unity tests](https://github.com/patyczak232323/Digital-Logic-Sim/actions/workflows/unity-tests.yml/badge.svg)](https://github.com/patyczak232323/Digital-Logic-Sim/actions/workflows/unity-tests.yml)
-[![License](https://img.shields.io/github/license/patyczak232323/Digital-Logic-Sim)](LICENSE)
+## Screenshots
+
+| Write hardware in Python syntax… | …and get a real gate-level circuit |
+|---|---|
+| <img src="Docs/images/rhdl-studio.png" alt="RHDL Studio: an 8-bit ALU written in RHDL, with the compiler status and a quick reference" width="440"> | <img src="Docs/images/rhdl-generated-alu.png" alt="The ALU from RHDL Studio built as a circuit of NAND gates in the editor" width="440"> |
+
+<p align="center"><img src="Docs/images/main-menu.png" alt="Rewired main menu" width="600"></p>
+
+## Who it is for
+
+- **Students** learning logic gates, truth tables, flip-flops and how a CPU works, for example alongside *Nand2Tetris*, *Digital Design and Computer Architecture* or *But How Do It Know?*
+- **Teachers** who want a free logic simulator for digital electronics and computer science classes
+- **Hobbyists** who want to design an 8-bit computer, build a CPU from scratch or make games that run on their own hardware
+- **Players of Digital Logic Sim** who want bigger, faster circuits, a hardware description language and Android support
 
 ## What you can build
 
@@ -57,20 +91,20 @@ The repository includes a compact example progression ending with a **4-bit CPU*
 
 The latest prebuilt version is available in **GitHub Releases**:
 
-**[Download the latest Rewired release](https://github.com/patyczak232323/Digital-Logic-Sim/releases/latest)**
+**[Download the latest Rewired release](https://github.com/patyczak232323/Rewired/releases/latest)**
 
 Release packages:
 
 - Windows x64: `DLSRewired-Windows-x64.zip`
 - Linux x86_64: `DLSRewired-Linux-x86_64.zip`
-- WebGL (browser): `DLSRewired-WebGL.zip`. Unzip it and serve the folder from any static web host. In the browser, projects are kept in the browser's own storage. The native JIT and LUT accelerators are not available there, so large circuits run slower.
+- WebGL (browser): `DLSRewired-WebGL.zip`. **Known issue:** the browser build currently shows an empty grey screen, because the editor draws with indirect instanced rendering, which WebGL does not support. Use a desktop or Android build for now.
 - Android ARM64 (experimental): `DLSRewired-Android-arm64.apk`
 
 On Linux, after extracting the archive, the executable may need permission:
 
 ```bash
-chmod +x DLSRewired.x86_64
-./DLSRewired.x86_64
+chmod +x DLSRewired
+./DLSRewired
 ```
 
 ### Updating
@@ -221,8 +255,8 @@ The Unity version is defined in `ProjectSettings/ProjectVersion.txt`.
 Clone:
 
 ```bash
-git clone https://github.com/patyczak232323/Digital-Logic-Sim.git
-cd Digital-Logic-Sim
+git clone https://github.com/patyczak232323/Rewired.git
+cd Rewired
 ```
 
 Tests:

@@ -6,7 +6,7 @@ Rewired is a digital logic and circuit simulator for building logic gates, regis
 
 Use the latest GitHub Release:
 
-https://github.com/patyczak232323/Digital-Logic-Sim/releases/latest
+https://github.com/patyczak232323/Rewired/releases/latest
 
 Available packages:
 
