@@ -17,7 +17,7 @@ Thanks for helping. Bug reports with a small project or RHDL file that reproduce
 | `Assets/Scripts/RHDL` | RHDL frontend: `RhdlSyntax` parses the source, `RhdlElaborator` builds a NAND netlist from it, `RhdlLayout` draws the schematic and `RhdlCompiler` ties them together |
 | `Assets/Scripts/Description` | Chip and project data types and their JSON serialization |
 | `Assets/Scripts/SaveSystem` | Loading, saving, save paths, global chips, WebGL and Android storage |
-| `Assets/Scripts/Game` | Editor model: projects, chip instances, interaction, undo, challenges |
+| `Assets/Scripts/Game` | Editor model: projects, chip instances, interaction, undo |
 | `Assets/Scripts/Graphics` | Desktop and touch UI, world drawing |
 | `Assets/Scripts/Export` | Verilog and SVG exporters |
 | `Assets/Scripts/Seb` | UI, drawing and text helpers from the original Digital Logic Sim |

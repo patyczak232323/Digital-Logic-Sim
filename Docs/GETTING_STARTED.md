@@ -116,10 +116,6 @@ For difficult circuits, use the simulation diagnostics and profiling tools descr
 - **Breakpoints**: right-click a pin (on Android, tap it) and pick *BREAKPOINT* to pause the simulation when it changes, rises, falls or reaches a value. *SPACE* (or *STEP* on Android) then advances one tick at a time.
 - **Export**: *EXPORT* in a chip's menu or the bottom-bar menu (*MENU* on Android) writes structural Verilog (also copied to the clipboard), an SVG schematic or a PNG screenshot to the project's `Exports` folder. On Android 10 and later each export is also copied to `Download/Rewired`, and *SHARE LAST EXPORT* sends it to another app.
 
-## 8. Learn with challenges
-
-*CHALLENGES* (bottom-bar menu, or *MENU* on Android) walks from a NOT gate built from NAND to a 4-bit adder. Each step names the chip to build and its pins; *CHECK* compares your saved chip's truth table with the goal and tells you the first input combination that is still wrong.
-
 ## Android controls
 
 The screen has three parts: the top bar, the *PARTS* panel on the left and the board.
@@ -129,7 +125,7 @@ The screen has three parts: the top bar, the *PARTS* panel on the left and the b
 - **Try it**: tap the round button of an input to switch it on and off.
 - **Change**: tap a part to select it. Its actions (*LOOK INSIDE*, *TRUTH TABLE*, *LABEL*, *FLIP*, *COPY*, *DELETE*, *MORE*) appear at the bottom of the board. Drag a part to move it.
 - **Move around**: drag empty space to move the view, pinch to zoom. The buttons on the right fit the whole chip on screen, switch on area selection (drag a box round several parts), and zoom in and out.
-- **Top bar**: *MENU* (new chip, chip library, truth table, export, challenges, RHDL Studio, settings, the guide, main menu), *PARTS* to show or hide the panel, undo and redo, *RUN*/*PAUSE*, *STEP* and *SAVE*.
+- **Top bar**: *MENU* (new chip, chip library, truth table, export, RHDL Studio, settings, the guide, main menu), *PARTS* to show or hide the panel, undo and redo, *RUN*/*PAUSE*, *STEP* and *SAVE*.
 - Holding a finger on a part, pin or wire opens its full menu. Android's Back button closes whatever is open, one step at a time.
 
 ## Compatibility note

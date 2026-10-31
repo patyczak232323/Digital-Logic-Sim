@@ -388,7 +388,8 @@ namespace DLS.Game
 				return ViewedChip.Elements.Count > 0;
 			}
 
-			return Saver.HasUnsavedChanges(ViewedChip.LastSavedDescription, DescriptionCreator.CreateChipDescription(ViewedChip));
+			ChipDescription saved = Saver.WithEditorPinColours(ViewedChip.LastSavedDescription, chipLibrary);
+			return Saver.HasUnsavedChanges(saved, DescriptionCreator.CreateChipDescription(ViewedChip));
 		}
 
 		public void CreateBlankDevChip()

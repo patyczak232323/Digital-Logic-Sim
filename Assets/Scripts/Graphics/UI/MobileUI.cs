@@ -288,7 +288,6 @@ namespace DLS.Graphics
 				case UIDrawer.MenuType.Export: ExportMenu.DrawMenu(); break;
 				case UIDrawer.MenuType.Breakpoint: BreakpointMenu.DrawMenu(); break;
 				case UIDrawer.MenuType.MobileHelp: MobileHelpOverlay.Draw(); break;
-				case UIDrawer.MenuType.Challenges: ChallengesMenu.DrawMenu(); break;
 			}
 
 			DrawModalBackButton(menu);
@@ -661,7 +660,6 @@ namespace DLS.Graphics
 				}),
 				("TOOLS", new (string, bool, Action)[]
 				{
-					("CHALLENGES", true, ChallengesMenu.Open),
 					("RHDL STUDIO", true, () => UIDrawer.SetActiveMenu(UIDrawer.MenuType.RhdlStudio)),
 					("DIAGNOSTICS", true, () => UIDrawer.SetActiveMenu(UIDrawer.MenuType.SimulationDiagnostics)),
 					(breakpoints > 0 ? $"CLEAR {breakpoints} BREAKPOINT{(breakpoints == 1 ? "" : "S")}" : "NO BREAKPOINTS", breakpoints > 0, SimulationBreakpoints.Clear)

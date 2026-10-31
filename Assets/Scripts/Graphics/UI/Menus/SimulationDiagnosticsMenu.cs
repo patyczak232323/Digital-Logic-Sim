@@ -12,10 +12,24 @@ namespace DLS.Graphics
 {
 	public static class SimulationDiagnosticsMenu
 	{
-		const float menuWidth = 86f;
+		const float wideMenuWidth = 86f;
 		const float columnGap = 1.2f;
-		const float leftColumnWidth = 36f;
-		const float rightColumnWidth = menuWidth - leftColumnWidth - columnGap;
+		const float wideLeftColumnWidth = 36f;
+
+		// Side by side when there is room; on a phone held upright the logic analyzer goes below
+		// the other sections and every column is as wide as the screen.
+		static float menuWidth = wideMenuWidth;
+		static float leftColumnWidth = wideLeftColumnWidth;
+		static float rightColumnWidth = wideMenuWidth - wideLeftColumnWidth - columnGap;
+		static bool stacked;
+
+		static void SetLayout(float availableWidth)
+		{
+			stacked = availableWidth < wideMenuWidth;
+			menuWidth = stacked ? availableWidth : wideMenuWidth;
+			leftColumnWidth = stacked ? availableWidth : wideLeftColumnWidth;
+			rightColumnWidth = stacked ? availableWidth : wideMenuWidth - wideLeftColumnWidth - columnGap;
+		}
 		const float headerHeight = 3.4f;
 		const float sectionHeaderHeight = 2.15f;
 		const float sectionGap = 0.55f;
@@ -45,7 +59,9 @@ namespace DLS.Graphics
 			{
 				// Taller than a phone screen, so it scrolls below the top bar.
 				Rect safe = MobileUI.SafeRectUI;
-				float width = Mathf.Min(menuWidth + 3f, safe.width - 1f);
+				float width = Mathf.Min(wideMenuWidth + 3f, safe.width - 1f);
+				// Leave room for the scroll bar.
+				SetLayout(width - 3f);
 				Vector2 topLeft = new(safe.center.x - width / 2f, safe.yMax - 6.2f);
 				mobileClosePressed = false;
 				UI.DrawScrollView(ID_MobileScroll, topLeft, new Vector2(width, topLeft.y - safe.yMin - 0.5f), Anchor.TopLeft, theme.ScrollTheme, drawMobileContent);
@@ -53,6 +69,7 @@ namespace DLS.Graphics
 			}
 			else
 			{
+				SetLayout(wideMenuWidth);
 				Draw.ID panelID = UI.ReservePanel();
 				using (UI.BeginBoundsScope(true))
 				{
@@ -92,6 +109,7 @@ namespace DLS.Graphics
 			DrawHotChips(theme, ref leftPos, bodyCol, secondary, dim, accent);
 			DrawReplay(theme, ref leftPos, bodyCol, secondary, dim, accent);
 
+			if (stacked) rightPos = leftPos + Vector2.down * sectionGap;
 			DrawLogicAnalyzer(theme, ref rightPos, bodyCol, raisedCol, secondary, dim, accent);
 
 			float bottom = Mathf.Min(leftPos.y, rightPos.y) - 0.5f;

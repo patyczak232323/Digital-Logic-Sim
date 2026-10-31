@@ -206,7 +206,9 @@ namespace DLS.Graphics
 			float top = safe.yMax - 7.1f;
 			float bottom = safe.yMin + 1.0f;
 			float usableWidth = safe.width - outerPad * 2f;
-			float colWidth = (usableWidth - gap) / 2f;
+			// Upright there is only room for one column: simulation goes below display & editing.
+			bool singleColumn = MobileUI.Portrait;
+			float colWidth = singleColumn ? usableWidth : (usableWidth - gap) / 2f;
 			float fieldWidth = colWidth * 0.43f;
 			Vector2 mobileEntrySize = new(colWidth, 4.3f);
 			Color labelCol = Color.white;
@@ -224,6 +226,7 @@ namespace DLS.Graphics
 			int gridDisplayMode = DrawMobileWheel("Grid", GridDisplayOptions, ID_GridDisplay, ref left);
 			int snappingMode = DrawMobileWheel("Snap to grid", SnappingOptionsMobile, ID_Snapping, ref left);
 			int straightWireMode = DrawMobileWheel("Straight wires", StraightWireOptionsMobile, ID_StraightWires, ref left);
+			if (singleColumn) right = left + Vector2.down * gap;
 
 			DrawMobileHeader("SIMULATION", ref right, colWidth);
 

@@ -126,11 +126,16 @@ namespace DLS.Graphics
 			float contentBottom = safe.yMin + 1.0f;
 			float contentHeight = Mathf.Max(12f, contentTop - contentBottom);
 			float usableWidth = safe.width - outerPad * 2f - gap;
-			float leftWidth = usableWidth * 0.58f;
-			float rightWidth = usableWidth - leftWidth;
+			// Sideways the list and the actions for the selected item stand side by side; upright
+			// the actions go below the list and both take the whole width.
+			bool stacked = MobileUI.Portrait;
+			float leftWidth = stacked ? usableWidth + gap : usableWidth * 0.58f;
+			float rightWidth = stacked ? leftWidth : usableWidth - leftWidth;
+			float actionsHeight = stacked ? Mathf.Min(40f, contentHeight * 0.45f) : contentHeight;
+			float listAreaHeight = stacked ? contentHeight - actionsHeight - gap : contentHeight;
 
 			Vector2 leftTop = new(safe.xMin + outerPad, contentTop);
-			Vector2 rightTop = new(leftTop.x + leftWidth + gap, contentTop);
+			Vector2 rightTop = stacked ? new Vector2(leftTop.x, contentBottom + actionsHeight) : new Vector2(leftTop.x + leftWidth + gap, contentTop);
 
 			UI.DrawText("CHIP LIBRARY", theme.FontBold, theme.FontSizeRegular * 1.05f,
 				new Vector2(safe.xMin + 13.2f, safe.yMax - 3.0f), Anchor.TextCentreLeft, Color.white);
@@ -163,7 +168,7 @@ namespace DLS.Graphics
 				}
 
 				Vector2 listTop = leftTop + Vector2.down * (tabHeight + 0.55f);
-				Vector2 listSize = new(leftWidth, Mathf.Max(8f, contentHeight - tabHeight - 0.55f));
+				Vector2 listSize = new(leftWidth, Mathf.Max(8f, listAreaHeight - tabHeight - 0.55f));
 
 				isScrolling = UI.GetScrollbarState(ID_CollectionsScrollbar).isDragging ||
 				              UI.GetScrollbarState(ID_StarredScrollbar).isDragging;
@@ -171,7 +176,7 @@ namespace DLS.Graphics
 				if (mobileShowCollections) DrawCollectionsPanel(listTop, listSize);
 				else DrawStarredPanel(listTop, listSize);
 
-				DrawSelectedItemPanel(rightTop, new Vector2(rightWidth, contentHeight));
+				DrawSelectedItemPanel(rightTop, new Vector2(rightWidth, actionsHeight));
 			}
 
 			if (KeyboardShortcuts.CancelShortcutTriggered ||

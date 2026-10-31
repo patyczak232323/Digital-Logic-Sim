@@ -29,7 +29,6 @@
     <Compile Include="$(Src)/RHDL/**/*.cs" />
     <Compile Include="$(Src)/Export/VerilogExporter.cs" />
     <Compile Include="$(Src)/Game/Project/ChipLibrary.cs" />
-    <Compile Include="$(Src)/Game/Challenges/*.cs" />
     <Compile Include="$(Src)/Game/Project/BuiltinChipCreator.cs" />
     <Compile Include="$(Src)/Game/Project/BuiltinCollectionCreator.cs" />
     <Compile Include="$(Src)/Game/Updates/ReleaseInfo.cs;$(Src)/Game/Updates/UpdateInstallScript.cs" />

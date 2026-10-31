@@ -41,6 +41,39 @@ namespace DLS.Tests
 		[TearDown]
 		public void TearDown() => RewiredEngine.Reset();
 
+		// Opening the example must not report unsaved changes: the comparison sees the saved chip
+		// as the editor describes it after loading (no colour on the chip's own outputs, the
+		// colour of every subchip output, none for buses).
+		[Test]
+		public void SavedChipsMatchWhatTheEditorDescribes()
+		{
+			(_, ChipDescription[] chips) = CreateSnakeProject();
+			ChipLibrary library = TestLibrary.Create();
+			foreach (ChipDescription chip in chips) library.NotifyChipSaved(chip, false);
+
+			ChipDescription snake = chips.Single(c => c.Name == "Snake");
+			ChipDescription normalized = Saver.WithEditorPinColours(snake, library);
+			Assert.AreNotSame(snake, normalized, "the RHDL chip should need the editor's defaults");
+			Assert.IsTrue(normalized.OutputPins.All(p => p.Colour == default));
+
+			foreach (SubChipDescription subChip in normalized.SubChips)
+			{
+				Assert.IsTrue(library.TryGetChipDescription(subChip.Name, out ChipDescription desc));
+				if (ChipTypeHelper.IsBusType(desc.ChipType))
+				{
+					Assert.IsNull(subChip.OutputPinColourInfo, subChip.Name);
+					continue;
+				}
+
+				CollectionAssert.AreEqual(desc.OutputPins.Select(p => (p.Colour, p.ID)).ToArray(),
+					subChip.OutputPinColourInfo.Select(c => (c.PinColour, c.PinID)).ToArray(), subChip.Name);
+			}
+
+			// Already in the editor's form: nothing to change, and no copy is made.
+			Assert.AreSame(normalized, Saver.WithEditorPinColours(normalized, library));
+			Assert.IsFalse(Saver.HasUnsavedChanges(normalized, Saver.WithEditorPinColours(snake, library)));
+		}
+
 		public static (ProjectDescription project, ChipDescription[] chips) CreateSnakeProject()
 		{
 			ChipLibrary library = TestLibrary.Create();
