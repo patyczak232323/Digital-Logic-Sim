@@ -437,8 +437,13 @@ namespace DLS.RHDL
 	{
 		public const int MaxWidth = 32;
 
+		// Brackets, calls, '~', 'not' and 'x if c else y' inside each other. Far more than any
+		// circuit needs, and it keeps a pasted or generated expression from exhausting the stack.
+		public const int MaxNesting = 100;
+
 		readonly List<Token> tokens;
 		int position;
+		int nesting;
 
 		RhdlParser(List<Token> tokens) => this.tokens = tokens;
 
@@ -800,7 +805,23 @@ namespace DLS.RHDL
 
 		// ---- Expressions ----
 
+		void EnterNesting()
+		{
+			if (++nesting > MaxNesting)
+			{
+				throw Error(Current, $"This expression is nested more than {MaxNesting} levels deep. Split it into named wires.");
+			}
+		}
+
 		Expr ParseExpression()
+		{
+			EnterNesting();
+			Expr result = ParseExpressionInner();
+			nesting--;
+			return result;
+		}
+
+		Expr ParseExpressionInner()
 		{
 			Expr value = ParseOr();
 			if (Current.Is("if"))
@@ -851,7 +872,10 @@ namespace DLS.RHDL
 			if (Current.Is("not"))
 			{
 				Token op = Advance();
-				return new UnaryExpr { Op = "not", Operand = ParseNot(), Line = op.Line, Column = op.Column };
+				EnterNesting();
+				Expr operand = ParseNot();
+				nesting--;
+				return new UnaryExpr { Op = "not", Operand = operand, Line = op.Line, Column = op.Column };
 			}
 
 			return ParseComparison();
@@ -954,7 +978,9 @@ namespace DLS.RHDL
 			if (Current.Is("~") || Current.Is("-") || Current.Is("+"))
 			{
 				Token op = Advance();
+				EnterNesting();
 				Expr operand = ParseUnary();
+				nesting--;
 				if (op.Text == "+") return operand;
 				return new UnaryExpr { Op = op.Text, Operand = operand, Line = op.Line, Column = op.Column };
 			}

@@ -247,6 +247,8 @@ namespace DLS.RHDL
 
 		static string BitLabel(string name, int width, int bit) => width == 1 ? name : $"{name}[{bit}]";
 
+		int unrolledIterations;
+
 		void Unroll(List<Statement> body, Dictionary<string, long> loopConstants)
 		{
 			foreach (Statement statement in body)
@@ -276,6 +278,14 @@ namespace DLS.RHDL
 
 					for (long i = start; step > 0 ? i < stop : i > stop; i += step)
 					{
+						// Counted on their own too: a loop whose body adds no statements would
+						// otherwise run for as long as its range says.
+						if (++unrolledIterations > MaxUnrolledStatements)
+						{
+							Error(loop, $"Loops repeat more than {MaxUnrolledStatements} times.");
+							throw new ElaborationStop();
+						}
+
 						Dictionary<string, long> inner = new(loopConstants, StringComparer.Ordinal) { [loop.Variable] = i };
 						Unroll(loop.Body, inner);
 						if (works.Count > MaxUnrolledStatements)

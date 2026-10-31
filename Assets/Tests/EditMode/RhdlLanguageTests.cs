@@ -357,5 +357,46 @@ circuit Maybe(A: u4) -> Y: u4:
 		{
 			AssertMessage(Errors("circuit C(A: u6) -> Y:\n    Y = A[0]\n"), 1, "1, 4 or 8 bits");
 		}
+
+		// ---- Sources that must not take the editor down ----
+
+		[Test]
+		public void DeeplyNestedExpressionsAreRejected()
+		{
+			int depth = RhdlCompiler.MaxExpressionNesting + 1;
+			string brackets = new string('(', depth) + "A" + new string(')', depth);
+			AssertMessage(Errors($"circuit C(A) -> Y:\n    Y = {brackets}\n"), 2, "nested more than");
+			AssertMessage(Errors($"circuit C(A) -> Y:\n    Y = {new string('~', 50000)}A\n"), 2, "nested more than");
+			AssertMessage(Errors($"circuit C(A) -> Y:\n    Y = {string.Concat(Enumerable.Repeat("not ", depth))}A\n"), 2, "nested more than");
+
+			// Just inside the limit still builds.
+			depth = RhdlCompiler.MaxExpressionNesting - 1;
+			Build($"circuit C(A) -> Y:\n    Y = {new string('(', depth)}A{new string(')', depth)}\n");
+		}
+
+		[Test]
+		public void LongChainsDoNotOverflowTheStack()
+		{
+			// Each of these used to recurse deeper than a 1 MB stack allows.
+			Build($"circuit LongAnd(A) -> Y:\n    Y = {string.Join(" & ", Enumerable.Repeat("A", 3000))}\n");
+
+			const int wires = 5000;
+			string reversed = "circuit Reversed(A) -> Y:\n    Y = w0\n" +
+			                  string.Concat(Enumerable.Range(0, wires).Select(i => $"    w{i} = w{i + 1}\n")) +
+			                  $"    w{wires} = ~A\n";
+			TestCircuit c = new(Build(reversed), library);
+			c.Set("A", 0);
+			c.Step();
+			Assert.AreEqual(1, c.Get("Y"));
+		}
+
+		[Test]
+		public void LoopsWithEmptyBodiesStillHaveALimit()
+		{
+			System.Diagnostics.Stopwatch time = System.Diagnostics.Stopwatch.StartNew();
+			AssertMessage(Errors("circuit C(A) -> Y:\n    for i in range(1000000000000):\n        pass\n    Y = A\n"), 2, "Loops repeat more than");
+			AssertMessage(Errors("circuit C(A) -> Y:\n    for i in range(1000000000):\n        for j in range(0):\n            Y = A\n    Y = A\n"), 2, "Loops repeat more than");
+			Assert.Less(time.ElapsedMilliseconds, 5000);
+		}
 	}
 }

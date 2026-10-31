@@ -5,9 +5,12 @@ namespace DLS.Game.Updates
 {
 	// The script that replaces a desktop installation with a downloaded release. Rewired starts
 	// it and quits; the script waits for Rewired to exit, copies the new files over the old ones,
-	// deletes the download and starts the new version.
+	// deletes the download and starts the new version. If copying fails it leaves FailedMarker in
+	// the download folder and starts the installed version again, which then reports the failure.
 	public static class UpdateInstallScript
 	{
+		public const string FailedMarker = "install-failed.txt";
+
 		public static string FileName(UpdatePlatform platform) => platform == UpdatePlatform.Windows ? "install-update.cmd" : "install-update.sh";
 
 		public static string Create(UpdatePlatform platform, int processId, string stagingDir, string downloadDir, string installDir, string executableName)
@@ -42,10 +45,12 @@ namespace DLS.Game.Updates
 			s.AppendLine($"start \"\" \"{installDir}\\{executableName}\"");
 			s.AppendLine($"rmdir /S /Q \"{downloadDir}\"");
 			s.AppendLine("exit /b 0");
+			// The window is hidden, so nobody would see a message here: leave a marker and start
+			// the installed version, which shows the failure.
 			s.AppendLine(":failed");
-			s.AppendLine($"echo Rewired could not copy the update into {installDir}.");
-			s.AppendLine($"echo The downloaded files are in {stagingDir}.");
-			s.AppendLine("pause");
+			s.AppendLine($"type nul > \"{downloadDir}\\{FailedMarker}\"");
+			s.AppendLine($"start \"\" \"{installDir}\\{executableName}\"");
+			s.AppendLine("exit /b 1");
 			return s.ToString().Replace("\n", "\r\n").Replace("\r\r\n", "\r\n");
 		}
 
@@ -58,7 +63,8 @@ namespace DLS.Game.Updates
 			s.Append("#!/bin/sh\n");
 			s.Append($"while kill -0 {processId} 2>/dev/null; do sleep 0.5; done\n");
 			s.Append($"if ! cp -R {Quote(stagingDir.TrimEnd('/') + "/.")} {Quote(installDir)}; then\n");
-			s.Append($"  echo \"Rewired could not copy the update into {installDir.Replace("\"", "")}. The files are in {stagingDir.Replace("\"", "")}.\" >&2\n");
+			s.Append($"  : > {Quote(downloadDir.TrimEnd('/') + "/" + FailedMarker)}\n");
+			s.Append($"  {executable} >/dev/null 2>&1 &\n");
 			s.Append("  exit 1\n");
 			s.Append("fi\n");
 			// Zip files do not keep the executable bit.
