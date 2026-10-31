@@ -169,6 +169,8 @@ jobs:
           # Keep Unity's Library folder between jobs on this runner instead of
           # restoring it from the GitHub cache; the next step removes everything else.
           clean: false
+          # The full history: the version code below counts its commits.
+          fetch-depth: 0
 
       - name: Remove untracked files except Unity Library
         shell: bash
@@ -190,6 +192,33 @@ jobs:
           done
           exit "$missing"
 
+      - name: Verify Android signing secrets
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+          ANDROID_KEYALIAS_NAME: ${{ secrets.ANDROID_KEYALIAS_NAME }}
+          ANDROID_KEYALIAS_PASS: ${{ secrets.ANDROID_KEYALIAS_PASS }}
+        run: |
+          # Every APK is signed with the Rewired release key, so one installs over another.
+          # Unity's debug key would make Android refuse to update the installed app.
+          missing=0
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASS ANDROID_KEYALIAS_NAME ANDROID_KEYALIAS_PASS; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing GitHub Actions secret: $name (the Android release key, see CONTRIBUTING.md)"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Android version code
+        id: version_code
+        shell: bash
+        run: |
+          # The number of commits on the branch: it grows with every release and every
+          # unofficial build, so Android always accepts the newer APK as an update.
+          echo "code=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Build Android APK with Unity
         uses: game-ci/unity-builder@4423ee75828dff56037d1d1cfdac6b68e3a6ba00 # v4.8.2
         env:
@@ -200,6 +229,12 @@ jobs:
           unityVersion: auto
           targetPlatform: Android
           androidExportType: androidPackage
+          androidKeystoreName: rewired.keystore
+          androidKeystoreBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          androidKeystorePass: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+          androidKeyaliasName: ${{ secrets.ANDROID_KEYALIAS_NAME }}
+          androidKeyaliasPass: ${{ secrets.ANDROID_KEYALIAS_PASS }}
+          androidVersionCode: ${{ steps.version_code.outputs.code }}
           buildName: DLSRewired
           buildsPath: build
 
@@ -231,6 +266,13 @@ jobs:
           # _work/_actions, which the runner must delete before the next job can start.
           work="$(readlink -f "$RUNNER_WORKSPACE/..")"
           docker run --rm -v "$work:/w" alpine:3.20 chown -R "$(id -u):$(id -g)" /w
+
+      - name: Remove the signing key from the runner
+        if: always()
+        shell: bash
+        run: |
+          # unity-builder writes the decoded keystore into the project folder.
+          find . -maxdepth 2 -name 'rewired.keystore' -print -delete || true
 
   # The WebGL editor image is large; pulling it filled the self-hosted host's Docker
   # disk and killed the other Unity jobs there, so WebGL builds on a GitHub-hosted runner.
