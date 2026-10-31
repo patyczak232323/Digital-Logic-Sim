@@ -209,12 +209,12 @@ Start here:
 - **[Simulation Diagnostics](Docs/SIMULATION_DIAGNOSTICS.md)**
 - **[Native JIT](Docs/NATIVE_JIT.md)**
 - **[Persistent FULL LUT Cache](Docs/PERSISTENT_FULL_LUT_CACHE.md)**
-- **[Rewired v0.5.1 release notes](Docs/RELEASE_0.5.1.md)**
+- **[Rewired v0.5.2 release notes](Docs/RELEASE_0.5.2.md)**
 - **[Contributing](CONTRIBUTING.md)**
 
 ## Development
 
-Current version: **Rewired v0.5.1**
+Current version: **Rewired v0.5.2**
 
 The Unity version is defined in `ProjectSettings/ProjectVersion.txt`.
 
