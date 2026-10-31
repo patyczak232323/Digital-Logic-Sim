@@ -50,7 +50,6 @@ The repository includes a compact example progression ending with a **4-bit CPU*
 - 64 x 64 colour screen (4 bits per channel, double-buffered) for games and graphics demos
 - Snake example project, installed on first start
 - updates from GitHub Releases inside the app on Windows, Linux and Android
-- guided challenges from a NOT gate built from NAND to a 4-bit adder
 - Windows x64, Linux x86_64, WebGL (browser) and Android ARM64 (experimental) release builds
 - touch interface for Android tablets and phones, held sideways or upright (Settings → Screen): drag parts from a categorised panel, tap a part for its actions, one-finger panning and a step-by-step guide
 

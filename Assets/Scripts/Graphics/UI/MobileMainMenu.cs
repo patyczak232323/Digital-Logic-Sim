@@ -479,15 +479,20 @@ namespace DLS.Graphics
 			}
 
 			y -= h + 2.6f;
-			UI.DrawText("TOUCH", theme.FontBold, theme.FontSizeRegular * 0.72f,
-				new Vector2(x, y), Anchor.TextCentreLeft, RewiredUI.SecondaryText);
-			y -= 2f;
 			string[] lines =
 			{
 				"Tap a part to select it; drag it to move it.",
 				"Drag empty space to move around; pinch to zoom.",
 				"Hold a finger on anything to see all its options."
 			};
+
+			// A phone held sideways has no room for the tips below the buttons; the home screen
+			// shows the same tips there.
+			if (y - 2f - lines.Length * 2.2f < safe.yMin) return;
+
+			UI.DrawText("TOUCH", theme.FontBold, theme.FontSizeRegular * 0.72f,
+				new Vector2(x, y), Anchor.TextCentreLeft, RewiredUI.SecondaryText);
+			y -= 2f;
 			foreach (string line in lines)
 			{
 				UI.DrawText(line, theme.FontRegular, theme.FontSizeRegular * 0.68f, new Vector2(x, y), Anchor.TextCentreLeft, Color.white);

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using DLS.Description;
 using DLS.Game;
 
@@ -212,6 +213,46 @@ namespace DLS.SaveSystem
 			{
 				Directory.Delete(projectPath, true);
 			}
+		}
+
+		// The editor never stores the colour of a chip's own output pins and stores the colour of
+		// every output pin of every subchip (none for buses). Chips written by RHDL, including the
+		// bundled examples, do it the other way round. Returns the saved chip as the editor would
+		// describe it right after loading it, so comparing the two finds only real changes.
+		// Returns the description itself when it already matches.
+		public static ChipDescription WithEditorPinColours(ChipDescription saved, ChipLibrary library)
+		{
+			if (saved == null || library == null) return saved;
+
+			bool NeedsDefaults(SubChipDescription subChip) =>
+				library.TryGetChipDescription(subChip.Name, out ChipDescription chip) &&
+				(ChipTypeHelper.IsBusType(chip.ChipType)
+					? subChip.OutputPinColourInfo != null
+					: (subChip.OutputPinColourInfo == null || subChip.OutputPinColourInfo.Length == 0) && chip.OutputPins is { Length: > 0 });
+
+			bool outputColoured = saved.OutputPins != null && saved.OutputPins.Any(p => p.Colour != default);
+			bool subChipsIncomplete = saved.SubChips != null && saved.SubChips.Any(NeedsDefaults);
+			if (!outputColoured && !subChipsIncomplete) return saved;
+
+			ChipDescription normalized = CloneChipDescription(saved);
+			if (normalized.OutputPins != null)
+			{
+				for (int i = 0; i < normalized.OutputPins.Length; i++) normalized.OutputPins[i].Colour = default;
+			}
+
+			if (normalized.SubChips != null)
+			{
+				for (int i = 0; i < normalized.SubChips.Length; i++)
+				{
+					if (!NeedsDefaults(normalized.SubChips[i])) continue;
+					library.TryGetChipDescription(normalized.SubChips[i].Name, out ChipDescription chip);
+					normalized.SubChips[i].OutputPinColourInfo = ChipTypeHelper.IsBusType(chip.ChipType)
+						? null
+						: chip.OutputPins.Select(p => new OutputPinColourInfo(p.Colour, p.ID)).ToArray();
+				}
+			}
+
+			return normalized;
 		}
 
 		public static bool HasUnsavedChanges(ChipDescription lastSaved, ChipDescription current)

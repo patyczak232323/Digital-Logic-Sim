@@ -26,8 +26,7 @@ namespace DLS.Graphics
 			TruthTable,
 			Export,
 			Breakpoint,
-			MobileHelp,
-			Challenges
+			MobileHelp
 		}
 
 		static MenuType activeMenuOld;
@@ -92,7 +91,6 @@ namespace DLS.Graphics
 			else if (menuToDraw == MenuType.TruthTable) TruthTableMenu.DrawMenu();
 			else if (menuToDraw == MenuType.Export) ExportMenu.DrawMenu();
 			else if (menuToDraw == MenuType.Breakpoint) BreakpointMenu.DrawMenu();
-			else if (menuToDraw == MenuType.Challenges) ChallengesMenu.DrawMenu();
 			else
 			{
 				bool showSimPausedBanner = project.simPaused;
@@ -132,7 +130,6 @@ namespace DLS.Graphics
 				else if (ActiveMenu == MenuType.TruthTable) TruthTableMenu.OnMenuOpened();
 				else if (ActiveMenu == MenuType.Export) ExportMenu.OnMenuOpened();
 				else if (ActiveMenu == MenuType.Breakpoint) BreakpointMenu.OnMenuOpened();
-				else if (ActiveMenu == MenuType.Challenges) ChallengesMenu.OnMenuOpened();
 
 				if (InInputBlockingMenu() && Project.ActiveProject != null && Project.ActiveProject.controller != null)
 				{

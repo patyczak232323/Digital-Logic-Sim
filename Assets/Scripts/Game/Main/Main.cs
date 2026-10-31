@@ -101,10 +101,16 @@ namespace DLS.Game
 			// Save new settings
 			ActiveAppSettings = newSettings;
 			Saver.SaveAppSettings(newSettings);
-			// Apply settings to app
-			int width = newSettings.fullscreenMode is FullScreenMode.Windowed ? newSettings.ResolutionX : FullScreenResolution.x;
-			int height = newSettings.fullscreenMode is FullScreenMode.Windowed ? newSettings.ResolutionY : FullScreenResolution.y;
-			Screen.SetResolution(width, height, newSettings.fullscreenMode);
+			// Apply settings to app. Window size and mode are desktop settings: on a phone
+			// SetResolution fixes the drawing surface to the size the screen had at start-up, so
+			// the picture no longer follows the screen when the phone turns.
+			if (!Application.isMobilePlatform)
+			{
+				int width = newSettings.fullscreenMode is FullScreenMode.Windowed ? newSettings.ResolutionX : FullScreenResolution.x;
+				int height = newSettings.fullscreenMode is FullScreenMode.Windowed ? newSettings.ResolutionY : FullScreenResolution.y;
+				Screen.SetResolution(width, height, newSettings.fullscreenMode);
+			}
+
 			QualitySettings.vSyncCount = newSettings.VSyncEnabled ? 1 : 0;
 		}
 
