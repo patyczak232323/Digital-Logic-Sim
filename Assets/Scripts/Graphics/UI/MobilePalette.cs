@@ -11,7 +11,7 @@ namespace DLS.Graphics
 {
 	// The parts panel of the touch interface: chip collections on the left, the chips of the
 	// chosen one on the right. Drag a chip onto the board to place it there, or tap it and
-	// then tap the board. A vertical drag scrolls the list.
+	// then tap the board. A vertical drag scrolls the list (upright, until it leaves the panel).
 	public static class MobilePalette
 	{
 		public const float Width = 26f;
@@ -216,6 +216,18 @@ namespace DLS.Graphics
 					{
 						pressScrolling = true;
 					}
+				}
+
+				// Upright the board is above the panel, so carrying a chip to it starts like
+				// scrolling the list: once the finger leaves the panel, it picks the chip up.
+				if (pressScrolling && pressRegion == Region.Items && pressedName != null && !blocked.Contains(pressedName) && !panel.Contains(mouse))
+				{
+					itemScroll = scrollAtPress;
+					pressScrolling = false;
+					project.controller.CancelEverything();
+					project.controller.StartPlacing(pressedName);
+					dragPlacing = true;
+					ArmedChip = pressedName;
 				}
 
 				if (pressScrolling)
